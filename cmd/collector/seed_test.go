@@ -4,23 +4,24 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 )
 
-// Regression: `collector seed --dest DIR --image-ref REF` must install the
-// binary and manifest instead of falling through to a claim run. Before the
-// seed dispatch existed, the seed init container failed with
+// Regression: `collector seed --dest DIR` must install the binary and
+// manifest instead of falling through to a claim run. Before the seed
+// dispatch existed, the seed init container failed with
 // "open testdata/complete.json: permission denied" on ops-qa.
 func TestRunSeedDispatchInstallsBinaryAndManifest(t *testing.T) {
 	dest := t.TempDir()
-	ref := "ghcr.io/eshu-hq/eshu-collector-aws-cloud@sha256:bef39c4a9fbe1bb337196f346691259ddafba93ca8040e588c5afb1140dc657a"
 	var stdout, stderr strings.Builder
-	err := run([]string{"seed", "--dest", dest, "--image-ref", ref}, nil, &stdout, &stderr)
-	if err != nil {
-		t.Fatalf("seed dispatch failed: %v (stderr: %s)", err, stderr.String())
+	if err := run([]string{"seed", "--dest", dest}, nil, &stdout, &stderr); err != nil {
+		t.Fatalf("seed dispatch failed: %v", err)
 	}
 	for _, name := range []string{"collector", "manifest.yaml"} {
 		info, statErr := os.Stat(filepath.Join(dest, name))
@@ -35,19 +36,63 @@ func TestRunSeedDispatchInstallsBinaryAndManifest(t *testing.T) {
 	if readErr != nil {
 		t.Fatal(readErr)
 	}
-	if !strings.Contains(string(manifest), ref) {
-		t.Fatalf("seeded manifest does not stamp the image reference")
+	// No reference given: the embedded manifest is written unchanged.
+	if !bytes.Equal(manifest, collector.ManifestYAML) {
+		t.Fatal("seed without a reference rewrote the manifest")
 	}
-	if !strings.Contains(stdout.String(), "seeded ") {
+	if !strings.HasPrefix(stdout.String(), "seeded ") {
 		t.Fatalf("seed did not report the seeded binary path: %q", stdout.String())
 	}
 }
 
-func TestRunSeedRejectsBadImageRef(t *testing.T) {
+func TestRunSeedStampsDigestPinnedRef(t *testing.T) {
+	ref := "ghcr.io/eshu-hq/eshu-collector-aws-cloud@sha256:871f126d60c9e63679705d62c01ca078206fd0a2a35650d01756c01eed19c2d0"
+	dest := t.TempDir()
 	var stdout, stderr strings.Builder
-	err := run([]string{"seed", "--dest", t.TempDir(), "--image-ref", "not-a-digest"}, nil, &stdout, &stderr)
-	if err == nil {
-		t.Fatal("seed accepted a malformed image reference")
+	if err := run([]string{"seed", "--dest", dest, "--image-ref", ref}, nil, &stdout, &stderr); err != nil {
+		t.Fatalf("seed with image-ref failed: %v", err)
+	}
+	manifest, readErr := os.ReadFile(filepath.Join(dest, "manifest.yaml"))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if !strings.Contains(string(manifest), ref) {
+		t.Fatal("seeded manifest does not stamp the image reference")
+	}
+}
+
+func TestRunSeedReadsRefFromEnv(t *testing.T) {
+	ref := "ghcr.io/eshu-hq/eshu-collector-aws-cloud@sha256:871f126d60c9e63679705d62c01ca078206fd0a2a35650d01756c01eed19c2d0"
+	dest := t.TempDir()
+	var stdout strings.Builder
+	getenv := func(key string) string {
+		if key == "COLLECTOR_IMAGE_REF" {
+			return ref
+		}
+		return ""
+	}
+	if err := runSeed([]string{"--dest", dest}, &stdout, getenv); err != nil {
+		t.Fatalf("seed with env ref failed: %v", err)
+	}
+	manifest, readErr := os.ReadFile(filepath.Join(dest, "manifest.yaml"))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if !strings.Contains(string(manifest), ref) {
+		t.Fatal("seeded manifest does not stamp the env image reference")
+	}
+}
+
+func TestRunSeedRejectsBadImageRef(t *testing.T) {
+	for _, ref := range []string{"not-a-digest", "ghcr.io/eshu-hq/eshu-collector-aws-cloud:0.1.0", "ghcr.io/eshu-hq/eshu-collector-aws-cloud@sha256:xyz"} {
+		dest := t.TempDir()
+		var stdout, stderr strings.Builder
+		if err := run([]string{"seed", "--dest", dest, "--image-ref", ref}, nil, &stdout, &stderr); err == nil {
+			t.Fatalf("seed accepted malformed image reference %q", ref)
+		}
+		if _, statErr := os.Stat(filepath.Join(dest, "collector")); !os.IsNotExist(statErr) {
+			t.Fatalf("seed wrote a binary for malformed reference %q", ref)
+		}
 	}
 }
 
