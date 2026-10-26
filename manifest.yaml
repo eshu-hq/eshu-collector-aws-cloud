@@ -1,0 +1,48 @@
+apiVersion: eshu.dev/v1alpha1
+kind: ComponentPackage
+metadata:
+  id: collector-aws-cloud
+  name: AWS Cloud collector
+  publisher: eshu-hq
+  version: 0.1.0
+spec:
+  compatibleCore: ">=0.0.5 <0.2.0"
+  componentType: collector
+  collectorKinds:
+    - aws
+  runtime:
+    sdkProtocol: collector-sdk/v1alpha1
+    adapter: process
+  artifacts:
+    - platform: linux/amd64
+      image: ghcr.io/eshu-hq/eshu-collector-aws-cloud@sha256:4d5d3a979b6b3d3e5b413e85c3c57046dbcf2a0da24dcf81a4489d99db55aa9d
+  emittedFacts:
+    # TRANSITIONAL placeholder families: emitted by the scaffold pipeline
+    # until the AWS logic port lands (PORT_PLAN.md). The port removes these
+    # and declares the thirteen bare AWS kinds (schema 1.0.0, reported)
+    # once the public SDK harness accepts host-granted kinds (#8851);
+    # until then conformance rejects any emitted kind without a `.`
+    # prefix, while core-side install/verify accept granted core kinds.
+    # Grant issuance (grant.example.json) proceeds first and does not wait
+    # for the manifest declaration.
+    - kind: collector-aws-cloud.snapshot
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: collector-aws-cloud.record
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - observed
+    - kind: collector-aws-cloud.warning
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+  consumerContracts:
+    reducer:
+      phases:
+        - source_evidence_only:no_graph_truth
+  telemetry:
+    metricsPrefix: eshu_dp_aws_cloud_collector_
