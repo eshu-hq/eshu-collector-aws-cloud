@@ -18,3 +18,16 @@ config:
     maxRecordsPerClaim: 5000
     maxPayloadBytes: 65536
     claimTimeoutSeconds: 300
+# Live mode: the host activation config carries no source.input. The
+# collector then lists live AWS resources for the target account across the
+# allowed regions and services (the 19 names in internal/live), using the
+# ambient credential chain only (IRSA, container or instance role). A
+# present-but-empty source.input behaves as absent.
+#  target_scopes:
+#    account_id: "055929692761"
+#  allowed_regions:
+#    - us-east-1
+#  allowed_services:
+#    - iam
+#    - ec2
+#    - s3

@@ -15,14 +15,17 @@ import (
 // TestImportBoundaryRejectsCoreAndCrossCollectorImports is the CI gate that
 // keeps a standalone collector repository standalone: no Eshu internal
 // implementation imports and no cross-collector implementation imports. Only
-// the published SDK modules plus the standard library and yaml are allowed.
-// The self-import prefix is derived from go.mod so renaming the module can
-// never desync this allowlist.
+// the published SDK modules, the AWS SDK v2 read surface the live-source
+// claim path lists (PORT_PLAN.md: awsruntime + service scanners), and the
+// standard library and yaml are allowed. The self-import prefix is derived
+// from go.mod so renaming the module can never desync this allowlist.
 func TestImportBoundaryRejectsCoreAndCrossCollectorImports(t *testing.T) {
 	t.Parallel()
 
 	allowedPrefixes := []string{
 		modulePath(t),
+		"github.com/aws/aws-sdk-go-v2",
+		"github.com/aws/smithy-go",
 		"github.com/eshu-hq/eshu/sdk/go/collector",
 		"github.com/eshu-hq/eshu/sdk/go/factschema",
 		"gopkg.in/yaml.v3",

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
+	"github.com/eshu-hq/eshu-collector-aws-cloud/internal/live"
 	sdk "github.com/eshu-hq/eshu/sdk/go/collector"
 )
 
@@ -190,13 +191,17 @@ func runWithTimeout(work func() (sdk.Result, error), limits collector.ResourceUs
 }
 
 // stdioPlan is a parsed SDK host request: everything parseSDKStdio learns
-// from stdin before the wall-time bound starts covering the collection.
+// from stdin before the wall-time bound starts covering the collection. A
+// request with source.input runs the local file mode; a host activation
+// request without it runs the config-driven live mode instead.
 type stdioPlan struct {
 	inputPath      string
 	sourceURI      string
 	previousDigest string
 	limits         collector.ResourceUse
 	claim          sdk.Claim
+	liveMode       bool
+	live           live.Config
 }
 
 // parseSDKStdio decodes and validates one collector SDK host request. It
@@ -220,24 +225,11 @@ func parseSDKStdio(stdin io.Reader) (stdioPlan, error) {
 	if strings.TrimSpace(request.ProtocolVersion) != sdk.ProtocolVersionV1Alpha1 {
 		return stdioPlan{}, fmt.Errorf("protocol_version %q is unsupported", request.ProtocolVersion)
 	}
-	inputPath, err := nestedString(request.Config, "source", "input")
-	if err != nil {
-		return stdioPlan{}, err
-	}
-	// A missing key falls back to the placeholder; a present-but-malformed
-	// value fails closed instead of silently emitting against the placeholder.
-	sourceURI, present, err := nestedOptionalString(request.Config, "source", "sourceURI")
-	if err != nil {
-		return stdioPlan{}, err
-	}
-	if !present || strings.TrimSpace(sourceURI) == "" {
-		sourceURI = "https://example.invalid/source/aws-cloud"
-	}
-	previousDigest, _, err := nestedOptionalString(request.Config, "freshness", "previousDigest")
-	if err != nil {
-		return stdioPlan{}, err
-	}
-	limits, err := nestedLimits(request.Config)
+	// source.input selects the local file mode; its absence selects the
+	// config-driven live mode, where the host activation config names the
+	// target account and the region/service allowlists. A present-but-empty
+	// input behaves as absent so hosts can send the key unset.
+	inputPath, inputPresent, err := nestedOptionalString(request.Config, "source", "input")
 	if err != nil {
 		return stdioPlan{}, err
 	}
@@ -245,17 +237,50 @@ func parseSDKStdio(stdin io.Reader) (stdioPlan, error) {
 	if strings.TrimSpace(claim.GenerationID) == "" {
 		claim.GenerationID = "generation-1"
 	}
-	plan.inputPath = inputPath
-	plan.sourceURI = sourceURI
-	plan.previousDigest = previousDigest
-	plan.limits = limits
 	plan.claim = claim
+	if inputPresent && strings.TrimSpace(inputPath) != "" {
+		// A missing key falls back to the placeholder; a present-but-malformed
+		// value fails closed instead of silently emitting against the placeholder.
+		sourceURI, present, err := nestedOptionalString(request.Config, "source", "sourceURI")
+		if err != nil {
+			return stdioPlan{}, err
+		}
+		if !present || strings.TrimSpace(sourceURI) == "" {
+			sourceURI = "https://example.invalid/source/aws-cloud"
+		}
+		previousDigest, _, err := nestedOptionalString(request.Config, "freshness", "previousDigest")
+		if err != nil {
+			return stdioPlan{}, err
+		}
+		limits, err := nestedLimits(request.Config)
+		if err != nil {
+			return stdioPlan{}, err
+		}
+		plan.inputPath = inputPath
+		plan.sourceURI = sourceURI
+		plan.previousDigest = previousDigest
+		plan.limits = limits
+		return plan, nil
+	}
+	liveConfig, err := live.ParseConfig(request.Config)
+	if err != nil {
+		return stdioPlan{}, err
+	}
+	plan.liveMode = true
+	plan.live = liveConfig
+	plan.sourceURI = liveConfig.SourceURI
+	plan.previousDigest = liveConfig.PreviousDigest
+	plan.limits = liveConfig.Limits
 	return plan, nil
 }
 
 // collectStdioPlan runs the file read and Collect for a parsed request
-// under the caller's wall-time bound.
+// under the caller's wall-time bound. Live-mode plans list live AWS
+// resources and Collect the built report instead.
 func collectStdioPlan(plan stdioPlan) (sdk.Result, error) {
+	if plan.liveMode {
+		return collectLivePlan(plan)
+	}
 	file, err := os.Open(plan.inputPath)
 	if err != nil {
 		return sdk.Result{}, err
@@ -289,17 +314,6 @@ func demoClaim() sdk.Claim {
 		Deadline:      now.Add(time.Hour),
 		ConfigHandle:  "component-config:aws-cloud",
 	}
-}
-
-func nestedString(config map[string]any, keys ...string) (string, error) {
-	value, present, err := nestedOptionalString(config, keys...)
-	if err != nil {
-		return "", err
-	}
-	if !present {
-		return "", fmt.Errorf("config %q missing", strings.Join(keys, "."))
-	}
-	return value, nil
 }
 
 // nestedOptionalString separates "missing" (present=false, err=nil, caller
