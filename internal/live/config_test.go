@@ -80,6 +80,30 @@ func TestParseConfigAcceptsScopeVariants(t *testing.T) {
 	}
 }
 
+// TestParseConfigAcceptsNestedScopeAllowlists proves the real host activation
+// shape parses: the allowlists live inside the single target_scopes element,
+// not top-level. The ops-qa activation sends exactly this shape; without the
+// singleton-scope fallback every live claim failed closed.
+func TestParseConfigAcceptsNestedScopeAllowlists(t *testing.T) {
+	t.Parallel()
+
+	nested := hostConfig()
+	delete(nested, "allowed_regions")
+	delete(nested, "allowed_services")
+	nested["target_scopes"] = []any{map[string]any{
+		"account_id":       "055929692761",
+		"allowed_regions":  []any{"us-east-1"},
+		"allowed_services": []any{"ec2", "s3"},
+	}}
+	parsed, err := ParseConfig(nested)
+	if err != nil {
+		t.Fatalf("ParseConfig(nested scope) error = %v", err)
+	}
+	if parsed.AccountID != "055929692761" || len(parsed.Regions) != 1 || len(parsed.Services) != 2 {
+		t.Fatalf("nested scope parsed = %+v, want account + 1 region + 2 services", parsed)
+	}
+}
+
 // TestParseConfigRejectsGaps proves missing allowlists and unknown services
 // fail closed instead of scanning an unbounded or mistyped scope.
 func TestParseConfigRejectsGaps(t *testing.T) {

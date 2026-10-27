@@ -180,6 +180,15 @@ func parseStringList(config map[string]any, keys ...string) ([]string, error) {
 			raw = firstPresent(nested, keys...)
 		}
 	}
+	// The host nests per-scope allowlists inside the single target_scopes
+	// element (account_id plus allowed_regions/allowed_services); nothing
+	// sends them top-level, so resolve the singleton scope the same way
+	// parseAccount does before failing closed.
+	if raw == nil {
+		if scope := scopeSingleton(config); scope != nil {
+			raw = firstPresent(scope, keys...)
+		}
+	}
 	list, ok := raw.([]any)
 	if !ok || len(list) == 0 {
 		return nil, fmt.Errorf("config %q missing (non-empty list required)", keys[0])
@@ -194,6 +203,25 @@ func parseStringList(config map[string]any, keys ...string) ([]string, error) {
 	}
 	sort.Strings(parsed)
 	return parsed, nil
+}
+
+// scopeSingleton returns the single target scope object when target_scopes
+// is a one-element list of objects (the host activation shape), or nil
+// otherwise. Multi-scope lists fail closed in accountFrom; here they resolve
+// to nothing so the caller reports the list itself missing.
+func scopeSingleton(config map[string]any) map[string]any {
+	raw := firstPresent(config, "target_scopes")
+	if raw == nil {
+		if nested, ok := config["source"].(map[string]any); ok {
+			raw = firstPresent(nested, "target_scopes")
+		}
+	}
+	list, ok := raw.([]any)
+	if !ok || len(list) != 1 {
+		return nil
+	}
+	scope, _ := list[0].(map[string]any)
+	return scope
 }
 
 func firstPresent(config map[string]any, keys ...string) any {
