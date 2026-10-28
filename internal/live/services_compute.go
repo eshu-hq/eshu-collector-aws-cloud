@@ -34,7 +34,7 @@ func listEC2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("ec2 describe VPCs: %w", err)
 		}
 		for _, vpc := range page.Vpcs {
-			records = append(records, record(aws.ToString(vpc.VpcId), "ec2", region, ec2Name(vpc.Tags, aws.ToString(vpc.VpcId)), "vpc"))
+			records = append(records, vpcRecord(vpc, region))
 		}
 	}
 	subnets := awsec2.NewDescribeSubnetsPaginator(client, &awsec2.DescribeSubnetsInput{})

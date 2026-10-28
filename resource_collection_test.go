@@ -17,6 +17,8 @@ func TestAppendLiveResourcesBindsClaimAndDeduplicates(t *testing.T) {
 	observation := ResourceObservation{
 		Boundary:   Boundary{AccountID: "123456789012", Region: "us-east-1", ServiceKind: "ec2"},
 		ResourceID: "vpc-123", ResourceType: awsv1.ResourceTypeEC2VPC, Name: "example",
+		State: "available", Tags: map[string]string{"environment": "qa"},
+		Attributes: map[string]any{"cidr_block": "10.0.0.0/16"},
 	}
 	result, err := AppendLiveResources(base, []ResourceObservation{observation, observation}, "aws://123456789012", ResourceUse{})
 	if err != nil {
@@ -34,6 +36,20 @@ func TestAppendLiveResourcesBindsClaimAndDeduplicates(t *testing.T) {
 	}
 	if got := fact.Payload["resource_type"]; got != awsv1.ResourceTypeEC2VPC {
 		t.Fatalf("resource_type = %v", got)
+	}
+	if got := fact.Payload["state"]; got != "available" {
+		t.Fatalf("state = %v", got)
+	}
+	tags, ok := fact.Payload["tags"].(map[string]string)
+	if !ok || tags["environment"] != "qa" {
+		t.Fatalf("tags = %#v", fact.Payload["tags"])
+	}
+	attrs, ok := fact.Payload["attributes"].(map[string]any)
+	if !ok {
+		t.Fatalf("attributes = %#v", fact.Payload["attributes"])
+	}
+	if attrs["cidr_block"] != "10.0.0.0/16" {
+		t.Fatalf("source attributes = %#v", attrs)
 	}
 	for _, status := range result.Statuses {
 		if status.FactCount != len(result.Facts) {
