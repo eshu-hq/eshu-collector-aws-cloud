@@ -8,14 +8,6 @@ import (
 	"time"
 )
 
-// clusterResourceID returns the resource_id the cluster node publishes. It
-// prefers the cluster ARN (always present from the docdb-elastic API) and falls
-// back to the cluster name, so a cluster's own edges are sourced on the same id
-// the cluster node publishes.
-func clusterResourceID(cluster Cluster) string {
-	return firstNonEmpty(cluster.ARN, cluster.Name)
-}
-
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")

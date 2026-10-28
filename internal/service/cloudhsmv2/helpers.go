@@ -8,20 +8,6 @@ import (
 	"time"
 )
 
-// clusterResourceID returns the resource_id the cluster node publishes. AWS
-// CloudHSM v2 clusters have no API ARN, so the node is keyed by the bare cluster
-// id (cluster-…). The backup-of-cluster edge keys this same value.
-func clusterResourceID(cluster Cluster) string {
-	return strings.TrimSpace(cluster.ID)
-}
-
-// backupResourceID returns the resource_id the backup node publishes. CloudHSM
-// v2 reports a backup ARN, but the backup id (backup-…) is the stable identity
-// the API always returns, so the node is keyed by the bare backup id.
-func backupResourceID(backup Backup) string {
-	return strings.TrimSpace(backup.ID)
-}
-
 // timeOrNil returns the UTC time when value is set, or nil for the zero time so
 // the attribute payload omits an unknown timestamp instead of emitting an epoch.
 func timeOrNil(value time.Time) any {

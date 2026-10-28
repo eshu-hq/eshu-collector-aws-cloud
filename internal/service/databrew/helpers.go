@@ -8,32 +8,6 @@ import (
 	"time"
 )
 
-// datasetResourceID returns the resource_id the dataset node publishes. It uses
-// the dataset name because jobs and projects reference a dataset by name, so
-// keying the dataset node on its name lets those internal edges join exactly.
-func datasetResourceID(dataset Dataset) string {
-	return strings.TrimSpace(dataset.Name)
-}
-
-// recipeResourceID returns the resource_id the recipe node publishes. It uses
-// the recipe name because projects reference a recipe by name, so keying the
-// recipe node on its name lets the project-uses-recipe edge join exactly.
-func recipeResourceID(recipe Recipe) string {
-	return strings.TrimSpace(recipe.Name)
-}
-
-// jobResourceID returns the resource_id the job node publishes. It prefers the
-// job ARN and falls back to the job name.
-func jobResourceID(job Job) string {
-	return firstNonEmpty(job.ARN, job.Name)
-}
-
-// projectResourceID returns the resource_id the project node publishes. It
-// prefers the project ARN and falls back to the project name.
-func projectResourceID(project Project) string {
-	return firstNonEmpty(project.ARN, project.Name)
-}
-
 // arnForBucket synthesizes the partition-aware S3 bucket ARN for name, or
 // returns an already-formed ARN unchanged. S3 buckets have no API ARN, so the
 // scanner synthesizes one carrying the boundary partition (aws / aws-cn /
@@ -48,19 +22,6 @@ func arnForBucket(partition, name string) string {
 		return name
 	}
 	return "arn:" + partition + ":s3:::" + name
-}
-
-// glueTableResourceID returns the "<database>/<table>" identity the Glue table
-// scanner publishes as its resource_id, or "" when either part is missing. It
-// mirrors the Glue scanner's tableResourceID so a dataset -> Glue table edge
-// joins the table node instead of dangling.
-func glueTableResourceID(database, table string) string {
-	database = strings.TrimSpace(database)
-	table = strings.TrimSpace(table)
-	if database == "" || table == "" {
-		return ""
-	}
-	return database + "/" + table
 }
 
 // isARN reports whether value carries the canonical AWS ARN prefix.

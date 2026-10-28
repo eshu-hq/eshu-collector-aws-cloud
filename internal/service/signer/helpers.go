@@ -5,22 +5,6 @@ package signer
 
 import "strings"
 
-// profileResourceID returns the resource_id the signing-profile node publishes.
-// It prefers the profile ARN (always present from the Signer API) and falls back
-// to the profile name, so a profile's own edges are sourced on the same id the
-// profile node publishes.
-func profileResourceID(profile SigningProfile) string {
-	return firstNonEmpty(profile.ARN, profile.Name)
-}
-
-// platformResourceID returns the resource_id the signing-platform node
-// publishes: the bare platform id (for example AWSLambda-SHA384-ECDSA). Signer
-// platforms carry no AWS ARN, so the bare id is the stable join key for the
-// profile-to-platform internal edge.
-func platformResourceID(platform SigningPlatform) string {
-	return strings.TrimSpace(platform.PlatformID)
-}
-
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")

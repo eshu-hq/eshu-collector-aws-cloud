@@ -1,6 +1,6 @@
 # NOT_PORTED.md — `internal/service/elbv2`
 
-Ported: `attributes.go`, `doc.go`, `relationships.go`, `types.go`.
+Ported: `attributes.go`, `doc.go`, `types.go`. (`relationships.go` was an empty stub and is removed.)
 
 ## Not ported (class-c)
 

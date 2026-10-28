@@ -1,0 +1,20 @@
+version: "2"
+linters:
+  enable:
+    - govet
+    - staticcheck
+    - ineffassign
+    - unused
+    - errcheck
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+formatters:
+  enable:
+    - gofumpt
+issues:
+  # The default of 50 hides backlog behind nondeterministic windows.
+  # Leave the census uncapped so the gate always reports every finding.
+  max-issues-per-linter: 0
+  max-same-issues: 0

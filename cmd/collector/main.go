@@ -135,15 +135,25 @@ func logHealth(stderr io.Writer, health collector.Health, resource collector.Res
 	if err != nil {
 		return
 	}
-	fmt.Fprintf(stderr, "collector health: %s\n", line)
+	// Best-effort health line: a write failure carries no recovery action.
+	if _, err := fmt.Fprintf(stderr, "collector health: %s\n", line); err != nil {
+		return
+	}
 }
 
 func collectLocalFlags(inputPath, sourceURI, previousDigest string, limits collector.ResourceUse) (sdk.Result, error) {
-	file, err := os.Open(inputPath)
+	file, err := os.Open(inputPath) // #nosec G304 -- inputPath is the operator's own --input flag value, never request-derived
 	if err != nil {
 		return sdk.Result{}, err
 	}
-	defer func() { _ = file.Close() }()
+	defer func() {
+		// The input is consumed end-to-end before Close; a close error
+		// on a read-only file carries no recovery action, so it is
+		// checked here and dropped.
+		if cerr := file.Close(); cerr != nil {
+			return
+		}
+	}()
 	report, err := collector.LoadReport(file)
 	if err != nil {
 		return sdk.Result{}, err
@@ -285,7 +295,14 @@ func collectStdioPlan(plan stdioPlan) (sdk.Result, error) {
 	if err != nil {
 		return sdk.Result{}, err
 	}
-	defer func() { _ = file.Close() }()
+	defer func() {
+		// The input is consumed end-to-end before Close; a close error
+		// on a read-only file carries no recovery action, so it is
+		// checked here and dropped.
+		if cerr := file.Close(); cerr != nil {
+			return
+		}
+	}()
 	report, err := collector.LoadReport(file)
 	if err != nil {
 		return sdk.Result{}, err

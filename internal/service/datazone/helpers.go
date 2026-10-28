@@ -6,45 +6,7 @@ package datazone
 import (
 	"strings"
 	"time"
-
-	awscloud "github.com/eshu-hq/eshu-collector-aws-cloud"
 )
-
-// domainResourceID returns the resource_id the domain node publishes. It prefers
-// the DataZone domain id (always present, and the value child resources
-// reference) and falls back to the domain ARN, so child-in-domain edges key the
-// domain by the same value the node publishes.
-func domainResourceID(domain Domain) string {
-	return firstNonEmpty(domain.ID, domain.ARN)
-}
-
-// redshiftClusterARN synthesizes the partition-aware provisioned Redshift
-// cluster ARN for clusterName so a data-source-backs-cluster edge matches the
-// Redshift scanner's published cluster resource_id, which is the cluster ARN it
-// synthesizes as
-// arn:<partition>:redshift:<region>:<account>:cluster:<identifier>. The DataZone
-// data source reports a bare cluster name plus an optional backing account and
-// region; account and region default to the scan boundary. It returns "" when
-// the cluster name is empty.
-func redshiftClusterARN(boundary awscloud.Boundary, clusterName, account, region string) string {
-	clusterName = strings.TrimSpace(clusterName)
-	if clusterName == "" {
-		return ""
-	}
-	account = strings.TrimSpace(account)
-	if account == "" {
-		account = strings.TrimSpace(boundary.AccountID)
-	}
-	region = strings.TrimSpace(region)
-	if region == "" {
-		region = strings.TrimSpace(boundary.Region)
-	}
-	partition := awscloud.PartitionForRegion(region)
-	if partition == "" {
-		partition = awscloud.PartitionForBoundary(boundary)
-	}
-	return "arn:" + partition + ":redshift:" + region + ":" + account + ":cluster:" + clusterName
-}
 
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {

@@ -5,7 +5,6 @@ package cloudformation
 
 import (
 	"strings"
-	"time"
 )
 
 func firstNonEmpty(values ...string) string {
@@ -49,14 +48,4 @@ func cloneStrings(input []string) []string {
 		return nil
 	}
 	return output
-}
-
-// timeOrEmpty renders a timestamp as an RFC3339 UTC string, or an empty string
-// when the timestamp is the zero value. Scanner payloads keep timestamps as
-// strings so the durable fact shape stays stable across SDK pointer values.
-func timeOrEmpty(input time.Time) string {
-	if input.IsZero() {
-		return ""
-	}
-	return input.UTC().Format(time.RFC3339)
 }

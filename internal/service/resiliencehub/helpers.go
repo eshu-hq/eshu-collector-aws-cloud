@@ -6,86 +6,7 @@ package resiliencehub
 import (
 	"strings"
 	"time"
-
-	"github.com/eshu-hq/eshu-collector-aws-cloud/catalog"
 )
-
-// appResourceID returns the resource_id the application node publishes: its ARN
-// (always present from the Resilience Hub API), falling back to the app name.
-func appResourceID(app App) string {
-	return firstNonEmpty(app.ARN, app.Name)
-}
-
-// policyResourceID returns the resource_id the resiliency-policy node publishes:
-// its ARN, falling back to the policy name.
-func policyResourceID(policy ResiliencyPolicy) string {
-	return firstNonEmpty(policy.ARN, policy.Name)
-}
-
-// componentResourceID returns the resource_id an application-component node
-// publishes. Components have no API ARN, so the scanner qualifies the component
-// name with the parent application ARN to keep the id stable and unique across
-// applications.
-func componentResourceID(appID string, component AppComponent) string {
-	appID = strings.TrimSpace(appID)
-	name := strings.TrimSpace(component.Name)
-	switch {
-	case appID != "" && name != "":
-		return appID + "/component/" + name
-	case name != "":
-		return name
-	default:
-		return ""
-	}
-}
-
-// inputSourceResourceID returns the resource_id an input-source node publishes.
-// It prefers the source ARN when reported and otherwise qualifies the source
-// name with the parent application ARN so the id is stable and unique.
-func inputSourceResourceID(appID string, source InputSource) string {
-	if arn := strings.TrimSpace(source.SourceARN); arn != "" {
-		return arn
-	}
-	appID = strings.TrimSpace(appID)
-	name := strings.TrimSpace(source.SourceName)
-	switch {
-	case appID != "" && name != "":
-		return appID + "/input-source/" + name
-	case name != "":
-		return name
-	default:
-		return ""
-	}
-}
-
-// assessmentResourceID returns the resource_id an assessment node publishes:
-// its ARN.
-func assessmentResourceID(assessment Assessment) string {
-	return strings.TrimSpace(assessment.ARN)
-}
-
-// protectedResourceTargetType maps a Resilience Hub-reported physical resource
-// type to the Eshu resource type the owning scanner publishes, for the subset
-// of types Resilience Hub identifies by a full ARN that the owning scanner also
-// keys by ARN. It returns "" for any type the scanner cannot key safely (the
-// Resilience Hub-native, non-ARN families), so the protected-resource edge is
-// skipped rather than dangled.
-func protectedResourceTargetType(resilienceHubType string) string {
-	switch strings.TrimSpace(resilienceHubType) {
-	case "AWS::ECS::Service":
-		return catalog.ResourceTypeECSService
-	case "AWS::EFS::FileSystem":
-		return catalog.ResourceTypeEFSFileSystem
-	case "AWS::ElasticLoadBalancingV2::LoadBalancer":
-		return catalog.ResourceTypeELBv2LoadBalancer
-	case "AWS::Lambda::Function":
-		return catalog.ResourceTypeLambdaFunction
-	case "AWS::SNS::Topic":
-		return catalog.ResourceTypeSNSTopic
-	default:
-		return ""
-	}
-}
 
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {
@@ -120,16 +41,6 @@ func cloneStringMap(input map[string]string) map[string]string {
 		return nil
 	}
 	return output
-}
-
-// int32OrNil returns the int32 value pointed to by value, or nil when the
-// pointer is nil, so the attribute payload omits an unknown objective instead
-// of emitting a misleading zero.
-func int32OrNil(value *int32) any {
-	if value == nil {
-		return nil
-	}
-	return *value
 }
 
 // timeOrNil returns the UTC time when value is set, or nil for the zero time so

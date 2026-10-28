@@ -5,15 +5,7 @@ package synthetics
 
 import (
 	"strings"
-	"time"
 )
-
-// canaryResourceID returns the resource_id the canary node publishes. It prefers
-// the synthesized canary ARN and falls back to the canary name, so a canary's
-// own edges key on the same value the canary node publishes.
-func canaryResourceID(canary Canary) string {
-	return firstNonEmpty(canary.ARN, canary.Name)
-}
 
 // bucketNameFromArtifactLocation extracts the S3 bucket name from a Synthetics
 // artifact location. AWS reports the location as a "bucket/prefix/..." path (it
@@ -47,69 +39,4 @@ func arnForBucket(partition, name string) string {
 		return name
 	}
 	return "arn:" + partition + ":s3:::" + name
-}
-
-// firstNonEmpty returns the first trimmed non-empty value, or "" when none.
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if trimmed := strings.TrimSpace(value); trimmed != "" {
-			return trimmed
-		}
-	}
-	return ""
-}
-
-// timeOrNil returns the UTC time when value is set, or nil for the zero time so
-// the attribute payload omits an unknown timestamp instead of emitting an epoch.
-func timeOrNil(value time.Time) any {
-	if value.IsZero() {
-		return nil
-	}
-	return value.UTC()
-}
-
-// cloneStringMap returns a trimmed-key copy of input, or nil when it is empty or
-// every key trims to empty, keeping omitempty-style payload behavior consistent.
-func cloneStringMap(input map[string]string) map[string]string {
-	if len(input) == 0 {
-		return nil
-	}
-	output := make(map[string]string, len(input))
-	for key, value := range input {
-		trimmed := strings.TrimSpace(key)
-		if trimmed == "" {
-			continue
-		}
-		output[trimmed] = value
-	}
-	if len(output) == 0 {
-		return nil
-	}
-	return output
-}
-
-// cloneStrings returns a trimmed copy of input with empty and duplicate entries
-// dropped, or nil when nothing survives. De-duplication keeps repeated subnet or
-// security group identifiers from emitting duplicate edges.
-func cloneStrings(input []string) []string {
-	if len(input) == 0 {
-		return nil
-	}
-	seen := make(map[string]struct{}, len(input))
-	output := make([]string, 0, len(input))
-	for _, value := range input {
-		trimmed := strings.TrimSpace(value)
-		if trimmed == "" {
-			continue
-		}
-		if _, ok := seen[trimmed]; ok {
-			continue
-		}
-		seen[trimmed] = struct{}{}
-		output = append(output, trimmed)
-	}
-	if len(output) == 0 {
-		return nil
-	}
-	return output
 }

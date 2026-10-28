@@ -6,8 +6,6 @@ package apigateway
 import (
 	"strings"
 	"time"
-
-	"github.com/eshu-hq/eshu-collector-aws-cloud/catalog"
 )
 
 func cloneStringMap(input map[string]string) map[string]string {
@@ -71,27 +69,4 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func restAPIResourceID(api RESTAPI) string {
-	return strings.TrimSpace(api.ID)
-}
-
-func v2APIResourceID(api V2API) string {
-	return strings.TrimSpace(api.ID)
-}
-
-func stageResourceID(apiID, stageName string) string {
-	return strings.TrimSpace(apiID) + "/stages/" + strings.TrimSpace(stageName)
-}
-
-func domainResourceID(domain DomainName) string {
-	return firstNonEmpty(domain.Name, domain.ARN)
-}
-
-func apiResourceType(apiKind string) string {
-	if apiKind == APIKindV2 {
-		return catalog.ResourceTypeAPIGatewayV2API
-	}
-	return catalog.ResourceTypeAPIGatewayRESTAPI
 }

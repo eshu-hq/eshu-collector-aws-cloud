@@ -5,9 +5,6 @@ package sagemaker
 
 import (
 	"context"
-	"fmt"
-	"sort"
-	"strings"
 )
 
 // fakeClient is a scanner-owned Client double. Each slice seeds one List
@@ -67,57 +64,6 @@ func (c *fakeClient) ListUserProfiles(context.Context) ([]UserProfile, error) {
 func (c *fakeClient) ListApps(context.Context) ([]App, error) { return c.apps, nil }
 func (c *fakeClient) ListInferenceComponents(context.Context) ([]InferenceComponent, error) {
 	return c.inferenceComponents, nil
-}
-
-// flatten renders a payload into a deterministic string so tests can assert a
-// forbidden value never appears anywhere in an emitted fact.
-func flatten(value any) string {
-	var b strings.Builder
-	flattenInto(&b, value)
-	return b.String()
-}
-
-func flattenInto(b *strings.Builder, value any) {
-	switch typed := value.(type) {
-	case map[string]any:
-		keys := make([]string, 0, len(typed))
-		for key := range typed {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		for _, key := range keys {
-			b.WriteString(key)
-			b.WriteByte('=')
-			flattenInto(b, typed[key])
-			b.WriteByte(';')
-		}
-	case map[string]string:
-		keys := make([]string, 0, len(typed))
-		for key := range typed {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		for _, key := range keys {
-			fmt.Fprintf(b, "%s=%s;", key, typed[key])
-		}
-	case []any:
-		for _, item := range typed {
-			flattenInto(b, item)
-			b.WriteByte(',')
-		}
-	case []string:
-		for _, item := range typed {
-			b.WriteString(item)
-			b.WriteByte(',')
-		}
-	case []map[string]any:
-		for _, item := range typed {
-			flattenInto(b, item)
-			b.WriteByte(',')
-		}
-	default:
-		fmt.Fprintf(b, "%v", typed)
-	}
 }
 
 var _ Client = (*fakeClient)(nil)

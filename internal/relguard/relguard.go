@@ -69,7 +69,7 @@ var KnownTargetTypeAllowlist = map[string]string{
 	// repository connects to through an external connection. The codeartifact
 	// scanner labels them with a stable non-AWS-resource type, mirroring
 	// container_image and git_repository.
-	"public_package_registry": "non-AWS join anchor: external public package registry endpoint (codeartifact external connection), see service/codeartifact/relationships.go",
+	"public_package_registry": "non-AWS join anchor: external public package registry endpoint (codeartifact external connection)",
 	// CodePipeline source providers (GitHub, CodeStarSourceConnection, Bitbucket)
 	// are a synthetic provider category, not a scanned resource; the constant
 	// guarantees the edge is never empty. See ResourceTypeCodePipelineSourceProvider.
@@ -81,7 +81,7 @@ var KnownTargetTypeAllowlist = map[string]string{
 	// through one WebACLID field; the edge cannot pick a v1/v2 type without more
 	// signal. Allowlisted pending a modeling decision rather than mis-keyed to
 	// aws_wafv2_web_acl (which would dangle for classic-WAF associations).
-	"aws_waf_web_acl": "ambiguous classic-WAF/WAFv2 association from CloudFront WebACLID; pending modeling decision, see service/cloudfront/relationships.go",
+	"aws_waf_web_acl": "ambiguous classic-WAF/WAFv2 association from CloudFront WebACLID; pending modeling decision",
 }
 
 // DeclaredResourceTypeValues parses every non-test Go source file directly

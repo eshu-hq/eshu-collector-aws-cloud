@@ -6,18 +6,6 @@ package globalaccelerator
 import (
 	"strings"
 	"time"
-
-	"github.com/eshu-hq/eshu-collector-aws-cloud/catalog"
-)
-
-const (
-	// ec2InstanceTargetType is the Eshu resource type an EC2-instance endpoint
-	// reference resolves to. The EC2 scanner does not emit instance resources,
-	// so this is target evidence only.
-	ec2InstanceTargetType = "aws_ec2_instance"
-	// genericResourceTargetType keeps an endpoint relationship honest when the
-	// reported endpoint id does not match a known target family.
-	genericResourceTargetType = "aws_resource"
 )
 
 func firstNonEmpty(values ...string) string {
@@ -31,25 +19,6 @@ func firstNonEmpty(values ...string) string {
 
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")
-}
-
-// endpointTargetType classifies a Global Accelerator endpoint id into the Eshu
-// resource-type family it references. AWS reports the endpoint id as an
-// ALB/NLB ARN, an Elastic IP allocation id (eipalloc-...), or an EC2 instance
-// id (i-...). An unrecognized id keeps a relationship honest by falling back to
-// the generic resource type so downstream correlation can resolve it later.
-func endpointTargetType(endpointID string) string {
-	id := strings.TrimSpace(endpointID)
-	switch {
-	case strings.Contains(id, ":elasticloadbalancing:"):
-		return catalog.ResourceTypeELBv2LoadBalancer
-	case strings.HasPrefix(id, "eipalloc-"):
-		return catalog.ResourceTypeVPCElasticIP
-	case strings.HasPrefix(id, "i-"):
-		return ec2InstanceTargetType
-	default:
-		return genericResourceTargetType
-	}
 }
 
 func timeOrNil(value time.Time) any {
