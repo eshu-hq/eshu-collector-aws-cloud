@@ -36,6 +36,40 @@ func readCIWorkflow(t *testing.T) ciWorkflowFile {
 	return workflow
 }
 
+// TestFixtureOnlyPRSkipsRace keeps fixture-only PRs cheap: the epic runs
+// the race lane on Go source or module changes only, never for fixtures the
+// tests read. A fixtures clause in the race condition would bill every
+// fixture PR for a 30-minute race job without new code to race.
+func TestFixtureOnlyPRSkipsRace(t *testing.T) {
+	t.Parallel()
+
+	workflow := readCIWorkflow(t)
+	race, ok := workflow.Jobs["race"]
+	if !ok {
+		t.Fatal("ci.yml has no race job")
+	}
+	if !strings.Contains(race.If, "needs.changes.outputs.go == 'true'") {
+		t.Errorf("job race if = %q, want the go selecting clause", race.If)
+	}
+	if strings.Contains(race.If, "needs.changes.outputs.fixtures") {
+		t.Errorf("job race if = %q, want no fixtures clause: fixture PRs run test only", race.If)
+	}
+	test, ok := workflow.Jobs["test"]
+	if !ok {
+		t.Fatal("ci.yml has no test job")
+	}
+	if !strings.Contains(test.If, "needs.changes.outputs.fixtures == 'true'") {
+		t.Errorf("job test if = %q, want the fixtures selecting clause", test.If)
+	}
+	shell, ok := workflow.Jobs["shell"]
+	if !ok {
+		t.Fatal("ci.yml has no shell job")
+	}
+	if strings.Contains(shell.If, "needs.changes.outputs.go") || strings.Contains(shell.If, "needs.changes.outputs.fixtures") {
+		t.Errorf("job shell if = %q, want shell selection only", shell.If)
+	}
+}
+
 // TestImageLaneRunsOnGoSources keeps the shipped artifact validated on
 // PRs that change what it embeds: the Dockerfile COPYs go.mod/go.sum,
 // COPYs the whole context (which keeps .go sources), and go-builds the
