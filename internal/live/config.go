@@ -45,10 +45,12 @@ var (
 // Config is the parsed live-source activation: everything parseSDKStdio
 // learns from a host request that carries no source.input file.
 type Config struct {
-	AccountID      string
-	Regions        []string
-	Services       []string
-	SourceURI      string
+	AccountID string
+	Regions   []string
+	Services  []string
+	SourceURI string
+	// PreviousDigest is the host hint; live collection currently ignores it
+	// until typed resources and failed service pairs enter the digest.
 	PreviousDigest string
 	Limits         collector.ResourceUse
 }

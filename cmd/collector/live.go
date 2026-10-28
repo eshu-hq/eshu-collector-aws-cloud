@@ -20,12 +20,7 @@ func collectLivePlan(plan stdioPlan) (sdk.Result, error) {
 	if err != nil {
 		return sdk.Result{}, err
 	}
-	opts := collector.CollectOptions{
-		ObservedAt:     time.Now().UTC(),
-		SourceURI:      plan.live.SourceURI,
-		PreviousDigest: plan.live.PreviousDigest,
-		Limits:         plan.live.Limits,
-	}
+	opts := liveCollectOptions(plan)
 	var result sdk.Result
 	if len(outcome.Warnings) == 0 {
 		result, err = collector.Collect(plan.claim, outcome.Report, opts)
@@ -36,4 +31,15 @@ func collectLivePlan(plan stdioPlan) (sdk.Result, error) {
 		return sdk.Result{}, err
 	}
 	return collector.AppendLiveResources(result, outcome.Resources, plan.live.SourceURI, plan.live.Limits)
+}
+
+// liveCollectOptions disables placeholder-only freshness until the digest
+// includes typed resources and failed service pairs. File mode keeps its
+// existing unchanged behavior.
+func liveCollectOptions(plan stdioPlan) collector.CollectOptions {
+	return collector.CollectOptions{
+		ObservedAt: time.Now().UTC(),
+		SourceURI:  plan.live.SourceURI,
+		Limits:     plan.live.Limits,
+	}
 }

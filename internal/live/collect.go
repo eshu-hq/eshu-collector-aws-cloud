@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 	awsv1 "github.com/eshu-hq/eshu-sdk/factschema/aws/v1"
 )
@@ -26,6 +27,8 @@ type Collector struct {
 	// LoadConfig resolves region-scoped AWS config; nil selects the ambient
 	// production chain (IRSA, ECS/EKS role, instance profile, environment).
 	LoadConfig func(ctx context.Context, region string) (aws.Config, error)
+	// VerifyAccount resolves the active credentials account; nil calls STS.
+	VerifyAccount func(ctx context.Context, cfg aws.Config) (string, error)
 	// Loaders overrides the production service registry; nil selects it.
 	Loaders map[string]Loader
 	// Now supplies the report timestamp; nil selects time.Now.
@@ -80,6 +83,17 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 			return Outcome{}, fmt.Errorf("live %s: %w", region, err)
 		}
 		cfg.Region = region
+		verify := c.VerifyAccount
+		if verify == nil {
+			verify = callerAccount
+		}
+		account, err := verify(ctx, cfg)
+		if err != nil || account == "" {
+			return Outcome{}, fmt.Errorf("live AWS account verification failed for region %s", region)
+		}
+		if account != config.AccountID {
+			return Outcome{}, fmt.Errorf("live AWS credentials do not match configured account for region %s", region)
+		}
 		for _, service := range config.Services {
 			if i > 0 && globalServices[service] {
 				continue
@@ -104,7 +118,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 						ServiceKind: item.Resource.ServiceKind,
 					},
 					ARN: item.Resource.ARN, ResourceID: item.Resource.ResourceID,
-					ResourceType: item.Resource.ResourceType, Name: item.Name,
+					ResourceType: item.Resource.ResourceType, Name: item.Resource.Name,
 				})
 			}
 		}
@@ -148,7 +162,12 @@ func record(arn, service, region, name, kind string) collector.Record {
 	}
 	if service == "ec2" && strings.TrimSpace(arn) != "" {
 		if resourceType, ok := ec2ResourceTypes[kind]; ok {
+			typedName := id
+			if kind == "security-group" {
+				typedName = name
+			}
 			result.Resource = &collector.LiveResource{
+				Name:   typedName,
 				Region: region, ServiceKind: service,
 				ResourceType: resourceType, ResourceID: id,
 			}
@@ -162,4 +181,16 @@ func firstLine(message string) string {
 		return message[:i]
 	}
 	return message
+}
+
+// callerAccount verifies the account of the actual credentials used by service clients.
+func callerAccount(ctx context.Context, cfg aws.Config) (string, error) {
+	output, err := sts.NewFromConfig(cfg).GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+	if err != nil {
+		return "", err
+	}
+	if output == nil {
+		return "", fmt.Errorf("STS returned no caller identity")
+	}
+	return aws.ToString(output.Account), nil
 }

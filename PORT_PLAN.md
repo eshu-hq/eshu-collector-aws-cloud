@@ -2,8 +2,10 @@
 
 Status: PARTIAL PORT. The resource envelope has a typed `NewResourceFact`
 seam with historical fixture/key proof. Claim-bound live EC2 reads now append
-typed resource identity to transitional placeholder records; all other live
-service loaders and the full scanner port remain unfinished. This plan maps
+typed resource identity to transitional placeholder records; STS verifies the
+active credentials account before service reads, and live mode ignores the old
+placeholder-only freshness digest. All other live service loaders and the full
+scanner port remain unfinished. This plan maps
 the remaining in-tree implementation to standalone locations. No live AWS
 core-kind output or host grant has been proved.
 

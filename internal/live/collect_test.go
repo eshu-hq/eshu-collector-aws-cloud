@@ -20,6 +20,10 @@ func fakeConfig(regions *[]string) func(context.Context, string) (aws.Config, er
 	}
 }
 
+func verifiedAccount(_ context.Context, _ aws.Config) (string, error) {
+	return "055929692761", nil
+}
+
 // TestCollectReportListsOnlyAllowlistedServices proves the orchestrator calls
 // exactly the configured service-region pairs: nothing outside the host
 // allowlists is ever read.
@@ -29,7 +33,8 @@ func TestCollectReportListsOnlyAllowlistedServices(t *testing.T) {
 	var regions []string
 	calls := map[string]int{}
 	collector := Collector{
-		LoadConfig: fakeConfig(&regions),
+		LoadConfig:    fakeConfig(&regions),
+		VerifyAccount: verifiedAccount,
 		Loaders: map[string]Loader{
 			"iam": func(_ context.Context, cfg aws.Config) ([]collector.Record, error) {
 				calls["iam/"+cfg.Region]++
@@ -64,7 +69,8 @@ func TestCollectReportSkipsGlobalServicesAfterFirstRegion(t *testing.T) {
 
 	calls := 0
 	collector := Collector{
-		LoadConfig: fakeConfig(&[]string{}),
+		LoadConfig:    fakeConfig(&[]string{}),
+		VerifyAccount: verifiedAccount,
 		Loaders: map[string]Loader{
 			"iam": func(_ context.Context, _ aws.Config) ([]collector.Record, error) {
 				calls++
@@ -88,7 +94,8 @@ func TestCollectReportDegradesPartialServiceFailure(t *testing.T) {
 	t.Parallel()
 
 	collector := Collector{
-		LoadConfig: fakeConfig(&[]string{}),
+		LoadConfig:    fakeConfig(&[]string{}),
+		VerifyAccount: verifiedAccount,
 		Loaders: map[string]Loader{
 			"iam": func(_ context.Context, _ aws.Config) ([]collector.Record, error) {
 				return []collector.Record{{ID: "arn:role", Name: "role"}}, nil
@@ -118,7 +125,8 @@ func TestCollectReportFailsWhenNothingIsReadable(t *testing.T) {
 	t.Parallel()
 
 	collector := Collector{
-		LoadConfig: fakeConfig(&[]string{}),
+		LoadConfig:    fakeConfig(&[]string{}),
+		VerifyAccount: verifiedAccount,
 		Loaders: map[string]Loader{
 			"sqs": func(_ context.Context, _ aws.Config) ([]collector.Record, error) {
 				return nil, errors.New("AccessDenied")
@@ -137,6 +145,7 @@ func TestCollectReportFailsConfigLoad(t *testing.T) {
 	t.Parallel()
 
 	collector := Collector{
+		VerifyAccount: verifiedAccount,
 		LoadConfig: func(_ context.Context, _ string) (aws.Config, error) {
 			return aws.Config{}, errors.New("no credentials")
 		},
@@ -150,7 +159,8 @@ func TestCollectReportFailsConfigLoad(t *testing.T) {
 
 func TestCollectReportRetainsTypedEC2SourceIdentity(t *testing.T) {
 	collector := Collector{
-		LoadConfig: fakeConfig(&[]string{}),
+		LoadConfig:    fakeConfig(&[]string{}),
+		VerifyAccount: func(context.Context, aws.Config) (string, error) { return "123456789012", nil },
 		Loaders: map[string]Loader{
 			"ec2": func(_ context.Context, cfg aws.Config) ([]collector.Record, error) {
 				return []collector.Record{
@@ -173,5 +183,54 @@ func TestCollectReportRetainsTypedEC2SourceIdentity(t *testing.T) {
 	if resource.ResourceID != "vpc-123" || resource.ResourceType != "aws_ec2_vpc" ||
 		resource.Boundary.AccountID != "123456789012" || resource.Boundary.Region != "us-east-1" {
 		t.Fatalf("wrong typed source identity: %#v", resource)
+	}
+}
+
+func TestCollectReportRejectsWrongAccountBeforeServiceRead(t *testing.T) {
+	calls := 0
+	c := Collector{
+		LoadConfig:    fakeConfig(&[]string{}),
+		VerifyAccount: func(context.Context, aws.Config) (string, error) { return "999999999999", nil },
+		Loaders: map[string]Loader{"ec2": func(context.Context, aws.Config) ([]collector.Record, error) {
+			calls++
+			return []collector.Record{record("vpc-123", "ec2", "us-east-1", "tag", "vpc")}, nil
+		}},
+	}
+	_, err := c.CollectReport(context.Background(), Config{AccountID: "055929692761", Regions: []string{"us-east-1"}, Services: []string{"ec2"}})
+	if err == nil || calls != 0 {
+		t.Fatalf("wrong account err=%v reads=%d, want error before read", err, calls)
+	}
+}
+
+func TestCollectReportRejectsUnverifiedAccountBeforeServiceRead(t *testing.T) {
+	calls := 0
+	c := Collector{
+		LoadConfig:    fakeConfig(&[]string{}),
+		VerifyAccount: func(context.Context, aws.Config) (string, error) { return "", errors.New("denied") },
+		Loaders: map[string]Loader{"ec2": func(context.Context, aws.Config) ([]collector.Record, error) {
+			calls++
+			return nil, nil
+		}},
+	}
+	_, err := c.CollectReport(context.Background(), Config{AccountID: "055929692761", Regions: []string{"us-east-1"}, Services: []string{"ec2"}})
+	if err == nil || calls != 0 {
+		t.Fatalf("unverified account err=%v reads=%d, want error before read", err, calls)
+	}
+}
+
+func TestTypedEC2NameMatchesLegacyIdentity(t *testing.T) {
+	for _, tt := range []struct{ kind, id, placeholder, want string }{
+		{"vpc", "vpc-1", "tag-vpc", "vpc-1"},
+		{"subnet", "subnet-1", "tag-subnet", "subnet-1"},
+		{"instance", "i-1", "tag-instance", "i-1"},
+		{"volume", "vol-1", "tag-volume", "vol-1"},
+		{"security-group", "sg-1", "group-name", "group-name"},
+		{"security-group-rule", "sgr-1", "sgr-1", "sgr-1"},
+		{"network-interface", "eni-1", "eni-1", "eni-1"},
+	} {
+		got := record(tt.id, "ec2", "us-east-1", tt.placeholder, tt.kind)
+		if got.Resource == nil || got.Resource.Name != tt.want {
+			t.Errorf("%s typed name = %v, want %q", tt.kind, got.Resource, tt.want)
+		}
 	}
 }

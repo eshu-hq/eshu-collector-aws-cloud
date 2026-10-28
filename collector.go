@@ -115,6 +115,7 @@ type LiveResource struct {
 	ServiceKind  string
 	ResourceType string
 	ResourceID   string
+	Name         string
 	ARN          string
 }
 
