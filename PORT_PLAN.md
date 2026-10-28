@@ -19,11 +19,11 @@ Source of truth for paths: `go/internal/collector/awscloud/` in
 | Producer `collector-aws-cloud`, `AuthorityMode: core_issued_grant` | 13 core-issued grants, one per kind × schema `1.0.0` (`grant.example.json`) |
 | SDK pair `collector v0.1.0-rc.4 / factschema v0.1.0-rc.7`, protocol `collector-sdk/v1alpha1` | `go.mod` pins, manifest `spec.runtime` |
 
-## Emission contract (declared, not yet emitted)
+## Emission contract (planned AWS kinds)
 
-`Contract()` and `manifest.yaml` declare the 13 AWS kinds at `1.0.0`
-`reported` plus 3 transitional placeholder kinds
-(`collector-aws-cloud.snapshot/record/warning`). The port:
+`Contract()` and `manifest.yaml` currently declare only 3 transitional
+placeholder kinds (`collector-aws-cloud.snapshot/record/warning`). The port
+will declare the 13 AWS kinds at `1.0.0` `reported` and:
 
 1. Ports the envelopes below so `Collect` emits the 13 AWS kinds.
 2. Deletes the 3 transitional kinds from `Contract()`, `manifest.yaml`,

@@ -96,9 +96,9 @@ with `docs/public/extend/sdk-compatibility.md` in the core repo.
 
 Core-owned fact kinds require a live #6709 producer grant naming this
 producer, version, kind, schema, and scope; namespaced kinds need none.
-This collector emits core kinds, so it needs one grant per kind per schema
-version it declares in `spec.emittedFacts` — thirteen grants, one per AWS
-kind. `TestManifestEmissionsAreAuthorized` fails when a declared kind is
+The planned AWS emission requires thirteen grants, one per core kind at
+schema `1.0.0`; the current transitional manifest declares none of those
+kinds. `TestManifestEmissionsAreAuthorized` fails when a declared kind is
 outside the collector's namespace and has no live grant scoped to a
 collector kind. This repo cannot see the core registry, so it treats any
 kind outside its namespace as potentially core-owned, including dotted

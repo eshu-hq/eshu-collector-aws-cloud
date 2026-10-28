@@ -154,9 +154,9 @@ func TestGrantExampleScopeIsCollectorKind(t *testing.T) {
 	}
 }
 
-// TestGrantExamplesCoverAWSKinds proves the checked-in examples authorize
-// every core-owned AWS kind the manifest declares, so the issuance request
-// set and the manifest cannot drift apart kind by kind.
+// TestGrantExamplesCoverAWSKinds proves the checked-in examples cover every
+// planned core-owned AWS kind. It also checks that the current manifest's
+// transitional emissions need no grant.
 func TestGrantExamplesCoverAWSKinds(t *testing.T) {
 	t.Parallel()
 

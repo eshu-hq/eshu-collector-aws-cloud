@@ -48,10 +48,10 @@ const (
 // (go/internal/facts/cloud): nine base kinds plus the EC2, S3, RDS posture
 // and external-principal-grant families. Confidence is reported: the
 // in-tree AWS envelopes record facts returned by the AWS APIs as
-// facts.SourceConfidenceReported. These kinds are NOT in Contract() or
-// manifest.yaml yet: the public SDK harness still requires every emitted
-// fact kind to carry a `.` prefix (#8851), so declaration waits for the
-// harness fix while grant issuance (grant.example.json) proceeds first.
+// facts.SourceConfidenceReported. These kinds are not in Contract() or
+// manifest.yaml yet: the placeholder pipeline emits only namespaced kinds.
+// Declaration follows the typed emitter port and a trusted host grant
+// snapshot supplied to SDK conformance (#8909).
 const (
 	AWSKindResource                 = "aws_resource"
 	AWSKindRelationship             = "aws_relationship"
@@ -68,9 +68,9 @@ const (
 	AWSKindS3ExternalPrincipalGrant = "s3_external_principal_grant"
 )
 
-// AWSKinds lists every core-owned AWS fact kind this collector emits once
-// the logic port lands. The placeholder pipeline does not emit these yet;
-// they are declared here and in manifest.yaml so grants can be issued.
+// AWSKinds lists the core-owned AWS fact kinds planned for the logic port.
+// The placeholder pipeline does not emit them, and manifest.yaml still
+// declares only its transitional namespaced kinds.
 var AWSKinds = []string{
 	AWSKindResource,
 	AWSKindRelationship,
@@ -124,11 +124,10 @@ type CollectOptions struct {
 // three transitional placeholder families the scaffold pipeline emits.
 // The AWS logic port (PORT_PLAN.md) retires these and declares the
 // thirteen AWS kinds here and in manifest.yaml. The bare AWS kinds stay
-// out of both declarations until the public SDK harness accepts
-// host-granted kinds (#8851): until then `conform` rejects any emitted
-// fact kind without a `.` namespace prefix, while core-side install and
-// verify accept granted core kinds. Grants (grant.example.json) are issued
-// first, independent of this declaration.
+// out of both declarations until typed emission and trusted host grant
+// context are ready (#8909). The standalone SDK accepts them through
+// CoreFacts; fixture-only synthetic context does not authorize production
+// emission.
 func Contract() sdk.Contract {
 	return sdk.Contract{
 		ProtocolVersion: sdk.ProtocolVersionV1Alpha1,
