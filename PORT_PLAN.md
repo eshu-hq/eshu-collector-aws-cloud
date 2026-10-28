@@ -17,7 +17,7 @@ Source of truth for paths: `go/internal/collector/awscloud/` in
 | `contract.Producer{ID: "collector-aws-cloud"}` in `go/internal/facts/cloud/aws.go` (+ posture/grant families) | `ComponentID = "collector-aws-cloud"`, `manifest.yaml` `metadata.id` |
 | `awscloud.CollectorKind = "aws"` (`types.go`), `scope.CollectorAWS = "aws"` | `CollectorKind = "aws"`, manifest `spec.collectorKinds: [aws]`, grant `scope: aws` |
 | Producer `collector-aws-cloud`, `AuthorityMode: core_issued_grant` | 13 core-issued grants, one per kind × schema `1.0.0` (`grant.example.json`) |
-| SDK pair `collector/factschema v0.2.0`, protocol `collector-sdk/v1alpha1` | `go.mod` pins, manifest `spec.runtime` |
+| SDK pair `collector v0.1.0-rc.4 / factschema v0.1.0-rc.7`, protocol `collector-sdk/v1alpha1` | `go.mod` pins, manifest `spec.runtime` |
 
 ## Emission contract (declared, not yet emitted)
 
@@ -63,8 +63,8 @@ importable only inside this module, satisfying `boundary_test.go`).
 
 ## Boundary rules for the port (CI-enforced)
 
-- Imports allowed: this module, `github.com/eshu-hq/eshu/sdk/go/collector`,
-  `github.com/eshu-hq/eshu/sdk/go/factschema`, `gopkg.in/yaml.v3`, stdlib.
+- Imports allowed: this module, `github.com/eshu-hq/eshu-sdk/collector`,
+  `github.com/eshu-hq/eshu-sdk/factschema`, `gopkg.in/yaml.v3`, stdlib.
   No `go/internal`, no cross-collector imports, no cgo (`boundary_test.go`).
 - AWS SDK dependencies enter via `go get` + committed `go.sum`
   (`go mod tidy -diff` is the first conformance gate).
@@ -80,9 +80,10 @@ importable only inside this module, satisfying `boundary_test.go`).
 1. Helpers (`types`, `partition`, `redaction`, `scan_status`) + boundary green.
 2. Grant issuance (13, grant-first-then-install: core `install`/`verify`
    accept granted core kinds before the manifest declares them).
-3. SDK harness fix for host-granted kinds (#8851); then declare the 13 bare
-   AWS kinds in `Contract()` + `manifest.yaml` (`conform` rejects them until
-   the fix lands — this ordering is load-bearing, not cosmetic).
+3. Complete trusted `CoreFacts` host integration (#8909), grant the exact
+   producer/kind/schema/collector-kind tuples, then declare the 13 bare AWS
+   kinds in `Contract()` + `manifest.yaml`. The standalone SDK supports this
+   mechanism; its fixture-only synthetic context is not a live grant.
 4. Base envelope (`aws_resource`) + conformance fixture rewrite.
 5. Remaining envelopes kind by kind; delete transitional kinds last.
 6. `awsruntime` + `service/` scanners service by service.

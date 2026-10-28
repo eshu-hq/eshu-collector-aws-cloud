@@ -8,8 +8,8 @@ template; the AWS logic port is tracked in [PORT_PLAN.md](PORT_PLAN.md).
 
 This repo pins the published SDK pair for core `>=0.0.5 <0.2.0`:
 
-- `github.com/eshu-hq/eshu/sdk/go/collector v0.2.0`
-- `github.com/eshu-hq/eshu/sdk/go/factschema v0.2.0`
+- `github.com/eshu-hq/eshu-sdk/collector v0.1.0-rc.4`
+- `github.com/eshu-hq/eshu-sdk/factschema v0.1.0-rc.7`
 
 Wire protocol: `collector-sdk/v1alpha1`. There are no `replace` directives:
 an out-of-tree clone resolves both modules through the Go module proxy.
@@ -35,12 +35,12 @@ the AWS APIs as reported):
 `aws_resource_policy_permission`, `aws_warning`, `ec2_instance_posture`,
 `s3_bucket_posture`, `rds_instance_posture`, `s3_external_principal_grant`.
 
-The bare AWS kinds stay out of the manifest until the public SDK harness
-accepts host-granted kinds (#8851): `conform` still requires every emitted
-kind to carry a `.` namespace prefix, while core-side `install` and `verify`
-accept granted core kinds. The grant request set (`grant.example.json`,
-one request per AWS kind) proceeds first and does not wait for the manifest
-declaration. See [PORT_PLAN.md](PORT_PLAN.md).
+The bare AWS kinds stay out of the manifest until their typed emitters are
+ported and the host supplies a trusted grant snapshot to conformance (#8909).
+The pinned standalone SDK accepts those kinds only through its `CoreFacts`
+context; a synthetic context in fixture tests proves the portable mechanism,
+not production authorization. The host owns grant issuance and rechecks
+emission at runtime. See [PORT_PLAN.md](PORT_PLAN.md).
 
 ## Build and test from a clean clone
 

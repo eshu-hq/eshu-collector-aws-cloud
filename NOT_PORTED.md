@@ -19,7 +19,7 @@ unblock it mechanically.
 | `s3_external_principal_grant_envelope.go` | same | same |
 | `security_group_rule_envelope.go` | same | same |
 
-The SDK (`sdk/go/collector v0.2.0`) ships `Fact`/`Result`, not the
+The SDK (`eshu-sdk/collector v0.1.0-rc.4`) ships `Fact`/`Result`, not the
 `facts.Envelope` shape (stable ID, confidence, boundary binding) the 134
 service scanners emit through these builders. Porting the envelopes without
 the scanners would strand the only callers; porting the scanners without

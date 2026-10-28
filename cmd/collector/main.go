@@ -14,7 +14,7 @@ import (
 
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 	"github.com/eshu-hq/eshu-collector-aws-cloud/internal/live"
-	sdk "github.com/eshu-hq/eshu/sdk/go/collector"
+	sdk "github.com/eshu-hq/eshu-sdk/collector"
 )
 
 type sdkRequest struct {

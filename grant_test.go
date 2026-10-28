@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eshu-hq/eshu/sdk/go/collector/conformance"
+	"github.com/eshu-hq/eshu-sdk/collector/conformance"
 )
 
 // GrantRequest is the template-side shape of a #6709 first-party producer

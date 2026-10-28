@@ -74,10 +74,10 @@ github.com/aws/aws-sdk-go-v2/service/sts v1.51.5 h1:OuyNaMncYP4ftrvcnOHJ9j3AxO3z
 github.com/aws/aws-sdk-go-v2/service/sts v1.51.5/go.mod h1:Bhu66tgvf94uunUSiAc0Ew0avhnpSm0J8Hl1MYocRbo=
 github.com/aws/smithy-go v1.28.6 h1:Pj+/sUviNYjow8ELRtNwKHZ9ECeF+7pATX3+shjLIrw=
 github.com/aws/smithy-go v1.28.6/go.mod h1:YE2RhdIuDbA5E5bTdciG9KrW3+TiEONeUWCqxX9i1Fc=
-github.com/eshu-hq/eshu/sdk/go/collector v0.2.0 h1:wOlmnu26Q/MAo50lNGlqj+KJvYDnI6x1CYOThhzNlEg=
-github.com/eshu-hq/eshu/sdk/go/collector v0.2.0/go.mod h1:DtRBLGu3mClyJdlcsuJX9mx0Gb4nvTk2J0U+HvFwNjY=
-github.com/eshu-hq/eshu/sdk/go/factschema v0.2.0 h1:47bNIgc95iYH7Thf0YWwIKbcHqf+m1UHC+En6IjOMKU=
-github.com/eshu-hq/eshu/sdk/go/factschema v0.2.0/go.mod h1:pVInY0h5obTaV0qlr4f1zkKjDXfIben/rxXZEzbrU5w=
+github.com/eshu-hq/eshu-sdk/collector v0.1.0-rc.4 h1:V8kE6u4KJ2S93po/9uAewswm8RAt38nwe6ppz6Kawy4=
+github.com/eshu-hq/eshu-sdk/collector v0.1.0-rc.4/go.mod h1:ysNLZcpQe9ZGYFZnTLyYTCHNaLrPRJjb1f9aLPOXdtA=
+github.com/eshu-hq/eshu-sdk/factschema v0.1.0-rc.7 h1:20Q3x+rqSSsQ2fEc4PvfiSFDaoQLNghsaTNgv5xSf5k=
+github.com/eshu-hq/eshu-sdk/factschema v0.1.0-rc.7/go.mod h1:CnwND1yYkq0K/gMO7k746nEKmTKvVCRYrHB3TZpsJqk=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
