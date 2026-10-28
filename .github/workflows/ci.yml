@@ -131,7 +131,7 @@ jobs:
             echo ""
             echo "| Package | Covered | Statements | Coverage |"
             echo "| --- | --- | --- | --- |"
-            awk -F'[:,]' 'NR > 1 {file=$1; pkg=file; sub(/\/[^/]*$/, "", pkg); stmts[pkg]+=$3; if ($4 > 0) cov[pkg]+=$3} END {for (p in stmts) printf "| %s | %d | %d | %.1f%% |\n", p, cov[p]+0, stmts[p], 100*(cov[p]+0)/stmts[p]}' coverage.out | sort
+            awk 'NR > 1 {n=split($1, a, ":"); file=a[1]; pkg=file; sub(/\/[^/]*$/, "", pkg); stmts[pkg]+=$2; if ($3 > 0) cov[pkg]+=$2} END {for (p in stmts) printf "| %s | %d | %d | %.1f%% |\n", p, cov[p]+0, stmts[p], 100*(cov[p]+0)/stmts[p]}' coverage.out | sort
           } >> "$GITHUB_STEP_SUMMARY"
           awk -v total="$total" -v floor="${{ env.COVERAGE_FLOOR }}" 'BEGIN {exit !(total + 0 >= floor + 0)}'
       - uses: actions/upload-artifact@v4 # ea165f8d65b6e75b540449e92b4886f43607fa02
