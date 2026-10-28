@@ -1,0 +1,18 @@
+.github/workflows/ci.yml
+  h_78a442cba0b3e6 43,49-51,60-70,73-74,88-112,115,138,153,242,249-252,256-262,268-279
+CONTRIBUTING.md
+  h_78a442cba0b3e6 20-21,25-26,33-39
+ci_workflow_test.go
+  h_78a442cba0b3e6 15,17-32,76-249
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ded1825a2ed7f7c243ce6077a99425e701c8088b",
+  "prompts": {},
+  "humans": {
+    "h_78a442cba0b3e6": {
+      "author": "Allen Sanabria <asanabria6910@gmail.com>"
+    }
+  }
+}
