@@ -50,7 +50,13 @@ func TestImageLaneRunsOnGoSources(t *testing.T) {
 	if !ok {
 		t.Fatal("ci.yml has no image job")
 	}
-	if !strings.Contains(job.If, "needs.changes.outputs.go") {
-		t.Errorf("job image if = %q, want a go clause: Go sources ship in the image", job.If)
+	if !strings.Contains(job.If, "needs.changes.outputs.go == 'true'") {
+		t.Errorf("job image if = %q, want the go selecting clause: Go sources ship in the image", job.If)
+	}
+	if strings.Contains(job.If, "needs.changes.outputs.go !=") {
+		t.Errorf("job image if = %q, want == 'true', not an inverted comparison", job.If)
+	}
+	if strings.Contains(job.If, "needs.changes.outputs.go == 'false'") {
+		t.Errorf("job image if = %q, want == 'true', not == 'false'", job.If)
 	}
 }
