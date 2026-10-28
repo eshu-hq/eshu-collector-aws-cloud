@@ -254,3 +254,74 @@ func TestResourceFactRejectsInvalidAndUnredactedInputs(t *testing.T) {
 		})
 	}
 }
+
+func TestResourceFactRejectsPresignedSourceURIWithoutEcho(t *testing.T) {
+	uris := []string{
+		"https://bucket.s3.amazonaws.com/key?X-Amz-Credential=AKIAEXAMPLE%2F20261028%2Fus-east-1%2Fs3%2Faws4_request",
+		"https://bucket.s3.amazonaws.com/key?X-Amz-Signature=deadbeefsecret",
+		"https://bucket.s3.amazonaws.com/key?X-Amz-%43redential=AKIAEXAMPLE",
+	}
+	for _, uri := range uris {
+		t.Run(uri[:strings.IndexByte(uri, '?')], func(t *testing.T) {
+			observation := resourceParityObservation(t)
+			observation.SourceURI = uri
+			fact, err := NewResourceFact(observation)
+			if err == nil || fact.Kind != "" {
+				t.Fatalf("presigned URI fact = %+v, error = %v; want refusal", fact, err)
+			}
+			if strings.Contains(err.Error(), "AKIAEXAMPLE") || strings.Contains(err.Error(), "deadbeefsecret") || strings.Contains(err.Error(), uri) {
+				t.Fatalf("error echoed credential material: %v", err)
+			}
+		})
+	}
+}
+
+func TestResourceFactCopiesNestedJSONValuesBeforeValidation(t *testing.T) {
+	observation := resourceParityObservation(t)
+	const exactID int64 = 9007199254740993
+	names := []string{"first"}
+	levels := []int{1, 2}
+	values := []map[string]any{{
+		"count":  exactID,
+		"names":  names,
+		"levels": levels,
+	}}
+	nested := map[string]any{"rows": values}
+	observation.Attributes = map[string]any{"nested": nested}
+	fact, err := NewResourceFact(observation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := json.Marshal(fact.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values[0]["count"] = int64(1)
+	names[0] = "changed"
+	levels[0] = 9
+	values[0]["DatabasePassword"] = "hunter2-parity-secret"
+	nested["injected"] = "changed"
+	observation.Tags["Environment"] = "changed"
+	after, err := json.Marshal(fact.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatalf("payload changed after caller mutation: before %s, after %s", before, after)
+	}
+	attributes, ok := fact.Payload["attributes"].(map[string]any)
+	if !ok {
+		t.Fatalf("attributes type = %T", fact.Payload["attributes"])
+	}
+	gotNested, ok := attributes["nested"].(map[string]any)
+	if !ok {
+		t.Fatalf("nested type = %T", attributes["nested"])
+	}
+	rows, ok := gotNested["rows"].([]map[string]any)
+	if !ok || len(rows) != 1 {
+		t.Fatalf("rows = %#v", gotNested["rows"])
+	}
+	if count, ok := rows[0]["count"].(int64); !ok || count != exactID {
+		t.Fatalf("count = %#v, want exact int64 %d", rows[0]["count"], exactID)
+	}
+}

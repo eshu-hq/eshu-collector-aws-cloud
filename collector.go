@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -402,29 +401,6 @@ func CollectRetryable(claim sdk.Claim, observedAt time.Time, retryAfterSeconds i
 			Class: sdk.StatusFailure, FailureClass: "transient", RetryAfterSeconds: retryAfterSeconds,
 		}},
 	}
-}
-
-func checkSourceURI(raw string) error {
-	trimmed := strings.TrimSpace(raw)
-	lower := strings.ToLower(trimmed)
-	// url.Parse only surfaces userinfo after "//", so check "@" first: a
-	// hierarchical URI with userinfo (https://user:secret@host) and an
-	// opaque credential body (svc:SECRET@host/x) are both refused. Error
-	// text never echoes the URI, which may carry the credential.
-	if strings.Contains(trimmed, "@") {
-		if u, err := url.Parse(trimmed); err != nil || u.User != nil {
-			return fmt.Errorf("source URI must not embed credentials")
-		}
-		if !strings.Contains(lower, "://") {
-			return fmt.Errorf("source URI must not embed credentials")
-		}
-	}
-	for _, key := range []string{"password", "secret", "token"} {
-		if strings.Contains(lower, key+"=") {
-			return fmt.Errorf("source URI must not embed credentials")
-		}
-	}
-	return nil
 }
 
 // credentialValueMarkers are substrings that mark free text as unsafe to
