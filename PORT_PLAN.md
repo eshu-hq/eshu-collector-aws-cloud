@@ -116,3 +116,12 @@ field; the service scanner must redact it first. The envelope test proves
 transport of the redacted shape, not the scanner's redaction policy. Scanner
 redaction and the host's core-kind authorization must be proved before live
 collection uses this seam.
+
+`NewResourceFact` snapshots `Attributes` through their emitted JSON form before
+validating or returning the fact. Nested caller maps, slices, pointer-backed
+values, and custom marshalers cannot change it afterward. Numeric values use
+`json.Number` in the in-memory payload, retaining exact JSON digits above
+float64's integer precision; historical `time.Time` attributes become their
+RFC3339 JSON strings. Fields hidden by `json:"-"` remain absent, as they are
+on the wire. Values that JSON cannot encode, including exposed cycles, fail
+closed with no fact.
