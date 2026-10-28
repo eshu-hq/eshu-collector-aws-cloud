@@ -1,0 +1,43 @@
+# Contributing
+
+## Local gates
+
+`make ci` runs the same lint, test, and race commands CI runs: `go vet`,
+`golangci-lint run` plus the gofumpt format check, `go mod tidy -diff`,
+the 500-line `.go` file cap, `go build`, the full test suite, and the
+race suite. Run it before every push. It needs Go 1.26.10 or newer;
+`go.mod` is the version of record and CI installs exactly that.
+
+Shell scripts pass `shellcheck` (see the `shell` lane). Keep them
+`set -euo pipefail` clean like `scripts/run-conformance.sh`.
+
+## CI lanes
+
+Job names are frozen because branch protection requires `ci-complete`:
+
+| Lane | Runs when |
+| --- | --- |
+| `lint` | Go sources, `manifest.yaml`, module or lint-config changes |
+| `test` | Above, plus fixtures and config the tests read |
+| `race` | Same inputs as `lint`, plus a coverage artifact and floor check |
+| `shell` | Shell script changes |
+| `image` | `Dockerfile` or `.dockerignore` changes (build only, no push) |
+| `govulncheck` | Dependency changes, pushes to `main`, weekly schedule |
+| `gosec` | Pushes to `main` and weekly schedule; advisory, SARIF to the Security tab |
+| `ci-complete` | Always; fails on any needed lane failure, passes on legitimate skips |
+
+Docs-only PRs run no lane and stay mergeable through `ci-complete`.
+
+## Coverage floor
+
+The `race` job fails below `COVERAGE_FLOOR` in `ci.yml`. The floor starts
+at the measured post-cleanup baseline and may only rise toward the 90%
+target as tests land. Never lower it, exclude packages silently, or
+delete assertions to move the number.
+
+## Fixture-only CI
+
+PR lanes never touch live AWS: tests run against `testdata/` fixtures.
+`manifest.yaml` is embedded into the binary, so editing it runs the full
+Go lanes. Base images stay digest-pinned; re-pin with the
+`scripts/pin-digest.sh` flow and keep the Go base in sync with `go.mod`.
