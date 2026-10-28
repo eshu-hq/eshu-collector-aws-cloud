@@ -16,3 +16,4 @@ updates:
       actions:
         patterns:
           - "*"
+# skip-proof: unclassified-only lane check for issue #6
