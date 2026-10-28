@@ -13,11 +13,8 @@ import (
 	sdk "github.com/eshu-hq/eshu-sdk/collector"
 )
 
-// collectLivePlan runs the config-driven live claim: it lists live AWS
-// resources for the host's region and service allowlists, builds the source
-// report, and runs the existing collector.Collect over it. Services that fail
-// degrade to a partial result with a recorded warning; a total read failure
-// errors the claim so an empty report never retires good evidence.
+// collectLivePlan runs a bounded AWS claim and appends typed resource evidence
+// from successful service reads. Failed services leave the claim partial.
 func collectLivePlan(plan stdioPlan) (sdk.Result, error) {
 	outcome, err := live.Collector{}.CollectReport(context.Background(), plan.live)
 	if err != nil {
@@ -29,8 +26,14 @@ func collectLivePlan(plan stdioPlan) (sdk.Result, error) {
 		PreviousDigest: plan.live.PreviousDigest,
 		Limits:         plan.live.Limits,
 	}
+	var result sdk.Result
 	if len(outcome.Warnings) == 0 {
-		return collector.Collect(plan.claim, outcome.Report, opts)
+		result, err = collector.Collect(plan.claim, outcome.Report, opts)
+	} else {
+		result, err = collector.CollectPartial(plan.claim, outcome.Report, opts, strings.Join(outcome.Warnings, "; "))
 	}
-	return collector.CollectPartial(plan.claim, outcome.Report, opts, strings.Join(outcome.Warnings, "; "))
+	if err != nil {
+		return sdk.Result{}, err
+	}
+	return collector.AppendLiveResources(result, outcome.Resources, plan.live.SourceURI, plan.live.Limits)
 }

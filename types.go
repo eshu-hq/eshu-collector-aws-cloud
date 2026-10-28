@@ -18,7 +18,10 @@ type Boundary struct {
 	GenerationID        string
 	CollectorInstanceID string
 	FencingToken        int64
-	ObservedAt          time.Time
+	// ClaimToken is the host's opaque SDK claim token. It is checked for
+	// presence when an observation comes from an SDK claim and never emitted.
+	ClaimToken string
+	ObservedAt time.Time
 }
 
 // ResourceObservation describes one AWS resource reported by a service API.

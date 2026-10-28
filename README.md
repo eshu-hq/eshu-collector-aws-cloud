@@ -23,10 +23,13 @@ review). Keep internal helpers private.
 
 ## Emission contract
 
-`manifest.yaml` `spec.emittedFacts` declares three transitional placeholder
-kinds (`collector-aws-cloud.snapshot/record/warning`) that the scaffold
-pipeline still emits until the logic port lands. The port removes them and
-declares the thirteen core-owned AWS fact kinds at schema `1.0.0`, all with
+`manifest.yaml` `spec.emittedFacts` declares `aws_resource` alongside three
+transitional placeholder kinds (`collector-aws-cloud.snapshot/record/warning`).
+The live EC2 reader emits typed resource identity for VPCs, subnets, security
+groups and rules, network interfaces, instances, and volumes. The remaining
+AWS service readers still produce placeholder records. The full port removes
+those placeholders and declares the other core-owned AWS fact kinds at schema
+`1.0.0`, all with
 `reported` confidence (the in-tree AWS envelopes record facts returned by
 the AWS APIs as reported):
 
@@ -35,17 +38,19 @@ the AWS APIs as reported):
 `aws_resource_policy_permission`, `aws_warning`, `ec2_instance_posture`,
 `s3_bucket_posture`, `rds_instance_posture`, `s3_external_principal_grant`.
 
-The bare AWS kinds stay out of the manifest until their typed emitters are
-ported and the host supplies a trusted grant snapshot to conformance (#8909).
+The remaining bare AWS kinds stay out of the manifest until their typed
+emitters are ported and the host supplies a trusted grant snapshot to
+conformance (#8909).
 The pinned standalone SDK accepts those kinds only through its `CoreFacts`
 context; a synthetic context in fixture tests proves the portable mechanism,
 not production authorization. The host owns grant issuance and rechecks
 emission at runtime. See [PORT_PLAN.md](PORT_PLAN.md).
 
-The initial typed `aws_resource` envelope helper is now present and tested
-against a committed in-tree fixture and stable key. It is not connected
-to `Collect` or the live service loaders; those still emit placeholder
-facts. Sensitive-shaped resource attribute keys currently fail closed.
+The typed `aws_resource` envelope is connected to claim-bound live EC2 reads.
+Its current payload contains identity and name; it does not yet carry the
+legacy scanner's attributes, tags, relationships, or other fact kinds. This
+is staged implementation, not a parity or live host admission claim.
+Sensitive-shaped resource attribute keys fail closed.
 See [PORT_PLAN.md](PORT_PLAN.md#resource-envelope-seam-status) for the
 remaining redaction and host-grant boundary.
 
@@ -126,9 +131,9 @@ expire in-flight leases, revoke, restore the last supported producer,
 replay, and verify fact/graph/read truth. Two producers never hold one
 scope+generation at once.
 
-No grants have been issued for this collector yet. Issuance is explicitly
-out of scope for the scaffold commit; the grant request set exists so the
-coordinator can issue it as the next step.
+Live grant issuance and claim admission for the new typed path are not yet
+proven here. The grant request set names the required tuples; the host must
+issue and verify them before deployment.
 
 ## Releases
 

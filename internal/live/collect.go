@@ -11,6 +11,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
+	awsv1 "github.com/eshu-hq/eshu-sdk/factschema/aws/v1"
 )
 
 // Loader lists one service's resources in one region as report records. It
@@ -38,6 +39,8 @@ type Collector struct {
 type Outcome struct {
 	Report   collector.Report
 	Warnings []string
+	// Resources are typed observations retained from successful AWS reads.
+	Resources []collector.ResourceObservation
 }
 
 func (c Collector) now() time.Time {
@@ -70,6 +73,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 	registry := c.loaders()
 	records := []collector.Record{}
 	warnings := []string{}
+	resources := []collector.ResourceObservation{}
 	for i, region := range config.Regions {
 		cfg, err := c.loadConfig(ctx, region)
 		if err != nil {
@@ -90,6 +94,19 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 				continue
 			}
 			records = append(records, listed...)
+			for _, item := range listed {
+				if item.Resource == nil {
+					continue
+				}
+				resources = append(resources, collector.ResourceObservation{
+					Boundary: collector.Boundary{
+						AccountID: config.AccountID, Region: item.Resource.Region,
+						ServiceKind: item.Resource.ServiceKind,
+					},
+					ARN: item.Resource.ARN, ResourceID: item.Resource.ResourceID,
+					ResourceType: item.Resource.ResourceType, Name: item.Name,
+				})
+			}
 		}
 	}
 	if len(records) == 0 && len(warnings) > 0 {
@@ -101,8 +118,19 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 			Source:      "aws-live:" + config.AccountID + "/" + strings.Join(config.Regions, ","),
 			Records:     records,
 		},
-		Warnings: warnings,
+		Warnings:  warnings,
+		Resources: resources,
 	}, nil
+}
+
+var ec2ResourceTypes = map[string]string{
+	"vpc":                 awsv1.ResourceTypeEC2VPC,
+	"subnet":              awsv1.ResourceTypeEC2Subnet,
+	"security-group":      awsv1.ResourceTypeEC2SecurityGroup,
+	"security-group-rule": awsv1.ResourceTypeEC2SecurityGroupRule,
+	"network-interface":   awsv1.ResourceTypeEC2NetworkInterface,
+	"instance":            awsv1.ResourceTypeEC2Instance,
+	"volume":              awsv1.ResourceTypeEC2Volume,
 }
 
 // record builds one metadata-only report record. The ID is the resource ARN
@@ -113,11 +141,20 @@ func record(arn, service, region, name, kind string) collector.Record {
 	if id == "" {
 		id = service + "/" + region + "/" + name
 	}
-	return collector.Record{
+	result := collector.Record{
 		ID:     id,
 		Name:   name,
 		Detail: "service=" + service + " region=" + region + " kind=" + kind,
 	}
+	if service == "ec2" && strings.TrimSpace(arn) != "" {
+		if resourceType, ok := ec2ResourceTypes[kind]; ok {
+			result.Resource = &collector.LiveResource{
+				Region: region, ServiceKind: service,
+				ResourceType: resourceType, ResourceID: id,
+			}
+		}
+	}
+	return result
 }
 
 func firstLine(message string) string {

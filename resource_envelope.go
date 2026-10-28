@@ -125,8 +125,8 @@ func validateResourceBoundary(boundary Boundary) error {
 			return fmt.Errorf("aws observation requires %s", required.name)
 		}
 	}
-	if boundary.FencingToken <= 0 {
-		return fmt.Errorf("aws observation fencing_token must be positive")
+	if boundary.FencingToken <= 0 && strings.TrimSpace(boundary.ClaimToken) == "" {
+		return fmt.Errorf("aws observation requires claim fencing token")
 	}
 	return nil
 }

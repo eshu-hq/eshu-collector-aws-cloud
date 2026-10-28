@@ -84,7 +84,11 @@ func pinnedRequest(t *testing.T, payload map[string]any, schemas map[string]json
 			Payload: payload,
 		}},
 	}
-	return conformance.Request{Manifest: manifest, Fixtures: []sdk.Result{result}, Mode: conformance.ModeFixture, PayloadSchemas: schemas}
+	request := coreFixtureRequest(t, manifest, []sdk.Result{result})
+	for kind, schema := range schemas {
+		request.PayloadSchemas[kind] = schema
+	}
+	return request
 }
 
 // TestTrustedCoreKindConformance checks the portable fixture path before the
@@ -101,12 +105,7 @@ func TestTrustedCoreKindConformance(t *testing.T) {
 		t.Fatal("pinned fixture pack ships no aws_resource payload")
 	}
 	request := pinnedRequest(t, payload, map[string]json.RawMessage{"aws_resource": schema})
-	request.Manifest.Spec.EmittedFacts[len(request.Manifest.Spec.EmittedFacts)-1] = conformance.FactFamily{
-		Kind: "aws_resource", SchemaVersions: []string{"1.0.0"},
-		SourceConfidence: []string{"reported"}, PayloadSchemaRef: "aws_resource",
-	}
-	request.Manifest.Spec.ConsumerContracts.Reducer.Phases = append(
-		request.Manifest.Spec.ConsumerContracts.Reducer.Phases, "proof.synthetic:aws_resource")
+	request.Manifest.Spec.EmittedFacts = request.Manifest.Spec.EmittedFacts[:len(request.Manifest.Spec.EmittedFacts)-1]
 	request.Fixtures[0].Facts[0].Kind = "aws_resource"
 	request.Fixtures[0].Facts[0].SourceConfidence = sdk.SourceConfidenceReported
 	request.ReservedFactKinds = []string{"aws_resource"}
@@ -115,7 +114,7 @@ func TestTrustedCoreKindConformance(t *testing.T) {
 		ComponentVersion: request.Manifest.Metadata.Version,
 		Facts: []conformance.CoreFactAuthorization{{
 			Kind: "aws_resource", PayloadSchemaRef: "aws_resource",
-			ReducerPhases: []string{"proof.synthetic:aws_resource"},
+			ReducerPhases: []string{"aws_cloud_runtime_drift"},
 			Emissions: []conformance.CoreFactEmission{{
 				CollectorKind: CollectorKind, SchemaVersions: []string{"1.0.0"},
 			}},

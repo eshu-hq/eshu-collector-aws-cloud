@@ -100,10 +100,22 @@ type Record struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
 	Detail string `json:"detail,omitempty"`
+	// Resource carries typed metadata from a live AWS read. The placeholder
+	// report format does not accept it from a file.
+	Resource *LiveResource `json:"-"`
 	// Secret is intentionally never emitted: Collect redacts it and records
 	// the redaction instead. Keep a field like this so the redaction path
 	// stays exercised after the template is customized.
 	Secret string `json:"secret,omitempty"`
+}
+
+// LiveResource is the source identity retained by a live AWS loader.
+type LiveResource struct {
+	Region       string
+	ServiceKind  string
+	ResourceType string
+	ResourceID   string
+	ARN          string
 }
 
 // CollectOptions controls emission for one claimed scope.
@@ -119,14 +131,9 @@ type CollectOptions struct {
 	Limits ResourceUse
 }
 
-// Contract returns the SDK fact families this collector may emit: the
-// three transitional placeholder families the scaffold pipeline emits.
-// The AWS logic port (PORT_PLAN.md) retires these and declares the
-// thirteen AWS kinds here and in manifest.yaml. The bare AWS kinds stay
-// out of both declarations until typed emission and trusted host grant
-// context are ready (#8909). The standalone SDK accepts them through
-// CoreFacts; fixture-only synthetic context does not authorize production
-// emission.
+// Contract returns the typed aws_resource kind and the transitional families
+// still emitted by the scaffold. The host must authorize the core-owned kind
+// with a live grant; synthetic fixture context does not authorize production.
 func Contract() sdk.Contract {
 	return sdk.Contract{
 		ProtocolVersion: sdk.ProtocolVersionV1Alpha1,
@@ -143,6 +150,11 @@ func Contract() sdk.Contract {
 			},
 			{
 				Kind:             FactKindWarning,
+				SchemaVersions:   []string{"1.0.0"},
+				SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceReported},
+			},
+			{
+				Kind:             AWSKindResource,
 				SchemaVersions:   []string{"1.0.0"},
 				SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceReported},
 			},

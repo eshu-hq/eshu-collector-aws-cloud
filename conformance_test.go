@@ -23,7 +23,7 @@ func TestConformancePositive(t *testing.T) {
 
 	manifest := loadManifest(t)
 	result := mustCollect(t, "complete.json", testClaim(), testObservedAt(), "")
-	report := conformance.Run(conformance.Request{Manifest: manifest, Fixtures: []sdk.Result{result}, Mode: conformance.ModeFixture})
+	report := conformance.Run(coreFixtureRequest(t, manifest, []sdk.Result{result}))
 	if !report.OK() {
 		t.Fatalf("conformance findings = %#v, want passed", report.Findings)
 	}
@@ -58,7 +58,7 @@ func TestConformanceEmpty(t *testing.T) {
 	if len(result.Facts) != 1 || result.Facts[0].Kind != FactKindSnapshot {
 		t.Fatalf("Facts = %#v, want one snapshot fact", result.Facts)
 	}
-	report := conformance.Run(conformance.Request{Manifest: manifest, Fixtures: []sdk.Result{result}, Mode: conformance.ModeFixture})
+	report := conformance.Run(coreFixtureRequest(t, manifest, []sdk.Result{result}))
 	if !report.OK() {
 		t.Fatalf("empty snapshot findings = %#v, want passed", report.Findings)
 	}
@@ -167,7 +167,7 @@ func TestConformanceDuplicate(t *testing.T) {
 	if len(duplicate.Facts) != len(complete.Facts) {
 		t.Fatalf("duplicate Facts = %d, want %d", len(duplicate.Facts), len(complete.Facts))
 	}
-	report := conformance.Run(conformance.Request{Manifest: manifest, Fixtures: []sdk.Result{duplicate}, Mode: conformance.ModeFixture})
+	report := conformance.Run(coreFixtureRequest(t, manifest, []sdk.Result{duplicate}))
 	if !report.OK() {
 		t.Fatalf("duplicate findings = %#v, want passed", report.Findings)
 	}

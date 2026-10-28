@@ -84,7 +84,7 @@ func TestProducerGrantContract(t *testing.T) {
 	}
 	// Revocation and expiry constrain granted kinds only: a revoked grant
 	// object must not block the template's own namespaced kinds.
-	if problems := uncoveredEmissions(loadManifest(t), []GrantRequest{revoked}, now); len(problems) != 0 {
+	if problems := uncoveredEmissions(namespacedManifest(t), []GrantRequest{revoked}, now); len(problems) != 0 {
 		t.Fatalf("revoked grant blocked namespaced kinds: %v", problems)
 	}
 	// Conflicting producers never share one scope+generation: the template
@@ -199,7 +199,7 @@ func TestUncoveredEmissionsRejectsDottedCoreLookingKind(t *testing.T) {
 	t.Parallel()
 
 	now := time.Now()
-	manifest := loadManifest(t)
+	manifest := namespacedManifest(t)
 	manifest.Spec.EmittedFacts = append(manifest.Spec.EmittedFacts, conformance.FactFamily{
 		Kind:             "incident.record",
 		SchemaVersions:   []string{"1.0.0", "1.1.0"},
@@ -260,7 +260,7 @@ func TestUncoveredEmissionsNamespaceBoundary(t *testing.T) {
 
 	now := time.Now()
 	revoked := GrantRequest{ProducerID: ComponentID, Version: "0.1.0", Kind: "x", Revoked: true}
-	own := loadManifest(t)
+	own := namespacedManifest(t)
 	if problems := uncoveredEmissions(own, []GrantRequest{revoked}, now); len(problems) != 0 {
 		t.Fatalf("own-namespace kinds with a revoked unrelated grant: %v, want none", problems)
 	}
@@ -330,4 +330,18 @@ func grantCovers(grants []GrantRequest, producerID, version, kind, schemaVersion
 
 func normalizeVersion(version string) string {
 	return strings.TrimPrefix(strings.TrimSpace(version), "v")
+}
+
+// namespacedManifest limits namespace boundary tests to their intended kinds.
+func namespacedManifest(t *testing.T) conformance.Manifest {
+	t.Helper()
+	manifest := loadManifest(t)
+	families := manifest.Spec.EmittedFacts[:0:0]
+	for _, family := range manifest.Spec.EmittedFacts {
+		if family.Kind != AWSKindResource {
+			families = append(families, family)
+		}
+	}
+	manifest.Spec.EmittedFacts = families
+	return manifest
 }

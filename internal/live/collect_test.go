@@ -147,3 +147,31 @@ func TestCollectReportFailsConfigLoad(t *testing.T) {
 		t.Fatal("CollectReport error = nil, want config failure")
 	}
 }
+
+func TestCollectReportRetainsTypedEC2SourceIdentity(t *testing.T) {
+	collector := Collector{
+		LoadConfig: fakeConfig(&[]string{}),
+		Loaders: map[string]Loader{
+			"ec2": func(_ context.Context, cfg aws.Config) ([]collector.Record, error) {
+				return []collector.Record{
+					record("vpc-123", "ec2", cfg.Region, "test", "vpc"),
+					record("", "ec2", cfg.Region, "missing", "vpc"),
+				}, nil
+			},
+		},
+	}
+	outcome, err := collector.CollectReport(context.Background(), Config{
+		AccountID: "123456789012", Regions: []string{"us-east-1"}, Services: []string{"ec2"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outcome.Resources) != 1 {
+		t.Fatalf("typed resources = %d, want one sourced ID", len(outcome.Resources))
+	}
+	resource := outcome.Resources[0]
+	if resource.ResourceID != "vpc-123" || resource.ResourceType != "aws_ec2_vpc" ||
+		resource.Boundary.AccountID != "123456789012" || resource.Boundary.Region != "us-east-1" {
+		t.Fatalf("wrong typed source identity: %#v", resource)
+	}
+}

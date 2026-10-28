@@ -1,8 +1,9 @@
 # PORT_PLAN.md — AWS logic port into this standalone repo
 
 Status: PARTIAL PORT. The resource envelope has a typed `NewResourceFact`
-seam with historical fixture/key proof, but `Report`/`Collect` and the live
-service loaders still emit transitional placeholder records. This plan maps
+seam with historical fixture/key proof. Claim-bound live EC2 reads now append
+typed resource identity to transitional placeholder records; all other live
+service loaders and the full scanner port remain unfinished. This plan maps
 the remaining in-tree implementation to standalone locations. No live AWS
 core-kind output or host grant has been proved.
 
@@ -22,9 +23,9 @@ Source of truth for paths: `go/internal/collector/awscloud/` in
 
 ## Emission contract (planned AWS kinds)
 
-`Contract()` and `manifest.yaml` currently declare only 3 transitional
+`Contract()` and `manifest.yaml` declare `aws_resource` and 3 transitional
 placeholder kinds (`collector-aws-cloud.snapshot/record/warning`). The port
-will declare the 13 AWS kinds at `1.0.0` `reported` and:
+will declare the remaining AWS kinds at `1.0.0` `reported` and:
 
 1. Ports the envelopes below so `Collect` emits the 13 AWS kinds.
 2. Deletes the 3 transitional kinds from `Contract()`, `manifest.yaml`,
@@ -85,10 +86,10 @@ importable only inside this module, satisfying `boundary_test.go`).
    producer/kind/schema/collector-kind tuples, then declare the 13 bare AWS
    kinds in `Contract()` + `manifest.yaml`. The standalone SDK supports this
    mechanism; its fixture-only synthetic context is not a live grant.
-4. Wire the typed base envelope (`aws_resource`) into claim-bound collection
-   after scanner redaction and host grant integration; replace placeholder
-   conformance fixtures. The pure envelope constructor and its fixture/key
-   regression are present, but neither step is complete.
+4. Complete the typed base envelope (`aws_resource`) in claim-bound collection:
+   the first EC2 identity slice is wired, but the legacy attributes, tags,
+   relationships, other services, real host grant proof, and replacement of
+   placeholder conformance fixtures remain.
 5. Remaining envelopes kind by kind; delete transitional kinds last.
 6. `awsruntime` + `service/` scanners service by service.
 7. `recordpolicy` / `freshness` / `catalog` / `checkpoint` integration.
