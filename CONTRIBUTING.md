@@ -27,6 +27,8 @@ Job names are frozen because branch protection requires `ci-complete`:
 | `ci-complete` | Always; fails on any needed lane failure, passes on legitimate skips |
 
 Docs-only PRs run no lane and stay mergeable through `ci-complete`.
+A manual `workflow_dispatch` run records every lane; the weekly schedule
+runs `govulncheck` and `gosec` only.
 
 ## Coverage floor
 
