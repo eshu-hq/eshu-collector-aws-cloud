@@ -12,39 +12,18 @@ import (
 // publishes. It prefers the collaboration ARN (always present from the Clean
 // Rooms API) and falls back to the collaboration id, so membership edges can key
 // the collaboration by the same value the node publishes.
-func collaborationResourceID(collaboration Collaboration) string {
-	return firstNonEmpty(collaboration.ARN, collaboration.ID)
-}
 
 // configuredTableResourceID returns the resource_id a configured-table node
 // publishes. It prefers the table ARN and falls back to the configured-table
 // id, so the table's own edges are sourced on the same id the node publishes.
-func configuredTableResourceID(table ConfiguredTable) string {
-	return firstNonEmpty(table.ARN, table.ID)
-}
 
 // membershipResourceID returns the resource_id a membership node publishes. It
 // prefers the membership ARN and falls back to the membership id.
-func membershipResourceID(membership Membership) string {
-	return firstNonEmpty(membership.ARN, membership.ID)
-}
 
 // glueTableResourceID returns the resource_id the Glue scanner publishes for a
 // Glue table node: "<database>/<table>", or just "<table>" when no database is
 // reported. It returns "" when no table name is present so a Glue edge is
 // skipped rather than dangled.
-func glueTableResourceID(databaseName, tableName string) string {
-	databaseName = strings.TrimSpace(databaseName)
-	tableName = strings.TrimSpace(tableName)
-	switch {
-	case databaseName != "" && tableName != "":
-		return databaseName + "/" + tableName
-	case tableName != "":
-		return tableName
-	default:
-		return ""
-	}
-}
 
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {

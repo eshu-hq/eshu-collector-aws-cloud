@@ -6,70 +6,28 @@ package workspaces
 import (
 	"strings"
 	"time"
-
-	awscloud "github.com/eshu-hq/eshu-collector-aws-cloud"
 )
 
 // workspaceResourceID returns the resource_id the WorkSpace node publishes. The
 // DescribeWorkspaces API does not return an ARN, so the scanner synthesizes a
 // partition-aware WorkSpaces ARN from the scan boundary and falls back to the
 // bare WorkSpace id when identity is incomplete.
-func workspaceResourceID(boundary awscloud.Boundary, workspace Workspace) string {
-	id := strings.TrimSpace(workspace.ID)
-	if id == "" {
-		return ""
-	}
-	if arn := workspacesARN(boundary, "workspace", id); arn != "" {
-		return arn
-	}
-	return id
-}
 
 // directoryResourceID returns the resource_id the WorkSpaces directory node
 // publishes. DescribeWorkspaceDirectories returns no ARN, so the scanner
 // synthesizes a partition-aware WorkSpaces directory ARN and falls back to the
 // bare directory id. The bare directory id is also what the Directory Service
 // scanner publishes, which the directory-to-DS edge keys on separately.
-func directoryResourceID(boundary awscloud.Boundary, directory Directory) string {
-	id := strings.TrimSpace(directory.ID)
-	if id == "" {
-		return ""
-	}
-	if arn := workspacesARN(boundary, "directory", id); arn != "" {
-		return arn
-	}
-	return id
-}
 
 // bundleResourceID returns the resource_id the WorkSpaces bundle node
 // publishes. DescribeWorkspaceBundles returns no ARN, so the scanner
 // synthesizes a partition-aware WorkSpaces bundle ARN and falls back to the
 // bare bundle id.
-func bundleResourceID(boundary awscloud.Boundary, bundle Bundle) string {
-	id := strings.TrimSpace(bundle.ID)
-	if id == "" {
-		return ""
-	}
-	if arn := workspacesARN(boundary, "workspacebundle", id); arn != "" {
-		return arn
-	}
-	return id
-}
 
 // ipGroupResourceID returns the resource_id the WorkSpaces IP access control
 // group node publishes. DescribeIpGroups returns no ARN, so the scanner
 // synthesizes a partition-aware WorkSpaces IP-group ARN and falls back to the
 // bare group id.
-func ipGroupResourceID(boundary awscloud.Boundary, group IPGroup) string {
-	id := strings.TrimSpace(group.ID)
-	if id == "" {
-		return ""
-	}
-	if arn := workspacesARN(boundary, "workspaceipgroup", id); arn != "" {
-		return arn
-	}
-	return id
-}
 
 // workspacesARN synthesizes a partition-aware Amazon WorkSpaces ARN of the form
 // arn:<partition>:workspaces:<region>:<account>:<resource>/<id>. WorkSpaces
@@ -78,20 +36,6 @@ func ipGroupResourceID(boundary awscloud.Boundary, group IPGroup) string {
 // the published ids join in every partition. It returns "" when the account or
 // region needed to form a valid ARN is missing, so the caller falls back to the
 // bare id instead of emitting a malformed ARN.
-func workspacesARN(boundary awscloud.Boundary, resource, id string) string {
-	account := strings.TrimSpace(boundary.AccountID)
-	region := strings.TrimSpace(boundary.Region)
-	resource = strings.TrimSpace(resource)
-	id = strings.TrimSpace(id)
-	if account == "" || region == "" || resource == "" || id == "" {
-		return ""
-	}
-	partition := awscloud.PartitionForBoundary(boundary)
-	return strings.Join(
-		[]string{"arn", partition, "workspaces", region, account, resource + "/" + id},
-		":",
-	)
-}
 
 // isARN reports whether value carries the canonical AWS ARN prefix. The scanner
 // uses it to decide whether a reported KMS or IAM reference is ARN-keyed (so
@@ -151,24 +95,3 @@ func cloneStrings(input []string) []string {
 // ruleAttributes projects the IP access control group rules into a payload-safe
 // slice of maps carrying only the CIDR and optional description, or nil when no
 // rule survives trimming.
-func ruleAttributes(rules []IPRule) []map[string]any {
-	if len(rules) == 0 {
-		return nil
-	}
-	output := make([]map[string]any, 0, len(rules))
-	for _, rule := range rules {
-		cidr := strings.TrimSpace(rule.CIDR)
-		if cidr == "" {
-			continue
-		}
-		entry := map[string]any{"cidr": cidr}
-		if desc := strings.TrimSpace(rule.Description); desc != "" {
-			entry["description"] = desc
-		}
-		output = append(output, entry)
-	}
-	if len(output) == 0 {
-		return nil
-	}
-	return output
-}

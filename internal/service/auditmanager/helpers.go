@@ -12,21 +12,12 @@ import (
 // prefers the assessment ARN (always present from GetAssessment) and falls back
 // to the assessment id, so an assessment's own edges are sourced on the same id
 // the assessment node publishes.
-func assessmentResourceID(assessment Assessment) string {
-	return firstNonEmpty(assessment.ARN, assessment.ID)
-}
 
 // frameworkResourceID returns the resource_id the framework node publishes. It
 // prefers the framework ARN and falls back to the framework id.
-func frameworkResourceID(framework Framework) string {
-	return firstNonEmpty(framework.ARN, framework.ID)
-}
 
 // controlResourceID returns the resource_id the control node publishes. It
 // prefers the control ARN and falls back to the control id.
-func controlResourceID(control Control) string {
-	return firstNonEmpty(control.ARN, control.ID)
-}
 
 // arnForBucket synthesizes the partition-aware S3 bucket ARN for name, or
 // returns an already-formed ARN unchanged. S3 buckets have no API ARN, so the
@@ -61,18 +52,6 @@ func accountRootARN(partition, accountID string) string {
 // returns "" when value is not an s3:// URI. Audit Manager reports the
 // assessment-reports destination as an s3://bucket/prefix URI, and only the
 // bucket name is needed to key the S3 bucket node.
-func bucketNameFromS3URI(value string) string {
-	trimmed := strings.TrimSpace(value)
-	const scheme = "s3://"
-	if !strings.HasPrefix(strings.ToLower(trimmed), scheme) {
-		return ""
-	}
-	rest := trimmed[len(scheme):]
-	if slash := strings.IndexByte(rest, '/'); slash >= 0 {
-		rest = rest[:slash]
-	}
-	return strings.TrimSpace(rest)
-}
 
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {

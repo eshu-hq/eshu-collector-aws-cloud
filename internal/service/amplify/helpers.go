@@ -4,12 +4,8 @@
 package amplify
 
 import (
-	"fmt"
 	"net/url"
 	"strings"
-	"time"
-
-	awscloud "github.com/eshu-hq/eshu-collector-aws-cloud"
 )
 
 // cloudFrontDomainSuffix is the public DNS suffix of every CloudFront
@@ -23,46 +19,18 @@ const cloudFrontDomainSuffix = ".cloudfront.net"
 // ARN is absent. The partition is derived from the scan boundary, never
 // hardcoded, so a GovCloud or China app id resolves to an ARN in its own
 // partition instead of dangling the app node and its outgoing edges.
-func appARN(boundary awscloud.Boundary, appID string) string {
-	appID = strings.TrimSpace(appID)
-	if appID == "" {
-		return ""
-	}
-	return fmt.Sprintf("arn:%s:amplify:%s:%s:apps/%s",
-		awscloud.PartitionForBoundary(boundary), boundary.Region, boundary.AccountID, appID)
-}
 
 // branchARN builds the canonical Amplify branch ARN. ListBranches already
 // returns the ARN, so this is only the synthesis fallback. The partition is
 // derived from the scan boundary, never hardcoded.
-func branchARN(boundary awscloud.Boundary, appID, branchName string) string {
-	appID = strings.TrimSpace(appID)
-	branchName = strings.TrimSpace(branchName)
-	if appID == "" || branchName == "" {
-		return ""
-	}
-	return fmt.Sprintf("arn:%s:amplify:%s:%s:apps/%s/branches/%s",
-		awscloud.PartitionForBoundary(boundary), boundary.Region, boundary.AccountID, appID, branchName)
-}
 
 // appResourceID returns the identity an app node publishes and every one of the
 // app's own outgoing edges sources from. It prefers the API-reported ARN and
 // falls back to the partition-aware synthesized ARN, then the bare app id.
-func appResourceID(boundary awscloud.Boundary, app App) string {
-	return firstNonEmpty(app.ARN, appARN(boundary, app.ID), app.ID)
-}
 
 // branchResourceID returns the identity a branch node publishes. It prefers the
 // API-reported ARN and falls back to the partition-aware synthesized ARN, then
 // a stable app#branch composite.
-func branchResourceID(boundary awscloud.Boundary, branch Branch) string {
-	synthesized := branchARN(boundary, branch.AppID, branch.Name)
-	composite := ""
-	if appID := strings.TrimSpace(branch.AppID); appID != "" && strings.TrimSpace(branch.Name) != "" {
-		composite = appID + "#branch#" + strings.TrimSpace(branch.Name)
-	}
-	return firstNonEmpty(branch.ARN, synthesized, composite, branch.Name)
-}
 
 // SanitizeRepositoryURL reduces an Amplify repository URL to scheme, host, and
 // path only, dropping any embedded userinfo (a token-bearing
@@ -123,40 +91,3 @@ func cloudFrontDomainFromDNSRecord(record string) string {
 // normalizedDomain lowercases and trims a trailing dot from a domain name so an
 // app->Route53 edge joins the hosted-zone node by its normalized_name
 // correlation anchor, which the route53 scanner publishes the same way.
-func normalizedDomain(domain string) string {
-	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(domain)), ".")
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if trimmed := strings.TrimSpace(value); trimmed != "" {
-			return trimmed
-		}
-	}
-	return ""
-}
-
-func timeOrNil(input time.Time) any {
-	if input.IsZero() {
-		return nil
-	}
-	return input.UTC()
-}
-
-func cloneStringMap(input map[string]string) map[string]string {
-	if len(input) == 0 {
-		return nil
-	}
-	output := make(map[string]string, len(input))
-	for key, value := range input {
-		trimmed := strings.TrimSpace(key)
-		if trimmed == "" {
-			continue
-		}
-		output[trimmed] = value
-	}
-	if len(output) == 0 {
-		return nil
-	}
-	return output
-}

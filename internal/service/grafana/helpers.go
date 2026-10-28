@@ -12,9 +12,6 @@ import (
 // resource_id and that every one of the workspace's own outgoing edges sources
 // from. It prefers the workspace ARN (synthesized partition-aware by the SDK
 // adapter when the API omits it) and falls back to the bare workspace id.
-func workspaceResourceID(workspace Workspace) string {
-	return firstNonEmpty(workspace.ARN, workspace.ID)
-}
 
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {

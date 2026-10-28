@@ -12,27 +12,10 @@ import (
 // prefers the database ARN (always present from the Timestream API) and falls
 // back to the database name, so table-in-database edges can key the database by
 // the same value the node publishes.
-func databaseResourceID(database Database) string {
-	return firstNonEmpty(database.ARN, database.Name)
-}
 
 // tableResourceID returns the resource_id the table node publishes. It prefers
 // the table ARN and falls back to the qualified database/table name, so a
 // table's own edges are sourced on the same id the table node publishes.
-func tableResourceID(table Table) string {
-	arn := strings.TrimSpace(table.ARN)
-	if arn != "" {
-		return arn
-	}
-	database := strings.TrimSpace(table.DatabaseName)
-	name := strings.TrimSpace(table.Name)
-	switch {
-	case database != "" && name != "":
-		return database + "/" + name
-	default:
-		return name
-	}
-}
 
 // arnForBucket synthesizes the partition-aware S3 bucket ARN for name, or
 // returns an already-formed ARN unchanged. S3 buckets have no API ARN, so the

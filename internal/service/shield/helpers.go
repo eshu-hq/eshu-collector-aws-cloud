@@ -3,11 +3,7 @@
 
 package shield
 
-import (
-	"strings"
-
-	"github.com/eshu-hq/eshu-collector-aws-cloud/catalog"
-)
+import "strings"
 
 // protectedTarget is the classified join target for a protection's protected
 // resource ARN. TargetType names a declared catalog.ResourceType* constant,
@@ -15,11 +11,6 @@ import (
 // publishes its resource_id, and ARNKeyed reports whether that key is the ARN
 // itself (so the relationship may also carry target_arn) or a bare id (so it
 // must not, to keep the relguard join-mode check satisfied).
-type protectedTarget struct {
-	TargetType       string
-	TargetResourceID string
-	ARNKeyed         bool
-}
 
 // classifyProtectedARN maps a Shield Advanced protected resource ARN to the
 // Eshu resource family it references and the join key the target scanner
@@ -48,70 +39,16 @@ type protectedTarget struct {
 // It returns ok=false for an empty ARN or any service segment without a
 // canonical Eshu resource family. The caller skips emission rather than
 // emitting an empty or dangling target_type.
-func classifyProtectedARN(arn string) (protectedTarget, bool) {
-	trimmed := strings.TrimSpace(arn)
-	if trimmed == "" {
-		return protectedTarget{}, false
-	}
-	switch {
-	case strings.Contains(trimmed, ":elasticloadbalancing:"):
-		return protectedTarget{
-			TargetType:       catalog.ResourceTypeELBv2LoadBalancer,
-			TargetResourceID: trimmed,
-			ARNKeyed:         true,
-		}, true
-	case strings.Contains(trimmed, ":cloudfront:"):
-		return protectedTarget{
-			TargetType:       catalog.ResourceTypeCloudFrontDistribution,
-			TargetResourceID: trimmed,
-			ARNKeyed:         true,
-		}, true
-	case strings.Contains(trimmed, ":globalaccelerator:"):
-		return protectedTarget{
-			TargetType:       catalog.ResourceTypeGlobalAcceleratorAccelerator,
-			TargetResourceID: trimmed,
-			ARNKeyed:         true,
-		}, true
-	case strings.Contains(trimmed, ":eip-allocation/"):
-		allocationID := arnResourceSuffix(trimmed, "eip-allocation/")
-		if allocationID == "" {
-			return protectedTarget{}, false
-		}
-		return protectedTarget{
-			TargetType:       catalog.ResourceTypeVPCElasticIP,
-			TargetResourceID: allocationID,
-			ARNKeyed:         false,
-		}, true
-	case strings.Contains(trimmed, ":hostedzone/"):
-		zoneID := arnResourceSuffix(trimmed, "hostedzone/")
-		if zoneID == "" {
-			return protectedTarget{}, false
-		}
-		return protectedTarget{
-			TargetType: catalog.ResourceTypeRoute53HostedZone,
-			// The route53 scanner publishes the hosted zone resource_id with the
-			// "/hostedzone/" prefix (it does not strip the API-reported ID), so
-			// the edge must carry the same prefixed form to join the node.
-			TargetResourceID: "/hostedzone/" + zoneID,
-			ARNKeyed:         false,
-		}, true
-	default:
-		return protectedTarget{}, false
-	}
-}
+
+// The route53 scanner publishes the hosted zone resource_id with the
+// "/hostedzone/" prefix (it does not strip the API-reported ID), so
+// the edge must carry the same prefixed form to join the node.
 
 // arnResourceSuffix returns the resource id that follows marker in an ARN's
 // resource segment, trimming any leading path so the bare id (for example
 // eipalloc-0a1b2c3d or Z1234567890ABC) matches the target scanner's published
 // resource_id. It returns the empty string when the marker is absent or has no
 // suffix.
-func arnResourceSuffix(arn, marker string) string {
-	idx := strings.Index(arn, marker)
-	if idx < 0 {
-		return ""
-	}
-	return strings.TrimSpace(arn[idx+len(marker):])
-}
 
 // firstNonEmpty returns the first non-empty, trimmed value, or the empty string
 // when every value is blank.

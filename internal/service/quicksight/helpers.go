@@ -12,28 +12,16 @@ import (
 // It prefers the data source ARN (always present from the QuickSight API) and
 // falls back to the data source id, so dataset->data-source edges can key the
 // data source by the same value the node publishes.
-func dataSourceResourceID(dataSource DataSource) string {
-	return firstNonEmpty(dataSource.ARN, dataSource.ID)
-}
 
 // dataSetResourceID returns the resource_id the dataset node publishes. It
 // prefers the dataset ARN and falls back to the dataset id, so dashboard and
 // analysis edges can key the dataset by the same value the node publishes.
-func dataSetResourceID(dataSet DataSet) string {
-	return firstNonEmpty(dataSet.ARN, dataSet.ID)
-}
 
 // dashboardResourceID returns the resource_id the dashboard node publishes,
 // preferring the dashboard ARN and falling back to the dashboard id.
-func dashboardResourceID(dashboard Dashboard) string {
-	return firstNonEmpty(dashboard.ARN, dashboard.ID)
-}
 
 // analysisResourceID returns the resource_id the analysis node publishes,
 // preferring the analysis ARN and falling back to the analysis id.
-func analysisResourceID(analysis Analysis) string {
-	return firstNonEmpty(analysis.ARN, analysis.ID)
-}
 
 // arnForBucket synthesizes the partition-aware S3 bucket ARN for name, or
 // returns an already-formed ARN unchanged. S3 buckets have no API ARN, so the
@@ -55,16 +43,6 @@ func arnForBucket(partition, name string) string {
 // VPC connection ARN. QuickSight VPC connection ARNs end with
 // ".../vpcConnection/<id>"; the resolved VPC connection summary is keyed by that
 // bare id. It returns "" when value is empty or not a recognizable ARN.
-func vpcConnectionIDFromARN(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" || !strings.HasPrefix(value, "arn:") {
-		return ""
-	}
-	if idx := strings.LastIndex(value, "/"); idx >= 0 && idx+1 < len(value) {
-		return strings.TrimSpace(value[idx+1:])
-	}
-	return ""
-}
 
 // firstNonEmpty returns the first trimmed non-empty value, or "" when none.
 func firstNonEmpty(values ...string) string {

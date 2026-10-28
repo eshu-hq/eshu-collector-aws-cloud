@@ -12,35 +12,10 @@ import (
 // It prefers the application ARN (always present from the API) and falls back to
 // the application name, so an application's own edges are sourced on the same id
 // the application node publishes.
-func applicationResourceID(application Application) string {
-	return firstNonEmpty(application.ARN, application.Name)
-}
 
 // snapshotNames returns the trimmed, distinct snapshot names in input order, or
 // nil when none survive. Only snapshot names are surfaced; no snapshot data or
 // persisted application state is read.
-func snapshotNames(snapshots []Snapshot) []string {
-	if len(snapshots) == 0 {
-		return nil
-	}
-	names := make([]string, 0, len(snapshots))
-	seen := make(map[string]struct{}, len(snapshots))
-	for _, snapshot := range snapshots {
-		name := strings.TrimSpace(snapshot.Name)
-		if name == "" {
-			continue
-		}
-		if _, ok := seen[name]; ok {
-			continue
-		}
-		seen[name] = struct{}{}
-		names = append(names, name)
-	}
-	if len(names) == 0 {
-		return nil
-	}
-	return names
-}
 
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {

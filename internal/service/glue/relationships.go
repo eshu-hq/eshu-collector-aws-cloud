@@ -10,22 +10,6 @@ import (
 	"github.com/eshu-hq/eshu-collector-aws-cloud/catalog"
 )
 
-func tableInDatabaseRelationship(boundary awscloud.Boundary, table Table) *awscloud.RelationshipObservation {
-	tableID := tableResourceID(table)
-	databaseName := strings.TrimSpace(table.DatabaseName)
-	if tableID == "" || databaseName == "" {
-		return nil
-	}
-	return &awscloud.RelationshipObservation{
-		Boundary:         boundary,
-		RelationshipType: catalog.RelationshipGlueTableInDatabase,
-		SourceResourceID: tableID,
-		TargetResourceID: databaseName,
-		TargetType:       catalog.ResourceTypeGlueDatabase,
-		SourceRecordID:   tableID + "->" + catalog.RelationshipGlueTableInDatabase + ":" + databaseName,
-	}
-}
-
 func tableS3LocationRelationship(boundary awscloud.Boundary, table Table) *awscloud.RelationshipObservation {
 	location := strings.TrimSpace(table.StorageLocation)
 	bucket, prefix, ok := parseS3Location(location)
@@ -79,93 +63,6 @@ func parseS3Location(location string) (bucket string, prefix string, ok bool) {
 	}
 	prefix = strings.TrimSpace(remainder[slash+1:])
 	return bucket, prefix, true
-}
-
-func crawlerDatabaseRelationship(boundary awscloud.Boundary, crawler Crawler) *awscloud.RelationshipObservation {
-	crawlerName := strings.TrimSpace(crawler.Name)
-	databaseName := strings.TrimSpace(crawler.DatabaseName)
-	if crawlerName == "" || databaseName == "" {
-		return nil
-	}
-	return &awscloud.RelationshipObservation{
-		Boundary:         boundary,
-		RelationshipType: catalog.RelationshipGlueCrawlerTargetsDatabase,
-		SourceResourceID: crawlerName,
-		TargetResourceID: databaseName,
-		TargetType:       catalog.ResourceTypeGlueDatabase,
-		SourceRecordID:   crawlerName + "->" + catalog.RelationshipGlueCrawlerTargetsDatabase + ":" + databaseName,
-	}
-}
-
-func crawlerRoleRelationship(boundary awscloud.Boundary, crawler Crawler) *awscloud.RelationshipObservation {
-	roleARN := strings.TrimSpace(crawler.RoleARN)
-	if !isARN(roleARN) {
-		return nil
-	}
-	crawlerName := strings.TrimSpace(crawler.Name)
-	if crawlerName == "" {
-		return nil
-	}
-	return &awscloud.RelationshipObservation{
-		Boundary:         boundary,
-		RelationshipType: catalog.RelationshipGlueCrawlerUsesIAMRole,
-		SourceResourceID: crawlerName,
-		TargetResourceID: roleARN,
-		TargetARN:        roleARN,
-		TargetType:       catalog.ResourceTypeIAMRole,
-		SourceRecordID:   crawlerName + "->" + catalog.RelationshipGlueCrawlerUsesIAMRole + ":" + roleARN,
-	}
-}
-
-func jobRoleRelationship(boundary awscloud.Boundary, job Job) *awscloud.RelationshipObservation {
-	roleARN := strings.TrimSpace(job.RoleARN)
-	if !isARN(roleARN) {
-		return nil
-	}
-	jobName := strings.TrimSpace(job.Name)
-	if jobName == "" {
-		return nil
-	}
-	return &awscloud.RelationshipObservation{
-		Boundary:         boundary,
-		RelationshipType: catalog.RelationshipGlueJobUsesIAMRole,
-		SourceResourceID: jobName,
-		TargetResourceID: roleARN,
-		TargetARN:        roleARN,
-		TargetType:       catalog.ResourceTypeIAMRole,
-		SourceRecordID:   jobName + "->" + catalog.RelationshipGlueJobUsesIAMRole + ":" + roleARN,
-	}
-}
-
-func triggerJobRelationships(boundary awscloud.Boundary, trigger Trigger) []awscloud.RelationshipObservation {
-	triggerName := strings.TrimSpace(trigger.Name)
-	if triggerName == "" || len(trigger.ActionJobs) == 0 {
-		return nil
-	}
-	observations := make([]awscloud.RelationshipObservation, 0, len(trigger.ActionJobs))
-	seen := make(map[string]struct{}, len(trigger.ActionJobs))
-	for _, jobName := range trigger.ActionJobs {
-		target := strings.TrimSpace(jobName)
-		if target == "" {
-			continue
-		}
-		if _, ok := seen[target]; ok {
-			continue
-		}
-		seen[target] = struct{}{}
-		observations = append(observations, awscloud.RelationshipObservation{
-			Boundary:         boundary,
-			RelationshipType: catalog.RelationshipGlueTriggerInvokesJob,
-			SourceResourceID: triggerName,
-			TargetResourceID: target,
-			TargetType:       catalog.ResourceTypeGlueJob,
-			SourceRecordID:   triggerName + "->" + catalog.RelationshipGlueTriggerInvokesJob + ":" + target,
-		})
-	}
-	if len(observations) == 0 {
-		return nil
-	}
-	return observations
 }
 
 func tableResourceID(table Table) string {

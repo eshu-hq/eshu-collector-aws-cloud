@@ -13,24 +13,15 @@ import (
 // the workspace id, so rule-groups-namespace-in-workspace and
 // scraper-sends-to-workspace edges can key the workspace by the same value the
 // node publishes.
-func workspaceResourceID(workspace Workspace) string {
-	return firstNonEmpty(workspace.ARN, workspace.WorkspaceID)
-}
 
 // namespaceResourceID returns the resource_id a rule-groups namespace node
 // publishes. It prefers the namespace ARN and falls back to the namespace name,
 // so a namespace's own edges are sourced on the same id the namespace node
 // publishes.
-func namespaceResourceID(namespace RuleGroupsNamespace) string {
-	return firstNonEmpty(namespace.ARN, namespace.Name)
-}
 
 // scraperResourceID returns the resource_id a scraper node publishes. It prefers
 // the scraper ARN and falls back to the scraper id, so a scraper's own edges are
 // sourced on the same id the scraper node publishes.
-func scraperResourceID(scraper Scraper) string {
-	return firstNonEmpty(scraper.ARN, scraper.ScraperID)
-}
 
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {

@@ -12,21 +12,12 @@ import (
 // It prefers the trust-anchor ARN (always present from the API) and falls back
 // to the trust-anchor id, so CRL-to-trust-anchor edges can key the trust anchor
 // by the same value the node publishes.
-func trustAnchorResourceID(anchor TrustAnchor) string {
-	return firstNonEmpty(anchor.ARN, anchor.TrustAnchorID)
-}
 
 // profileResourceID returns the resource_id the profile node publishes. It
 // prefers the profile ARN and falls back to the profile id.
-func profileResourceID(profile Profile) string {
-	return firstNonEmpty(profile.ARN, profile.ProfileID)
-}
 
 // crlResourceID returns the resource_id the CRL node publishes. It prefers the
 // CRL ARN and falls back to the CRL id.
-func crlResourceID(crl CRL) string {
-	return firstNonEmpty(crl.ARN, crl.CRLID)
-}
 
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {

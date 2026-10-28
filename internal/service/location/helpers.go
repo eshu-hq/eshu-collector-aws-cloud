@@ -11,37 +11,22 @@ import (
 // mapResourceID returns the resource_id the map node publishes. It prefers the
 // map ARN (always present from DescribeMap) and falls back to the map name so a
 // node always has a stable identity.
-func mapResourceID(m Map) string {
-	return firstNonEmpty(m.ARN, m.Name)
-}
 
 // placeIndexResourceID returns the resource_id the place index node publishes.
 // It prefers the index ARN and falls back to the index name.
-func placeIndexResourceID(p PlaceIndex) string {
-	return firstNonEmpty(p.ARN, p.Name)
-}
 
 // trackerResourceID returns the resource_id the tracker node publishes. It
 // prefers the tracker ARN and falls back to the tracker name, so a tracker's
 // own edges are sourced on the same id the tracker node publishes.
-func trackerResourceID(t Tracker) string {
-	return firstNonEmpty(t.ARN, t.Name)
-}
 
 // geofenceCollectionResourceID returns the resource_id the geofence collection
 // node publishes. It prefers the collection ARN and falls back to the
 // collection name, so the tracker-consumes edge can key the collection by the
 // same ARN ListTrackerConsumers reports.
-func geofenceCollectionResourceID(c GeofenceCollection) string {
-	return firstNonEmpty(c.ARN, c.Name)
-}
 
 // routeCalculatorResourceID returns the resource_id the route calculator node
 // publishes. It prefers the calculator ARN and falls back to the calculator
 // name.
-func routeCalculatorResourceID(r RouteCalculator) string {
-	return firstNonEmpty(r.ARN, r.Name)
-}
 
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {

@@ -13,39 +13,16 @@ import (
 // falls back to the policy store id, so policy-in-store and
 // identity-source-in-store edges can key the store by the same value the node
 // publishes.
-func policyStoreResourceID(store PolicyStore) string {
-	return firstNonEmpty(store.ARN, store.ID)
-}
 
 // policyResourceID returns the resource_id a policy node publishes. Policies
 // have no API ARN, so the scanner keys them by the qualified
 // "<policy-store-id>/<policy-id>" so each policy id stays unique across stores
 // and the policy-in-store edge sources on the same value the node publishes.
-func policyResourceID(policy Policy) string {
-	policyID := strings.TrimSpace(policy.ID)
-	storeID := strings.TrimSpace(policy.PolicyStoreID)
-	switch {
-	case storeID != "" && policyID != "":
-		return storeID + "/" + policyID
-	default:
-		return policyID
-	}
-}
 
 // identitySourceResourceID returns the resource_id an identity source node
 // publishes. Identity sources have no API ARN, so the scanner keys them by the
 // qualified "<policy-store-id>/<identity-source-id>" so the id stays unique
 // across stores.
-func identitySourceResourceID(source IdentitySource) string {
-	sourceID := strings.TrimSpace(source.ID)
-	storeID := strings.TrimSpace(source.PolicyStoreID)
-	switch {
-	case storeID != "" && sourceID != "":
-		return storeID + "/" + sourceID
-	default:
-		return sourceID
-	}
-}
 
 // cognitoUserPoolID extracts the bare Cognito user pool id from a user pool
 // ARN of the shape
@@ -54,18 +31,6 @@ func identitySourceResourceID(source IdentitySource) string {
 // pool id, so the identity-source-to-user-pool edge must key the target on this
 // extracted id rather than the ARN. It returns "" when value is not a user pool
 // ARN, so a malformed reference skips the edge instead of dangling it.
-func cognitoUserPoolID(arn string) string {
-	arn = strings.TrimSpace(arn)
-	if arn == "" {
-		return ""
-	}
-	marker := ":userpool/"
-	idx := strings.LastIndex(arn, marker)
-	if idx < 0 {
-		return ""
-	}
-	return strings.TrimSpace(arn[idx+len(marker):])
-}
 
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {

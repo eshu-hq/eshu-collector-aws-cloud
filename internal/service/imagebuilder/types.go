@@ -5,7 +5,6 @@ package imagebuilder
 
 import (
 	"context"
-	"time"
 
 	awscloud "github.com/eshu-hq/eshu-collector-aws-cloud"
 )
@@ -224,15 +223,3 @@ type DistributionConfiguration struct {
 // the zero time when value is blank or unparseable. AWS Image Builder reports
 // timestamps as RFC3339-shaped strings, so timestamp attributes stay consistent
 // with the time-typed attributes other scanners emit.
-func parsedTime(value string) time.Time {
-	value = trimSpace(value)
-	if value == "" {
-		return time.Time{}
-	}
-	for _, layout := range []string{time.RFC3339Nano, time.RFC3339} {
-		if parsed, err := time.Parse(layout, value); err == nil {
-			return parsed.UTC()
-		}
-	}
-	return time.Time{}
-}

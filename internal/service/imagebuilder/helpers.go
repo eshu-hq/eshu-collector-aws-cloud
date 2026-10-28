@@ -10,9 +10,6 @@ import (
 
 // trimSpace is a local alias for strings.TrimSpace so the package's identity and
 // timestamp helpers read consistently without importing strings everywhere.
-func trimSpace(value string) string {
-	return strings.TrimSpace(value)
-}
 
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {
@@ -26,20 +23,6 @@ func isARN(value string) bool {
 // (aws / aws-cn / aws-us-gov) and account so the edge joins the real
 // instance-profile node in every partition instead of dangling. It returns ""
 // when the name or account is missing.
-func arnForInstanceProfile(partition, accountID, name string) string {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return ""
-	}
-	if strings.HasPrefix(name, "arn:") {
-		return name
-	}
-	accountID = strings.TrimSpace(accountID)
-	if accountID == "" {
-		return ""
-	}
-	return "arn:" + partition + ":iam::" + accountID + ":instance-profile/" + name
-}
 
 // arnForBucket synthesizes the partition-aware S3 bucket ARN the S3 scanner
 // publishes as a bucket node's resource_id, or returns an already-formed ARN
@@ -63,21 +46,6 @@ func arnForBucket(partition, name string) string {
 // so the scanner derives the ARN carrying the boundary partition, region, and
 // account so the container-recipe->repository edge joins the real repository
 // node. It returns "" when the name, region, or account is missing.
-func arnForECRRepository(partition, region, accountID, name string) string {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return ""
-	}
-	if strings.HasPrefix(name, "arn:") {
-		return name
-	}
-	region = strings.TrimSpace(region)
-	accountID = strings.TrimSpace(accountID)
-	if region == "" || accountID == "" {
-		return ""
-	}
-	return "arn:" + partition + ":ecr:" + region + ":" + accountID + ":repository/" + name
-}
 
 // timeOrNil returns the UTC time when value is set, or nil for the zero time so
 // the attribute payload omits an unknown timestamp instead of emitting an epoch.
