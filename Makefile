@@ -2,7 +2,6 @@
 # commands the workflow runs. Coverage artifacts and SARIF upload stay in
 # CI; use `go tool cover` locally for the same numbers.
 GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
-COVERAGE_FLOOR := 79
 
 .PHONY: ci vet lint fmt tidy cap build test race
 

@@ -55,8 +55,3 @@ func (f *fakeClient) ListKnowledgeBases(context.Context) ([]KnowledgeBase, error
 }
 
 var _ Client = (*fakeClient)(nil)
-
-// richClient returns a fully populated fixture covering every in-scope resource
-// type and relationship. Sensitive sentinel values are deliberately absent: the
-// fixture proves the scanner cannot emit forbidden payloads because the
-// scanner-owned types have no field to carry them.
