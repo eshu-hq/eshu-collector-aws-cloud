@@ -8,23 +8,6 @@ import (
 	"time"
 )
 
-// instanceResourceID returns the resource_id a replication instance node
-// publishes. It prefers the instance ARN (always present from
-// DescribeReplicationInstances) and falls back to the customer identifier so a
-// task's runs-on-instance edge can key the instance by the same value.
-
-// subnetGroupResourceID returns the resource_id a replication subnet group node
-// publishes. DMS reports no subnet-group ARN, so the node is keyed by its
-// identifier and the instance-in-subnet-group edge keys it the same way.
-
-// endpointResourceID returns the resource_id an endpoint node publishes. It
-// prefers the endpoint ARN (always present from DescribeEndpoints) and falls
-// back to the customer identifier so a task's source/target endpoint edges can
-// key the endpoint by the same value.
-
-// taskResourceID returns the resource_id a replication task node publishes. It
-// prefers the task ARN and falls back to the customer identifier.
-
 // arnForBucket synthesizes the partition-aware S3 bucket ARN for name, or
 // returns an already-formed ARN unchanged. S3 buckets have no API ARN, so the
 // scanner synthesizes one carrying the boundary partition (aws / aws-cn /
@@ -45,9 +28,6 @@ func arnForBucket(partition, name string) string {
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")
 }
-
-// arnIfARN returns value when it is ARN-shaped, otherwise the empty string, so
-// a relationship sets target_arn only for ARN-shaped target identifiers.
 
 // firstNonEmpty returns the first trimmed non-empty value, or "" when none.
 func firstNonEmpty(values ...string) string {

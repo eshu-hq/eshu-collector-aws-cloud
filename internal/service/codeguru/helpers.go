@@ -8,24 +8,6 @@ import (
 	"time"
 )
 
-// associationResourceID returns the resource_id a repository-association node
-// publishes. It prefers the association ARN (always present from the Reviewer
-// API) and falls back to the association id, so an association's own edges are
-// sourced on the same id the node publishes.
-
-// profilingGroupResourceID returns the resource_id a profiling-group node
-// publishes. It prefers the group ARN and falls back to the group name.
-
-// codeCommitRepositoryARN synthesizes the partition-aware CodeCommit repository
-// ARN (arn:<partition>:codecommit:<region>:<account>:<name>) that matches how
-// the CodeCommit scanner publishes its repository resource_id. CodeGuru Reviewer
-// reports only the repository name and the owning account for a CodeCommit
-// association, so the ARN is synthesized from the scan boundary region and the
-// reported owner account, carrying the boundary partition (aws / aws-cn /
-// aws-us-gov) so the edge joins the real repository node in every partition. It
-// returns "" when the repository name, owning account, or region is missing,
-// which keeps the edge from dangling.
-
 // firstNonEmpty returns the first trimmed non-empty value, or "" when none.
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {

@@ -7,32 +7,6 @@ import (
 	"strings"
 )
 
-// applicationARN synthesizes the partition-aware AppConfig application ARN for
-// id within boundary, or returns "" when id is blank. AppConfig list responses
-// carry no ARN, so the scanner derives the application identity AWS itself uses
-// (arn:<partition>:appconfig:<region>:<account>:application/<id>) with the
-// boundary partition so GovCloud and China resolve to the real node instead of
-// dangling the graph join. It never hardcodes arn:aws:.
-
-// environmentARN synthesizes the partition-aware AppConfig environment ARN for
-// the environment id under applicationID, or returns "" when either id is
-// blank. The form is
-// arn:<partition>:appconfig:<region>:<account>:application/<app>/environment/<env>.
-
-// profileARN synthesizes the partition-aware AppConfig configuration profile ARN
-// for the profile id under applicationID, or returns "" when either id is blank.
-// The form is
-// arn:<partition>:appconfig:<region>:<account>:application/<app>/configurationprofile/<profile>.
-
-// deploymentStrategyARN synthesizes the partition-aware AppConfig deployment
-// strategy ARN for id within boundary, or returns "" when id is blank. The form
-// is arn:<partition>:appconfig:<region>:<account>:deploymentstrategy/<id>.
-
-// appconfigARN assembles a partition-aware AppConfig ARN with the trailing
-// resource segment from boundary. The partition is derived from the boundary
-// region (aws / aws-cn / aws-us-gov) so synthesized identities match the real
-// node in every partition; arn:aws: is never hardcoded.
-
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")

@@ -7,10 +7,6 @@ import (
 	"strings"
 )
 
-// canaryResourceID returns the resource_id the canary node publishes. It prefers
-// the synthesized canary ARN and falls back to the canary name, so a canary's
-// own edges key on the same value the canary node publishes.
-
 // bucketNameFromArtifactLocation extracts the S3 bucket name from a Synthetics
 // artifact location. AWS reports the location as a "bucket/prefix/..." path (it
 // may carry a leading "s3://" scheme), never an ARN, so the bucket is the first
@@ -44,15 +40,3 @@ func arnForBucket(partition, name string) string {
 	}
 	return "arn:" + partition + ":s3:::" + name
 }
-
-// firstNonEmpty returns the first trimmed non-empty value, or "" when none.
-
-// timeOrNil returns the UTC time when value is set, or nil for the zero time so
-// the attribute payload omits an unknown timestamp instead of emitting an epoch.
-
-// cloneStringMap returns a trimmed-key copy of input, or nil when it is empty or
-// every key trims to empty, keeping omitempty-style payload behavior consistent.
-
-// cloneStrings returns a trimmed copy of input with empty and duplicate entries
-// dropped, or nil when nothing survives. De-duplication keeps repeated subnet or
-// security group identifiers from emitting duplicate edges.

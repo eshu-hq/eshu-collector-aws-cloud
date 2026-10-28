@@ -8,17 +8,6 @@ import (
 	"time"
 )
 
-// environmentResourceID returns the resource_id the environment node publishes.
-// It prefers the environment ARN (always present from the Proton API) and falls
-// back to the environment name, so service-in-environment edges can key the
-// environment by the same value the node publishes.
-
-// serviceResourceID returns the resource_id the service node publishes. It
-// prefers the service ARN and falls back to the service name.
-
-// templateResourceID returns the resource_id a template node publishes. It
-// prefers the template ARN and falls back to the template name.
-
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")

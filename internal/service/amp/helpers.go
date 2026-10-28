@@ -8,21 +8,6 @@ import (
 	"time"
 )
 
-// workspaceResourceID returns the resource_id the workspace node publishes. It
-// prefers the workspace ARN (always present from the AMP API) and falls back to
-// the workspace id, so rule-groups-namespace-in-workspace and
-// scraper-sends-to-workspace edges can key the workspace by the same value the
-// node publishes.
-
-// namespaceResourceID returns the resource_id a rule-groups namespace node
-// publishes. It prefers the namespace ARN and falls back to the namespace name,
-// so a namespace's own edges are sourced on the same id the namespace node
-// publishes.
-
-// scraperResourceID returns the resource_id a scraper node publishes. It prefers
-// the scraper ARN and falls back to the scraper id, so a scraper's own edges are
-// sourced on the same id the scraper node publishes.
-
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")

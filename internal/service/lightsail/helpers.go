@@ -15,14 +15,3 @@ func timeOrNil(value time.Time) any {
 	}
 	return value.UTC()
 }
-
-// int32OrNil returns the pointed-to int32, or nil when value is nil, so optional
-// numeric attributes stay absent rather than serializing a zero value.
-
-// cloneStringSlice returns a trimmed copy of input with blank entries dropped,
-// or nil when nothing survives, keeping the omitempty-style payload behavior
-// consistent across services.
-
-// cloneInt32Slice returns a copy of input, or nil when input is empty, so
-// optional numeric-list attributes stay absent rather than serializing an empty
-// slice.

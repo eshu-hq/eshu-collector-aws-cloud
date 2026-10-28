@@ -8,28 +8,6 @@ import (
 	"time"
 )
 
-// applicationResourceID returns the resource_id the application node publishes.
-// It prefers the Pinpoint application id (the stable console Project ID) and
-// falls back to the application ARN, then the name, so application-scoped edges
-// can key the application by the same value the node publishes.
-
-// segmentResourceID returns the resource_id the segment node publishes. It
-// prefers the segment ARN and falls back to the application-qualified segment
-// id, so a segment's own edges are sourced on the same id the segment node
-// publishes.
-
-// channelResourceID returns the resource_id a channel-settings node publishes.
-// A Pinpoint channel has no AWS-assigned ARN, so the scanner keys it by the
-// stable application-id/channel-type pair, which is unique within a claim.
-
-// sesIdentityNameFromARN extracts the SES email-identity name (the verified
-// email address or domain) from an SES identity ARN of the form
-// arn:<partition>:ses:<region>:<account>:identity/<name>. The SES scanner
-// publishes its email-identity resource_id as that bare name, so the Pinpoint
-// email-channel edge must key the same value to join. It returns "" when value
-// is not an SES identity ARN, so the caller skips the edge rather than dangle a
-// guess.
-
 // firstNonEmpty returns the first trimmed non-empty value, or "" when none.
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {

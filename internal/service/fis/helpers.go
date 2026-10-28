@@ -8,11 +8,6 @@ import (
 	"time"
 )
 
-// templateResourceID returns the resource_id the experiment-template node
-// publishes. It prefers the template ARN (always present from the FIS API) and
-// falls back to the template id, so a template's own edges are sourced on the
-// same id the template node publishes.
-
 // arnForBucket synthesizes the partition-aware S3 bucket ARN for name, or
 // returns an already-formed ARN unchanged. S3 buckets have no API ARN, so the
 // scanner synthesizes one carrying the boundary partition (aws / aws-cn /
@@ -28,22 +23,6 @@ func arnForBucket(partition, name string) string {
 	}
 	return "arn:" + partition + ":s3:::" + name
 }
-
-// instanceIDFromARN extracts the bare EC2 instance id (i-...) from an EC2
-// instance ARN's instance/<id> resource segment. EC2 instance graph nodes are
-// keyed by the bare instance id, not the ARN, so the FIS EC2 target edge must
-// publish the bare id to join. It returns "" when arn is not an EC2 instance
-// ARN.
-
-// arnService returns the service segment of an AWS ARN (the third colon-
-// delimited field), lowercased, or "" when value is not an ARN with a service
-// segment. The scanner uses it to type an FIS target resource ARN to the right
-// resource family (ecs, rds) before keying the edge.
-
-// arnResourceSegment returns the resource segment of an AWS ARN (everything
-// after the fifth colon), or "" when value is not an ARN with a resource
-// segment. The scanner uses it to distinguish RDS DB instance ARNs (db:...)
-// from DB cluster ARNs (cluster:...).
 
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {

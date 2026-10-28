@@ -14,24 +14,6 @@ import (
 // resolves to a *.cloudfront.net host.
 const cloudFrontDomainSuffix = ".cloudfront.net"
 
-// appARN builds the canonical Amplify app ARN. ListApps already returns the
-// ARN, so this is only the synthesis fallback for the defensive case where the
-// ARN is absent. The partition is derived from the scan boundary, never
-// hardcoded, so a GovCloud or China app id resolves to an ARN in its own
-// partition instead of dangling the app node and its outgoing edges.
-
-// branchARN builds the canonical Amplify branch ARN. ListBranches already
-// returns the ARN, so this is only the synthesis fallback. The partition is
-// derived from the scan boundary, never hardcoded.
-
-// appResourceID returns the identity an app node publishes and every one of the
-// app's own outgoing edges sources from. It prefers the API-reported ARN and
-// falls back to the partition-aware synthesized ARN, then the bare app id.
-
-// branchResourceID returns the identity a branch node publishes. It prefers the
-// API-reported ARN and falls back to the partition-aware synthesized ARN, then
-// a stable app#branch composite.
-
 // SanitizeRepositoryURL reduces an Amplify repository URL to scheme, host, and
 // path only, dropping any embedded userinfo (a token-bearing
 // https://x-access-token:TOKEN@github.com/... form) and any query or fragment.
@@ -87,7 +69,3 @@ func cloudFrontDomainFromDNSRecord(record string) string {
 	}
 	return ""
 }
-
-// normalizedDomain lowercases and trims a trailing dot from a domain name so an
-// app->Route53 edge joins the hosted-zone node by its normalized_name
-// correlation anchor, which the route53 scanner publishes the same way.

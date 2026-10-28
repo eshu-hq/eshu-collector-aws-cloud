@@ -7,44 +7,6 @@ import (
 	"strings"
 )
 
-// identityResourceID returns the resource_id the email-identity node publishes.
-// SES identity names are the email address or domain and are unique within an
-// account/region, so the trimmed name is the stable identity.
-
-// configurationSetResourceID returns the resource_id the configuration-set node
-// publishes, the trimmed configuration set name.
-
-// eventDestinationResourceID returns the resource_id an event-destination node
-// publishes. It qualifies the destination name with its parent configuration
-// set name so destinations with the same name under different sets stay
-// distinct, and so the in-set edge can key the parent set exactly.
-
-// dedicatedIPPoolResourceID returns the resource_id the dedicated-IP-pool node
-// publishes, the trimmed pool name.
-
-// identityARN synthesizes the partition-aware SES email-identity ARN for the
-// resource node's arn field. SES does not return an ARN for an identity, so the
-// scanner derives the partition from the scan boundary (aws / aws-cn /
-// aws-us-gov) instead of hardcoding it. It returns "" when the boundary lacks
-// the account id, region, or identity name needed to form a real ARN.
-
-// configurationSetARN synthesizes the partition-aware SES configuration-set ARN
-// for the resource node's arn field. SES does not return an ARN for a
-// configuration set, so the scanner derives the partition from the scan boundary
-// (aws / aws-cn / aws-us-gov) instead of hardcoding it. It returns "" when the
-// boundary lacks the account id, region, or set name needed to form a real ARN.
-
-// dedicatedIPPoolARN synthesizes the partition-aware SES dedicated-IP-pool ARN
-// for the resource node's arn field. SES returns only the pool name, so the
-// scanner derives the partition from the scan boundary instead of hardcoding it.
-// It returns "" when the boundary lacks the account id, region, or pool name.
-
-// destinationClasses returns the bounded set of configured destination class
-// enums for an event destination (sns, kinesis_firehose, event_bridge,
-// cloud_watch, pinpoint). Only the destination kind is recorded; no destination
-// secret, HEC token, or access key is ever read. It returns nil when nothing is
-// configured so the attribute payload stays omitempty-consistent.
-
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")

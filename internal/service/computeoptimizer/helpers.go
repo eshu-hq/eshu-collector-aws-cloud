@@ -8,31 +8,6 @@ import (
 	"time"
 )
 
-// instanceRecommendationID returns the resource_id the instance-recommendation
-// node publishes. Each recommendation is identified by the analyzed instance
-// ARN so the node and its own edge share one stable id within a generation.
-
-// autoScalingGroupRecommendationID returns the resource_id the ASG-recommendation
-// node publishes, preferring the analyzed group ARN and falling back to the
-// group name.
-
-// volumeRecommendationID returns the resource_id the volume-recommendation node
-// publishes, keyed by the analyzed EBS volume ARN.
-
-// lambdaFunctionRecommendationID returns the resource_id the
-// function-recommendation node publishes, keyed by the analyzed function ARN.
-
-// instanceIDFromARN extracts the bare EC2 instance id (i-...) from an instance
-// ARN of the form arn:<partition>:ec2:<region>:<account>:instance/<id>. EC2
-// instance relationship targets are keyed by the bare id, not the ARN, so the
-// edge joins the instance identity other scanners publish. It returns "" when
-// the value is not an instance ARN.
-
-// volumeIDFromARN extracts the bare EBS volume id (vol-...) from a volume ARN of
-// the form arn:<partition>:ec2:<region>:<account>:volume/<id>. It returns "" when
-// the value is not a volume ARN. The id is recorded as recommendation metadata
-// only until recommendation-to-volume relationship projection lands.
-
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")
@@ -76,6 +51,3 @@ func cloneStringMap(input map[string]string) map[string]string {
 	}
 	return output
 }
-
-// cloneFloatMap returns a copy of input with empty keys dropped, or nil when
-// nothing survives, so an empty finding-count map omits cleanly.

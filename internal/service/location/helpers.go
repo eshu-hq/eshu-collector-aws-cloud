@@ -8,26 +8,6 @@ import (
 	"time"
 )
 
-// mapResourceID returns the resource_id the map node publishes. It prefers the
-// map ARN (always present from DescribeMap) and falls back to the map name so a
-// node always has a stable identity.
-
-// placeIndexResourceID returns the resource_id the place index node publishes.
-// It prefers the index ARN and falls back to the index name.
-
-// trackerResourceID returns the resource_id the tracker node publishes. It
-// prefers the tracker ARN and falls back to the tracker name, so a tracker's
-// own edges are sourced on the same id the tracker node publishes.
-
-// geofenceCollectionResourceID returns the resource_id the geofence collection
-// node publishes. It prefers the collection ARN and falls back to the
-// collection name, so the tracker-consumes edge can key the collection by the
-// same ARN ListTrackerConsumers reports.
-
-// routeCalculatorResourceID returns the resource_id the route calculator node
-// publishes. It prefers the calculator ARN and falls back to the calculator
-// name.
-
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")

@@ -10,16 +10,6 @@ import (
 	"github.com/eshu-hq/eshu-collector-aws-cloud/catalog"
 )
 
-// foundationModelTargetType labels a base or provisioned model ARN relationship
-// target. Bedrock base and foundation model ARNs are managed by AWS and are not
-// emitted as scanner resources of their own, so the target is the foundation
-// model resource type the scanner does emit for the read-only model list.
-
-// customModelS3Relationship maps an `s3://bucket/key` output URI to an S3 bucket
-// relationship target, taking the partition from the custom model ARN so the
-// synthesized bucket ARN is correct in any AWS partition. It returns ok=false
-// for blank, non-S3 URIs.
-
 func knowledgeBaseRelationships(kb KnowledgeBase) []awscloud.RelationshipObservation {
 	id := firstNonEmpty(kb.ARN, kb.ID, kb.Name)
 	if id == "" {

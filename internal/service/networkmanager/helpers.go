@@ -8,43 +8,6 @@ import (
 	"time"
 )
 
-// globalNetworkResourceID returns the resource_id the global-network node
-// publishes. It prefers the API-reported ARN (Network Manager always returns
-// one) and synthesizes the partition-aware ARN from the boundary account when a
-// fixture omits it, so child parent edges key the same value the node publishes.
-
-// globalNetworkARN synthesizes the partition-aware ARN for a global-network id,
-// matching the region-less Network Manager ARN shape AWS publishes
-// (arn:<partition>:networkmanager::<account>:global-network/<id>). It returns ""
-// when the id is empty.
-
-// siteARN synthesizes the partition-aware ARN for a site id within a global
-// network, matching the Network Manager ARN shape
-// (arn:<partition>:networkmanager::<account>:site/<global-network-id>/<site-id>).
-// It returns "" when either id is empty.
-
-// deviceARN synthesizes the partition-aware ARN for a device id within a global
-// network, matching the Network Manager ARN shape. It returns "" when either id
-// is empty.
-
-// linkARN synthesizes the partition-aware ARN for a link id within a global
-// network, matching the Network Manager ARN shape. It returns "" when either id
-// is empty.
-
-// networkManagerARN builds a region-less Network Manager ARN for resourcePath
-// using the boundary partition and account. Network Manager is global, so the
-// ARN region segment is empty; the partition is derived from the boundary so
-// GovCloud and China edges resolve instead of dangling. It returns "" when the
-// account id is missing, since a parent edge keyed to an account-less ARN would
-// never join the real node.
-
-// transitGatewayID extracts the bare transit gateway id (tgw-...) from a transit
-// gateway ARN. The transit gateway scanner publishes its resource_id as the bare
-// id, not an ARN, so registration edges must key the id rather than the ARN.
-// Network Manager reports the ARN
-// (arn:<partition>:ec2:<region>:<account>:transit-gateway/tgw-...), so the id is
-// the final path segment. It returns "" when no id can be extracted.
-
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")

@@ -8,15 +8,6 @@ import (
 	"time"
 )
 
-// applicationResourceID returns the resource_id the application node publishes.
-// It prefers the application ARN (always present from the API) and falls back to
-// the application name, so an application's own edges are sourced on the same id
-// the application node publishes.
-
-// snapshotNames returns the trimmed, distinct snapshot names in input order, or
-// nil when none survive. Only snapshot names are surfaced; no snapshot data or
-// persisted application state is read.
-
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")

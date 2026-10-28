@@ -81,6 +81,3 @@ func organizationsResourceType(family string) (string, bool) {
 		return "", false
 	}
 }
-
-// cloneStringMap returns a trimmed-key copy of input, or nil when it is empty or
-// every key trims to empty, keeping omitempty-style payload behavior consistent.

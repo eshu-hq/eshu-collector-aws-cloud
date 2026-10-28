@@ -8,17 +8,6 @@ import (
 	"time"
 )
 
-// assessmentResourceID returns the resource_id the assessment node publishes. It
-// prefers the assessment ARN (always present from GetAssessment) and falls back
-// to the assessment id, so an assessment's own edges are sourced on the same id
-// the assessment node publishes.
-
-// frameworkResourceID returns the resource_id the framework node publishes. It
-// prefers the framework ARN and falls back to the framework id.
-
-// controlResourceID returns the resource_id the control node publishes. It
-// prefers the control ARN and falls back to the control id.
-
 // arnForBucket synthesizes the partition-aware S3 bucket ARN for name, or
 // returns an already-formed ARN unchanged. S3 buckets have no API ARN, so the
 // scanner synthesizes one carrying the boundary partition (aws / aws-cn /
@@ -47,11 +36,6 @@ func accountRootARN(partition, accountID string) string {
 	}
 	return "arn:" + partition + ":iam::" + accountID + ":root"
 }
-
-// bucketNameFromS3URI extracts the bucket name from an s3:// destination URI, or
-// returns "" when value is not an s3:// URI. Audit Manager reports the
-// assessment-reports destination as an s3://bucket/prefix URI, and only the
-// bucket name is needed to key the S3 bucket node.
 
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {

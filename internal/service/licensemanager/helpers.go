@@ -8,20 +8,6 @@ import (
 	"time"
 )
 
-// sortStrings sorts input in place in ascending order, keeping the metadata
-// payload deterministic across scans.
-
-// configurationResourceID returns the resource_id the configuration node
-// publishes. It prefers the configuration ARN (always present from the License
-// Manager API) and falls back to the configuration id, then the name, so a
-// configuration's own edges are sourced on the same id the node publishes.
-
-// instanceIDFromARN extracts the bare EC2 instance id (i-...) from an EC2
-// instance ARN of the form arn:<partition>:ec2:<region>:<account>:instance/i-...
-// It returns "" when value is not an instance ARN, so a non-instance or
-// malformed ARN never keys a dangling edge. The function never synthesizes an
-// ARN; it only reads the trailing instance id the EC2 instance node publishes.
-
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")

@@ -57,20 +57,3 @@ func timeOrNil(value time.Time) any {
 	}
 	return value.UTC().Format(time.RFC3339)
 }
-
-// dataSourceResourceID builds a stable resource_id for an AppSync data source.
-// Data source names are unique only within an API, so the API ID prefixes the
-// name.
-
-// resolverResourceID builds a stable resource_id for an AppSync resolver. A
-// resolver is uniquely identified within an API by its type name and field
-// name.
-
-// functionResourceID builds a stable resource_id for an AppSync pipeline
-// function, preferring the function ID and falling back to the name.
-
-// schemaResourceID builds a stable resource_id for AppSync schema metadata. One
-// schema exists per API.
-
-// resolverName builds a human-readable name for a resolver from its type and
-// field.

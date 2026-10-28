@@ -19,11 +19,11 @@ Job names are frozen because branch protection requires `ci-complete`:
 | --- | --- |
 | `lint` | Go sources, `manifest.yaml`, module or lint-config changes |
 | `test` | Above, plus fixtures and config the tests read |
-| `race` | Same inputs as `lint`, plus a coverage artifact and floor check |
+| `race` | Same inputs as `test`, plus a coverage artifact and floor check |
 | `shell` | Shell script changes |
-| `image` | `Dockerfile` or `.dockerignore` changes (build only, no push) |
-| `govulncheck` | Dependency changes, pushes to `main`, weekly schedule |
-| `gosec` | Pushes to `main` and weekly schedule; advisory, SARIF to the Security tab |
+| `image` | `Dockerfile`, `.dockerignore`, `manifest.yaml`, or module changes (build only, no push) |
+| `govulncheck` | Dependency changes, pushes to `main`, weekly schedule, manual dispatch |
+| `gosec` | Pushes to `main`, weekly schedule, and manual dispatch; advisory, SARIF to the Security tab |
 | `ci-complete` | Always; fails on any needed lane failure, passes on legitimate skips |
 
 Docs-only PRs run no lane and stay mergeable through `ci-complete`.

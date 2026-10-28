@@ -58,11 +58,6 @@ func timeOrNil(value time.Time) any {
 	return value.UTC()
 }
 
-// configurationARNByID maps each configuration ID to its ARN so the
-// broker→configuration relationship can target the ARN the configuration
-// resource publishes as its ResourceID. Entries without both an ID and an ARN
-// are skipped because they cannot resolve a broker reference.
-
 // isARN reports whether value begins with the AWS ARN prefix after trimming.
 // Amazon MQ reports the encryption KMS key as a customer master key ARN when a
 // customer-managed key is used; the KMS relationship targets the ARN form so

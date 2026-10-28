@@ -66,7 +66,4 @@ func (c *fakeClient) ListInferenceComponents(context.Context) ([]InferenceCompon
 	return c.inferenceComponents, nil
 }
 
-// flatten renders a payload into a deterministic string so tests can assert a
-// forbidden value never appears anywhere in an emitted fact.
-
 var _ Client = (*fakeClient)(nil)

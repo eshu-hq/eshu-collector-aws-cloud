@@ -8,11 +8,6 @@ import (
 	"time"
 )
 
-// workspaceResourceID returns the identifier a workspace node publishes as its
-// resource_id and that every one of the workspace's own outgoing edges sources
-// from. It prefers the workspace ARN (synthesized partition-aware by the SDK
-// adapter when the API omits it) and falls back to the bare workspace id.
-
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")

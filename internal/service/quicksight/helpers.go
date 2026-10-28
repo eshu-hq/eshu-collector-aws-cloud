@@ -8,21 +8,6 @@ import (
 	"time"
 )
 
-// dataSourceResourceID returns the resource_id the data source node publishes.
-// It prefers the data source ARN (always present from the QuickSight API) and
-// falls back to the data source id, so dataset->data-source edges can key the
-// data source by the same value the node publishes.
-
-// dataSetResourceID returns the resource_id the dataset node publishes. It
-// prefers the dataset ARN and falls back to the dataset id, so dashboard and
-// analysis edges can key the dataset by the same value the node publishes.
-
-// dashboardResourceID returns the resource_id the dashboard node publishes,
-// preferring the dashboard ARN and falling back to the dashboard id.
-
-// analysisResourceID returns the resource_id the analysis node publishes,
-// preferring the analysis ARN and falling back to the analysis id.
-
 // arnForBucket synthesizes the partition-aware S3 bucket ARN for name, or
 // returns an already-formed ARN unchanged. S3 buckets have no API ARN, so the
 // scanner synthesizes one carrying the boundary partition (aws / aws-cn /
@@ -38,11 +23,6 @@ func arnForBucket(partition, name string) string {
 	}
 	return "arn:" + partition + ":s3:::" + name
 }
-
-// vpcConnectionIDFromARN extracts the bare VPC connection id from a QuickSight
-// VPC connection ARN. QuickSight VPC connection ARNs end with
-// ".../vpcConnection/<id>"; the resolved VPC connection summary is keyed by that
-// bare id. It returns "" when value is empty or not a recognizable ARN.
 
 // firstNonEmpty returns the first trimmed non-empty value, or "" when none.
 func firstNonEmpty(values ...string) string {

@@ -8,15 +8,6 @@ import (
 	"time"
 )
 
-// pipelineARN builds the canonical CodePipeline pipeline ARN. ListPipelines
-// does not return ARNs, so the scanner derives a stable identity from the
-// boundary account and region plus the pipeline name, matching the documented
-// AWS ARN format. The partition is derived from the boundary, never hardcoded.
-
-// stageAttributes maps stage and action structure into fact payload maps. It
-// emits action configuration KEY names only; no action configuration value is
-// ever present because the scanner-owned Action carries no value field.
-
 func timeOrNil(input time.Time) any {
 	if input.IsZero() {
 		return nil

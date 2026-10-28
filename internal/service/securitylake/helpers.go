@@ -8,23 +8,6 @@ import (
 	"time"
 )
 
-// dataLakeResourceID returns the resource_id the data lake node publishes. It
-// prefers the data lake ARN (always present from the Security Lake API) and
-// falls back to a region-scoped synthetic id so log-source edges can key the
-// data lake by the same value the node publishes.
-
-// logSourceResourceID returns the resource_id a log-source node publishes. A log
-// source has no AWS ARN, so the scanner builds a stable composite id from the
-// collection scope (account, region, source name, custom flag) that uniquely
-// identifies the source within the account.
-
-// subscriberResourceID returns the resource_id a subscriber node publishes. It
-// prefers the subscriber ARN and falls back to the subscriber id.
-
-// sourceKind returns the stable scope token for a log source kind so the
-// composite resource_id distinguishes an AWS-native source from a third-party
-// custom source with the same name.
-
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")
@@ -39,8 +22,6 @@ func firstNonEmpty(values ...string) string {
 	}
 	return ""
 }
-
-// nonEmpty returns a copy of values with trimmed-empty entries dropped.
 
 // timeOrNil returns the UTC time when value is set, or nil for the zero time so
 // the attribute payload omits an unknown timestamp instead of emitting an epoch.

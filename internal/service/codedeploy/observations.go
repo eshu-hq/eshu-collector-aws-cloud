@@ -82,7 +82,3 @@ func deploymentARN(boundary awscloud.Boundary, id string) string {
 	return fmt.Sprintf("arn:%s:codedeploy:%s:%s:deployment:%s",
 		awscloud.PartitionForBoundary(boundary), boundary.Region, boundary.AccountID, id)
 }
-
-// tagFilterAttributes maps tag-filter summaries into fact payload maps. The
-// value is the redaction marker map when present; raw filter values never
-// reach this function.

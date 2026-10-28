@@ -8,27 +8,10 @@ import (
 	"time"
 )
 
-// serviceNetworkResourceID returns the resource_id the service network node
-// publishes. It prefers the ARN (always present from the API) and falls back to
-// the id, so service-network edges key on the same value the node publishes.
-
-// serviceResourceID returns the resource_id the service node publishes. It
-// prefers the ARN and falls back to the id.
-
-// targetGroupResourceID returns the resource_id the target group node
-// publishes. It prefers the ARN and falls back to the id.
-
-// listenerResourceID returns the resource_id the listener node publishes. It
-// prefers the ARN and falls back to the id.
-
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")
 }
-
-// isInstanceID reports whether value is a bare EC2 instance id (i-...), the
-// resource_id form the load-balancer-to-instance and target-to-instance edges
-// key on.
 
 // firstNonEmpty returns the first trimmed non-empty value, or "" when none.
 func firstNonEmpty(values ...string) string {

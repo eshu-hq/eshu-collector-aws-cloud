@@ -8,24 +8,6 @@ import (
 	"time"
 )
 
-// partition returns the AWS partition for the scan boundary's region. The
-// scanner uses it only when it must synthesize an S3 bucket ARN from a bare
-// bucket name, so the synthesized identity carries aws-us-gov or aws-cn in
-// GovCloud and China instead of dangling against the commercial-partition
-// bucket node. When the source data already carries an ARN, the scanner reads
-// the partition from that ARN instead.
-
-// s3BucketARN returns the S3 bucket ARN for an MWAA source-bucket reference.
-// When the reference is already an ARN it is returned trimmed and unchanged so
-// it inherits its own partition. When the reference is a bare bucket name the
-// ARN is synthesized with the boundary partition. The empty string is returned
-// when no bucket can be derived so the caller skips the edge.
-
-// trimLogGroupWildcardARN drops the trailing ":*" wildcard suffix MWAA appends
-// to a CloudWatch Logs log group ARN. The cloudwatchlogs scanner publishes the
-// non-wildcard ARN as its resource_id, so the suffix must be trimmed for the
-// MWAA-to-log-group edge to join instead of dangling.
-
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")
 }

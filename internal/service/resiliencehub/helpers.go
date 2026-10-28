@@ -8,31 +8,6 @@ import (
 	"time"
 )
 
-// appResourceID returns the resource_id the application node publishes: its ARN
-// (always present from the Resilience Hub API), falling back to the app name.
-
-// policyResourceID returns the resource_id the resiliency-policy node publishes:
-// its ARN, falling back to the policy name.
-
-// componentResourceID returns the resource_id an application-component node
-// publishes. Components have no API ARN, so the scanner qualifies the component
-// name with the parent application ARN to keep the id stable and unique across
-// applications.
-
-// inputSourceResourceID returns the resource_id an input-source node publishes.
-// It prefers the source ARN when reported and otherwise qualifies the source
-// name with the parent application ARN so the id is stable and unique.
-
-// assessmentResourceID returns the resource_id an assessment node publishes:
-// its ARN.
-
-// protectedResourceTargetType maps a Resilience Hub-reported physical resource
-// type to the Eshu resource type the owning scanner publishes, for the subset
-// of types Resilience Hub identifies by a full ARN that the owning scanner also
-// keys by ARN. It returns "" for any type the scanner cannot key safely (the
-// Resilience Hub-native, non-ARN families), so the protected-resource edge is
-// skipped rather than dangled.
-
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")
@@ -67,10 +42,6 @@ func cloneStringMap(input map[string]string) map[string]string {
 	}
 	return output
 }
-
-// int32OrNil returns the int32 value pointed to by value, or nil when the
-// pointer is nil, so the attribute payload omits an unknown objective instead
-// of emitting a misleading zero.
 
 // timeOrNil returns the UTC time when value is set, or nil for the zero time so
 // the attribute payload omits an unknown timestamp instead of emitting an epoch.

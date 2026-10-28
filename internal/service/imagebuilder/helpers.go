@@ -8,21 +8,10 @@ import (
 	"time"
 )
 
-// trimSpace is a local alias for strings.TrimSpace so the package's identity and
-// timestamp helpers read consistently without importing strings everywhere.
-
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")
 }
-
-// arnForInstanceProfile synthesizes the partition-aware IAM instance-profile ARN
-// the IAM scanner publishes as an instance-profile node's resource_id, or
-// returns an already-formed ARN unchanged. Image Builder reports the instance
-// profile NAME, so the scanner derives the ARN carrying the boundary partition
-// (aws / aws-cn / aws-us-gov) and account so the edge joins the real
-// instance-profile node in every partition instead of dangling. It returns ""
-// when the name or account is missing.
 
 // arnForBucket synthesizes the partition-aware S3 bucket ARN the S3 scanner
 // publishes as a bucket node's resource_id, or returns an already-formed ARN
@@ -39,13 +28,6 @@ func arnForBucket(partition, name string) string {
 	}
 	return "arn:" + partition + ":s3:::" + name
 }
-
-// arnForECRRepository synthesizes the partition-aware ECR repository ARN the ECR
-// scanner publishes as a repository node's resource_id, or returns an
-// already-formed ARN unchanged. Image Builder reports the ECR repository NAME,
-// so the scanner derives the ARN carrying the boundary partition, region, and
-// account so the container-recipe->repository edge joins the real repository
-// node. It returns "" when the name, region, or account is missing.
 
 // timeOrNil returns the UTC time when value is set, or nil for the zero time so
 // the attribute payload omits an unknown timestamp instead of emitting an epoch.

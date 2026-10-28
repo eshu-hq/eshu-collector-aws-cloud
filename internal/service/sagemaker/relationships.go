@@ -10,11 +10,6 @@ import (
 	"github.com/eshu-hq/eshu-collector-aws-cloud/catalog"
 )
 
-// containerImageTargetType labels a container image URI relationship target.
-// SageMaker model containers reference image URIs that may live in ECR or any
-// OCI registry, so the target is a generic image reference rather than an
-// ECR-specific resource type.
-
 // modelArtifactRelationship maps an `s3://bucket/key` model-artifact URL to an
 // S3 bucket relationship target, keeping the raw URL and key prefix as
 // attributes. It returns ok=false for blank, non-S3, or duplicate URLs.

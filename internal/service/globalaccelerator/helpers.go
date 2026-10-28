@@ -8,13 +8,6 @@ import (
 	"time"
 )
 
-// ec2InstanceTargetType is the Eshu resource type an EC2-instance endpoint
-// reference resolves to. The EC2 scanner does not emit instance resources,
-// so this is target evidence only.
-
-// genericResourceTargetType keeps an endpoint relationship honest when the
-// reported endpoint id does not match a known target family.
-
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
 		if trimmed := strings.TrimSpace(value); trimmed != "" {
@@ -27,12 +20,6 @@ func firstNonEmpty(values ...string) string {
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")
 }
-
-// endpointTargetType classifies a Global Accelerator endpoint id into the Eshu
-// resource-type family it references. AWS reports the endpoint id as an
-// ALB/NLB ARN, an Elastic IP allocation id (eipalloc-...), or an EC2 instance
-// id (i-...). An unrecognized id keeps a relationship honest by falling back to
-// the generic resource type so downstream correlation can resolve it later.
 
 func timeOrNil(value time.Time) any {
 	if value.IsZero() {

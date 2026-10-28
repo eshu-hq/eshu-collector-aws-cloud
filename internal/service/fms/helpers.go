@@ -17,8 +17,3 @@ func firstNonEmpty(values ...string) string {
 	}
 	return ""
 }
-
-// sortedUnique returns the trimmed, deduplicated, lexically sorted set of the
-// input values. The scanner uses it for member account ids so the emitted
-// relationship set is stable and never keyed on AWS response order; a stable
-// order keeps the generation-to-generation fact set deterministic.

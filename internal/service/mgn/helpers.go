@@ -8,30 +8,6 @@ import (
 	"time"
 )
 
-// sourceServerResourceID returns the resource_id the source-server node
-// publishes. It prefers the MGN source server id (always present from the API
-// and the value applications and jobs reference) and falls back to the ARN, so
-// internal edges key the source server by the same value the node publishes.
-
-// applicationResourceID returns the resource_id the application node publishes.
-// It prefers the MGN application id (the value source servers reference) and
-// falls back to the ARN.
-
-// jobResourceID returns the resource_id the job node publishes. It prefers the
-// MGN job id and falls back to the ARN.
-
-// launchConfigurationResourceID returns the resource_id the launch
-// configuration node publishes. Launch configurations have no AWS ARN, so the
-// scanner keys the node on a stable qualified id derived from the owning source
-// server id, ensuring the launch-config node and its edges share one identity.
-
-// isInstanceID reports whether value is a bare EC2 instance id (i-...). MGN
-// reports the launched instance as a bare instance id, which is how the EC2
-// instance family is keyed, so the scanner never synthesizes an ARN for it.
-
-// isLaunchTemplateID reports whether value is a bare EC2 launch template id
-// (lt-...), the form MGN reports and the launch-template family is keyed under.
-
 // firstNonEmpty returns the first trimmed non-empty value, or "" when none.
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {

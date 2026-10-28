@@ -5,20 +5,6 @@ package route53recoverycontrolconfig
 
 import "strings"
 
-// clusterResourceID returns the resource_id the cluster node publishes. The
-// cluster ARN is the stable join key, so control-panel-in-cluster edges key the
-// cluster by the same value the node publishes.
-
-// controlPanelResourceID returns the resource_id the control panel node
-// publishes. The control panel ARN is the stable join key, so routing-control
-// and safety-rule edges key the panel by the same value the node publishes.
-
-// routingControlResourceID returns the resource_id the routing control node
-// publishes, preferring its ARN.
-
-// safetyRuleResourceID returns the resource_id the safety rule node publishes,
-// preferring its ARN.
-
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")

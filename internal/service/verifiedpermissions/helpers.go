@@ -8,30 +8,6 @@ import (
 	"time"
 )
 
-// policyStoreResourceID returns the resource_id the policy store node
-// publishes. It prefers the policy store ARN (always present from the API) and
-// falls back to the policy store id, so policy-in-store and
-// identity-source-in-store edges can key the store by the same value the node
-// publishes.
-
-// policyResourceID returns the resource_id a policy node publishes. Policies
-// have no API ARN, so the scanner keys them by the qualified
-// "<policy-store-id>/<policy-id>" so each policy id stays unique across stores
-// and the policy-in-store edge sources on the same value the node publishes.
-
-// identitySourceResourceID returns the resource_id an identity source node
-// publishes. Identity sources have no API ARN, so the scanner keys them by the
-// qualified "<policy-store-id>/<identity-source-id>" so the id stays unique
-// across stores.
-
-// cognitoUserPoolID extracts the bare Cognito user pool id from a user pool
-// ARN of the shape
-// arn:<partition>:cognito-idp:<region>:<account>:userpool/<user-pool-id>. The
-// Cognito scanner publishes a user pool node's resource_id as the bare user
-// pool id, so the identity-source-to-user-pool edge must key the target on this
-// extracted id rather than the ARN. It returns "" when value is not a user pool
-// ARN, so a malformed reference skips the edge instead of dangling it.
-
 // isARN reports whether value carries the canonical AWS ARN prefix.
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")

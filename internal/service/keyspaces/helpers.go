@@ -8,12 +8,6 @@ import (
 	"time"
 )
 
-// columnMaps renders structural column definitions (name + CQL type) into safe
-// attribute maps. It carries no table row or cell data.
-
-// clusteringKeyMaps renders clustering-key definitions (column name + sort
-// order) into safe attribute maps. It carries no table row or cell data.
-
 func cloneStringMap(input map[string]string) map[string]string {
 	if len(input) == 0 {
 		return nil

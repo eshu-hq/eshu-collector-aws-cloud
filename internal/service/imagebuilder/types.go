@@ -218,8 +218,3 @@ type DistributionConfiguration struct {
 	// Tags carries the distribution configuration resource tags.
 	Tags map[string]string
 }
-
-// parsedTime parses an AWS-reported timestamp string into a UTC time, returning
-// the zero time when value is blank or unparseable. AWS Image Builder reports
-// timestamps as RFC3339-shaped strings, so timestamp attributes stay consistent
-// with the time-typed attributes other scanners emit.

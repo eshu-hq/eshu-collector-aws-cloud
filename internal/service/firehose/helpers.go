@@ -16,11 +16,6 @@ const destinationKindRedshift = "redshift"
 // Elasticsearch) Firehose destination.
 const destinationKindOpenSearch = "opensearch"
 
-// destinationKindSplunk classifies a Splunk Firehose destination.
-
-// destinationKindHTTPEndpoint classifies a generic HTTP endpoint Firehose
-// destination.
-
 // firstNonEmpty returns the first trimmed, non-empty string in values, or "" if
 // every value is blank. The scanner uses it to prefer an ARN identity over a
 // bare name without persisting an empty identity.
@@ -39,14 +34,3 @@ func firstNonEmpty(values ...string) string {
 func isARN(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), "arn:")
 }
-
-// timeOrNil returns value in UTC, or nil when the timestamp is the zero value,
-// so the scanner never persists a synthetic "0001-01-01" creation time.
-
-// cloneStringMap returns a defensive copy of input with blank keys dropped, or
-// nil when no entries remain. The scanner uses it so AWS tag maps cannot be
-// mutated through the emitted fact payload.
-
-// dedupeNonEmpty returns the input order-preserving with blank entries dropped
-// and duplicates collapsed, or nil when nothing remains. The scanner uses it
-// for the per-stream destination-kind summary.

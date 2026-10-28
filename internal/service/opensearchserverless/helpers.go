@@ -7,15 +7,6 @@ import (
 	"strings"
 )
 
-// collectionResourceID returns the resource_id the collection node publishes. It
-// prefers the collection ARN (always present from BatchGetCollection) and falls
-// back to the collection id then name, so a collection's own edges are sourced on
-// the same id the collection node publishes.
-
-// vpcEndpointResourceID returns the resource_id the VPC endpoint node publishes.
-// OpenSearch Serverless managed endpoints have no API ARN, so the bare vpce-… id
-// (falling back to the name) is the published identity.
-
 // securityPolicyResourceID returns the resource_id a security policy node
 // publishes. Policy names are unique per type, so the type-qualified name keys
 // the resource stably across encryption and network policies that may share a
@@ -104,16 +95,3 @@ func CollectionPatternFromResource(resource string) string {
 	}
 	return strings.TrimSpace(strings.TrimPrefix(resource, prefix))
 }
-
-// isARN reports whether value carries the canonical AWS ARN prefix.
-
-// firstNonEmpty returns the first trimmed non-empty value, or "" when none.
-
-// timeOrNil returns the UTC time when value is set, or nil for the zero time so
-// the attribute payload omits an unknown timestamp instead of emitting an epoch.
-
-// cloneStringMap returns a trimmed-key copy of input, or nil when it is empty or
-// every key trims to empty, keeping omitempty-style payload behavior consistent.
-
-// cloneStrings returns a trimmed copy of input with empty entries dropped, or nil
-// when nothing survives.
