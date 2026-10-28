@@ -315,7 +315,10 @@ func sortMappingAttributes(attributes []map[string]any) {
 }
 
 func stringAttribute(attributes map[string]any, key string) string {
-	value, _ := attributes[key].(string)
+	value, ok := attributes[key].(string)
+	if !ok {
+		return ""
+	}
 	return value
 }
 

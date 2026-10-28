@@ -204,7 +204,10 @@ func TestRedaction(t *testing.T) {
 		t.Fatalf("Collect() error = %v", err)
 	}
 	for _, fact := range result.Facts {
-		raw, _ := json.Marshal(fact.Payload)
+		raw, err := json.Marshal(fact.Payload)
+		if err != nil {
+			t.Fatalf("marshal fact payload: %v", err)
+		}
 		if strings.Contains(string(raw), "super-secret-value") {
 			t.Fatalf("payload leaks secret: %s", raw)
 		}
@@ -262,7 +265,10 @@ func TestRetryAndPartial(t *testing.T) {
 		t.Fatalf("CollectPartial() error = %v", err)
 	}
 	for _, fact := range withheld.Facts {
-		raw, _ := json.Marshal(fact.Payload)
+		raw, err := json.Marshal(fact.Payload)
+		if err != nil {
+			t.Fatalf("marshal fact payload: %v", err)
+		}
 		if strings.Contains(string(raw), "hunter2") {
 			t.Fatalf("partial warning leaks unshareable cause: %s", raw)
 		}

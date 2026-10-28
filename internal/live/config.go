@@ -220,7 +220,10 @@ func scopeSingleton(config map[string]any) map[string]any {
 	if !ok || len(list) != 1 {
 		return nil
 	}
-	scope, _ := list[0].(map[string]any)
+	scope, ok := list[0].(map[string]any)
+	if !ok {
+		return nil
+	}
 	return scope
 }
 
