@@ -242,6 +242,9 @@ func TestResourceFactRejectsInvalidAndUnredactedInputs(t *testing.T) {
 		{"secret tag key", func(o *ResourceObservation) {
 			o.Tags = map[string]string{"DatabasePassword": "hunter2-parity-secret"}
 		}},
+		{"custom marshaler secret key", func(o *ResourceObservation) {
+			o.Attributes = map[string]any{"custom": privateAttributeMarshaler{values: map[string]any{"DatabasePassword": "hunter2-parity-secret"}}}
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -317,11 +320,105 @@ func TestResourceFactCopiesNestedJSONValuesBeforeValidation(t *testing.T) {
 	if !ok {
 		t.Fatalf("nested type = %T", attributes["nested"])
 	}
-	rows, ok := gotNested["rows"].([]map[string]any)
+	rows, ok := gotNested["rows"].([]any)
 	if !ok || len(rows) != 1 {
 		t.Fatalf("rows = %#v", gotNested["rows"])
 	}
-	if count, ok := rows[0]["count"].(int64); !ok || count != exactID {
-		t.Fatalf("count = %#v, want exact int64 %d", rows[0]["count"], exactID)
+	row, ok := rows[0].(map[string]any)
+	if !ok {
+		t.Fatalf("row type = %T", rows[0])
+	}
+	if count, ok := row["count"].(json.Number); !ok || count.String() != "9007199254740993" {
+		t.Fatalf("count = %#v, want exact JSON number %d", row["count"], exactID)
+	}
+	if _, err := factschema.DecodeAWSResource(factschema.Envelope{FactKind: fact.Kind, SchemaVersion: fact.SchemaVersion, Payload: fact.Payload}); err != nil {
+		t.Fatalf("typed decode normalized payload: %v", err)
+	}
+}
+
+type privateAttributeMarshaler struct {
+	values map[string]any
+}
+
+func (value privateAttributeMarshaler) MarshalJSON() ([]byte, error) {
+	return json.Marshal(value.values)
+}
+
+type ignoredAttributeCycle struct {
+	Visible string                 `json:"visible"`
+	Next    *ignoredAttributeCycle `json:"-"`
+}
+
+func TestResourceFactCopiesCustomMarshalerOutput(t *testing.T) {
+	observation := resourceParityObservation(t)
+	private := map[string]any{"count": int64(9007199254740993), "state": "clean"}
+	observation.Attributes = map[string]any{"custom": privateAttributeMarshaler{values: private}}
+	fact, err := NewResourceFact(observation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := json.Marshal(fact.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	private["state"] = "changed"
+	private["DatabasePassword"] = "hunter2-parity-secret"
+	after, err := json.Marshal(fact.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) || !strings.Contains(string(after), `"count":9007199254740993`) {
+		t.Fatalf("custom marshaler output changed or lost numeric precision: before %s, after %s", before, after)
+	}
+}
+
+func TestResourceFactCopiesEmittedJSONWithoutIgnoredCycle(t *testing.T) {
+	observation := resourceParityObservation(t)
+	item := &ignoredAttributeCycle{Visible: "kept"}
+	item.Next = item
+	observation.Attributes = map[string]any{"item": item}
+	fact, err := NewResourceFact(observation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(fact.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"item":{"visible":"kept"}`) {
+		t.Fatalf("emitted payload lost visible field: %s", raw)
+	}
+}
+
+type exposedAttributeCycle struct {
+	Next *exposedAttributeCycle `json:"next"`
+}
+
+func TestResourceFactRejectsEmittedCycle(t *testing.T) {
+	observation := resourceParityObservation(t)
+	item := &exposedAttributeCycle{}
+	item.Next = item
+	observation.Attributes = map[string]any{"item": item}
+	fact, err := NewResourceFact(observation)
+	if err == nil || fact.Kind != "" {
+		t.Fatalf("emitted cycle fact = %+v, error = %v; want refusal", fact, err)
+	}
+}
+
+func TestResourceFactPreservesHistoricalTimeAttributeWireValue(t *testing.T) {
+	observation := resourceParityObservation(t)
+	observed := time.Date(2026, 10, 20, 13, 2, 3, 123000000, time.FixedZone("offset", 3600))
+	observation.Attributes = map[string]any{"created_at": observed}
+	fact, err := NewResourceFact(observation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attributes, ok := fact.Payload["attributes"].(map[string]any)
+	if !ok {
+		t.Fatalf("attributes type = %T", fact.Payload["attributes"])
+	}
+	want := "2026-10-20T13:02:03.123+01:00"
+	if got := attributes["created_at"]; got != want {
+		t.Fatalf("created_at = %#v, want wire timestamp %q", got, want)
 	}
 }
