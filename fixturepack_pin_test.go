@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	sdk "github.com/eshu-hq/eshu/sdk/go/collector"
-	"github.com/eshu-hq/eshu/sdk/go/collector/conformance"
-	"github.com/eshu-hq/eshu/sdk/go/factschema/fixturepack"
+	sdk "github.com/eshu-hq/eshu-sdk/collector"
+	"github.com/eshu-hq/eshu-sdk/collector/conformance"
+	"github.com/eshu-hq/eshu-sdk/factschema/fixturepack"
 )
 
 // namespacedKind is this collector's namespaced fact kind validated against
@@ -85,4 +85,48 @@ func pinnedRequest(t *testing.T, payload map[string]any, schemas map[string]json
 		}},
 	}
 	return conformance.Request{Manifest: manifest, Fixtures: []sdk.Result{result}, Mode: conformance.ModeFixture, PayloadSchemas: schemas}
+}
+
+// TestTrustedCoreKindConformance checks the portable fixture path before the
+// AWS scanner port. Only a host-supplied authorization context may admit a
+// bare core kind; this synthetic context does not grant production authority.
+func TestTrustedCoreKindConformance(t *testing.T) {
+	t.Parallel()
+	schema, ok := fixturepack.SchemaFor("aws_resource")
+	if !ok {
+		t.Fatal("pinned fixture pack ships no aws_resource schema")
+	}
+	payload, ok := fixturepack.ValidPayload("aws_resource")
+	if !ok {
+		t.Fatal("pinned fixture pack ships no aws_resource payload")
+	}
+	request := pinnedRequest(t, payload, map[string]json.RawMessage{"aws_resource": schema})
+	request.Manifest.Spec.EmittedFacts[len(request.Manifest.Spec.EmittedFacts)-1] = conformance.FactFamily{
+		Kind: "aws_resource", SchemaVersions: []string{"1.0.0"},
+		SourceConfidence: []string{"reported"}, PayloadSchemaRef: "aws_resource",
+	}
+	request.Manifest.Spec.ConsumerContracts.Reducer.Phases = append(
+		request.Manifest.Spec.ConsumerContracts.Reducer.Phases, "proof.synthetic:aws_resource")
+	request.Fixtures[0].Facts[0].Kind = "aws_resource"
+	request.Fixtures[0].Facts[0].SourceConfidence = sdk.SourceConfidenceReported
+	request.ReservedFactKinds = []string{"aws_resource"}
+	request.CoreFacts = &conformance.CoreFactContext{
+		ComponentID:      request.Manifest.Metadata.ID,
+		ComponentVersion: request.Manifest.Metadata.Version,
+		Facts: []conformance.CoreFactAuthorization{{
+			Kind: "aws_resource", PayloadSchemaRef: "aws_resource",
+			ReducerPhases: []string{"proof.synthetic:aws_resource"},
+			Emissions: []conformance.CoreFactEmission{{
+				CollectorKind: CollectorKind, SchemaVersions: []string{"1.0.0"},
+			}},
+		}},
+	}
+	if report := conformance.Run(request); !report.OK() {
+		t.Fatalf("trusted core fixture: findings = %#v", report.Findings)
+	}
+	request.CoreFacts = nil
+	if report := conformance.Run(request); report.OK() ||
+		!hasFinding(report, conformance.FindingManifestInvalid) {
+		t.Fatalf("grantless core fixture: findings = %#v, want manifest_invalid", report.Findings)
+	}
 }

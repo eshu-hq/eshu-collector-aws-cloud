@@ -7,16 +7,15 @@ import (
 	"strings"
 	"testing"
 
-	sdk "github.com/eshu-hq/eshu/sdk/go/collector"
-	"github.com/eshu-hq/eshu/sdk/go/collector/conformance"
+	sdk "github.com/eshu-hq/eshu-sdk/collector"
+	"github.com/eshu-hq/eshu-sdk/collector/conformance"
 )
 
-// supportedCoreRange is the manifest compatibleCore this template pins,
-// matching the sdk-compatibility row for SDK v0.2.0.
+// supportedCoreRange is the manifest compatibleCore asserted by this fixture test.
 const supportedCoreRange = ">=0.0.5 <0.2.0"
 
-// TestCompatibilityMatrixSupportedPair proves the pinned SDK v0.2.0 protocol
-// and manifest range pass conformance together.
+// TestCompatibilityMatrixSupportedPair checks the manifest range and protocol
+// with fixture conformance using the pinned standalone collector SDK.
 func TestCompatibilityMatrixSupportedPair(t *testing.T) {
 	t.Parallel()
 

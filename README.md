@@ -8,8 +8,8 @@ template; the AWS logic port is tracked in [PORT_PLAN.md](PORT_PLAN.md).
 
 This repo pins the published SDK pair for core `>=0.0.5 <0.2.0`:
 
-- `github.com/eshu-hq/eshu/sdk/go/collector v0.2.0`
-- `github.com/eshu-hq/eshu/sdk/go/factschema v0.2.0`
+- `github.com/eshu-hq/eshu-sdk/collector v0.1.0-rc.4`
+- `github.com/eshu-hq/eshu-sdk/factschema v0.1.0-rc.7`
 
 Wire protocol: `collector-sdk/v1alpha1`. There are no `replace` directives:
 an out-of-tree clone resolves both modules through the Go module proxy.
@@ -35,12 +35,12 @@ the AWS APIs as reported):
 `aws_resource_policy_permission`, `aws_warning`, `ec2_instance_posture`,
 `s3_bucket_posture`, `rds_instance_posture`, `s3_external_principal_grant`.
 
-The bare AWS kinds stay out of the manifest until the public SDK harness
-accepts host-granted kinds (#8851): `conform` still requires every emitted
-kind to carry a `.` namespace prefix, while core-side `install` and `verify`
-accept granted core kinds. The grant request set (`grant.example.json`,
-one request per AWS kind) proceeds first and does not wait for the manifest
-declaration. See [PORT_PLAN.md](PORT_PLAN.md).
+The bare AWS kinds stay out of the manifest until their typed emitters are
+ported and the host supplies a trusted grant snapshot to conformance (#8909).
+The pinned standalone SDK accepts those kinds only through its `CoreFacts`
+context; a synthetic context in fixture tests proves the portable mechanism,
+not production authorization. The host owns grant issuance and rechecks
+emission at runtime. See [PORT_PLAN.md](PORT_PLAN.md).
 
 ## Build and test from a clean clone
 
@@ -96,9 +96,9 @@ with `docs/public/extend/sdk-compatibility.md` in the core repo.
 
 Core-owned fact kinds require a live #6709 producer grant naming this
 producer, version, kind, schema, and scope; namespaced kinds need none.
-This collector emits core kinds, so it needs one grant per kind per schema
-version it declares in `spec.emittedFacts` — thirteen grants, one per AWS
-kind. `TestManifestEmissionsAreAuthorized` fails when a declared kind is
+The planned AWS emission requires thirteen grants, one per core kind at
+schema `1.0.0`; the current transitional manifest declares none of those
+kinds. `TestManifestEmissionsAreAuthorized` fails when a declared kind is
 outside the collector's namespace and has no live grant scoped to a
 collector kind. This repo cannot see the core registry, so it treats any
 kind outside its namespace as potentially core-owned, including dotted

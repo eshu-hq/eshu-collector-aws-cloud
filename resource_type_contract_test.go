@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/eshu-hq/eshu-collector-aws-cloud/catalog"
-	awsv1 "github.com/eshu-hq/eshu/sdk/go/factschema/aws/v1"
+	awsv1 "github.com/eshu-hq/eshu-sdk/factschema/aws/v1"
 )
 
 func TestAWSCloudResourceTypeConstantsMatchFactSchema(t *testing.T) {

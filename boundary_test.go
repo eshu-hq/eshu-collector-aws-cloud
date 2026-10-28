@@ -26,8 +26,8 @@ func TestImportBoundaryRejectsCoreAndCrossCollectorImports(t *testing.T) {
 		modulePath(t),
 		"github.com/aws/aws-sdk-go-v2",
 		"github.com/aws/smithy-go",
-		"github.com/eshu-hq/eshu/sdk/go/collector",
-		"github.com/eshu-hq/eshu/sdk/go/factschema",
+		"github.com/eshu-hq/eshu-sdk/collector",
+		"github.com/eshu-hq/eshu-sdk/factschema",
 		"gopkg.in/yaml.v3",
 	}
 	violations := []string{}

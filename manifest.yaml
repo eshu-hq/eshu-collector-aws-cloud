@@ -20,11 +20,9 @@ spec:
     # TRANSITIONAL placeholder families: emitted by the scaffold pipeline
     # until the AWS logic port lands (PORT_PLAN.md). The port removes these
     # and declares the thirteen bare AWS kinds (schema 1.0.0, reported)
-    # once the public SDK harness accepts host-granted kinds (#8851);
-    # until then conformance rejects any emitted kind without a `.`
-    # prefix, while core-side install/verify accept granted core kinds.
-    # Grant issuance (grant.example.json) proceeds first and does not wait
-    # for the manifest declaration.
+    # after typed emission and trusted host grant context are ready (#8909).
+    # The standalone SDK accepts these kinds through trusted CoreFacts;
+    # fixture-only synthetic context does not grant production authority.
     - kind: collector-aws-cloud.snapshot
       schemaVersions:
         - 1.0.0

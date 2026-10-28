@@ -25,8 +25,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sns v1.47.6
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.52.6
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.81.0
-	github.com/eshu-hq/eshu/sdk/go/collector v0.2.0
-	github.com/eshu-hq/eshu/sdk/go/factschema v0.2.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -47,4 +45,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.43.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.51.5 // indirect
 	github.com/aws/smithy-go v1.28.6 // indirect
+	github.com/eshu-hq/eshu-sdk/collector v0.1.0-rc.4
+	github.com/eshu-hq/eshu-sdk/factschema v0.1.0-rc.7
 )

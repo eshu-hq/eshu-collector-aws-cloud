@@ -12,8 +12,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	sdk "github.com/eshu-hq/eshu/sdk/go/collector"
-	"github.com/eshu-hq/eshu/sdk/go/collector/conformance"
+	sdk "github.com/eshu-hq/eshu-sdk/collector"
+	"github.com/eshu-hq/eshu-sdk/collector/conformance"
 )
 
 // TestConformancePositive proves the representative collector passes the

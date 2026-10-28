@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
-	sdk "github.com/eshu-hq/eshu/sdk/go/collector"
+	sdk "github.com/eshu-hq/eshu-sdk/collector"
 )
 
 // TestNestedOptionalStringSeparatesMissingFromMalformed proves a missing key
