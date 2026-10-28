@@ -1,9 +1,10 @@
 # PORT_PLAN.md — AWS logic port into this standalone repo
 
-Status: SCAFFOLD ONLY. The collection pipeline (`Report`/`Collect`,
-`testdata/`, placeholder conformance fixtures) is still the template
-placeholder. This plan maps the in-tree implementation to scaffold
-locations for the later logic port. Nothing here is ported yet.
+Status: PARTIAL PORT. The resource envelope has a typed `NewResourceFact`
+seam with historical fixture/key proof, but `Report`/`Collect` and the live
+service loaders still emit transitional placeholder records. This plan maps
+the remaining in-tree implementation to standalone locations. No live AWS
+core-kind output or host grant has been proved.
 
 Source of truth for paths: `go/internal/collector/awscloud/` in
 `eshu-hq/eshu` at the scaffold commit, plus payload schemas in
@@ -84,8 +85,34 @@ importable only inside this module, satisfying `boundary_test.go`).
    producer/kind/schema/collector-kind tuples, then declare the 13 bare AWS
    kinds in `Contract()` + `manifest.yaml`. The standalone SDK supports this
    mechanism; its fixture-only synthetic context is not a live grant.
-4. Base envelope (`aws_resource`) + conformance fixture rewrite.
+4. Wire the typed base envelope (`aws_resource`) into claim-bound collection
+   after scanner redaction and host grant integration; replace placeholder
+   conformance fixtures. The pure envelope constructor and its fixture/key
+   regression are present, but neither step is complete.
 5. Remaining envelopes kind by kind; delete transitional kinds last.
 6. `awsruntime` + `service/` scanners service by service.
 7. `recordpolicy` / `freshness` / `catalog` / `checkpoint` integration.
 8. Image push + `pin-digest.sh`, deployment proof per README.
+
+## Resource envelope seam status
+
+`NewResourceFact` encodes the shared `aws_resource` identity with the pinned
+`factschema/aws/v1.Resource` type. The committed `8852-parity-awscloud.json`
+fixture pins the historical key and payload; separate tests cover whitespace
+trimming, anchor deduplication, ARN/resource-ID fallback, and required identity
+rejection. The SDK decoder classifies an absent `resource_id` as
+`input_invalid`. The constructor carries source scope, generation, URI, record
+ID, and observation time in the SDK fact. The SDK fact has no fencing-token
+field: the host owns the claim and its token.
+
+This seam rejects a sensitive-shaped JSON key such as
+`attributes.DatabasePassword` containing a raw value or a redaction marker,
+and refuses a credential-bearing source URI. The legacy CloudFormation scanner
+uses a different, accepted shape: each output is an entry with fixed `key` and
+`redacted` fields, so the string `DatabasePassword` remains as evidence while
+its raw value is replaced by a marker. The SDK rc.4 key walker accepts that
+shape. It cannot tell whether a raw secret was placed under a fixed `value`
+field; the service scanner must redact it first. The envelope test proves
+transport of the redacted shape, not the scanner's redaction policy. Scanner
+redaction and the host's core-kind authorization must be proved before live
+collection uses this seam.

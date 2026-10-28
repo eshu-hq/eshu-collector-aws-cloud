@@ -42,6 +42,13 @@ context; a synthetic context in fixture tests proves the portable mechanism,
 not production authorization. The host owns grant issuance and rechecks
 emission at runtime. See [PORT_PLAN.md](PORT_PLAN.md).
 
+The initial typed `aws_resource` envelope helper is now present and tested
+against a committed in-tree fixture and stable key. It is not connected
+to `Collect` or the live service loaders; those still emit placeholder
+facts. Sensitive-shaped resource attribute keys currently fail closed.
+See [PORT_PLAN.md](PORT_PLAN.md#resource-envelope-seam-status) for the
+remaining redaction and host-grant boundary.
+
 ## Build and test from a clean clone
 
 ```bash
