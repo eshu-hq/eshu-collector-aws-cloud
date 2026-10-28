@@ -75,6 +75,8 @@ func TestSourceURIRefusal(t *testing.T) {
 		"svc:SECRET@example.invalid/x",
 		"https://example.invalid/source?token=abc",
 		"https://example.invalid/source?password=hunter2",
+		"https://bucket.s3.amazonaws.com/key?X-Amz-Credential=AKIAEXAMPLE%2F20261028%2Fus-east-1%2Fs3%2Faws4_request",
+		"https://bucket.s3.amazonaws.com/key?X-Amz-Signature=deadbeefsecret",
 		"",
 	} {
 		_, err := Collect(testClaim(), mustLoadReport(t, "complete.json"), CollectOptions{
@@ -85,11 +87,18 @@ func TestSourceURIRefusal(t *testing.T) {
 			t.Fatalf("Collect(SourceURI=%q) error = nil, want refusal", uri)
 		}
 	}
-	if _, err := Collect(testClaim(), mustLoadReport(t, "complete.json"), CollectOptions{
-		ObservedAt: testObservedAt(),
-		SourceURI:  "https://example.invalid/source/aws-cloud",
-	}); err != nil {
-		t.Fatalf("Collect(good URI) error = %v, want nil", err)
+	for _, uri := range []string{
+		"https://example.invalid/source/aws-cloud",
+		"https://example.invalid/source?region=us-east-1",
+		"aws://123456789012/us-east-1",
+		"aws:iam:role/parity-runtime",
+	} {
+		if _, err := Collect(testClaim(), mustLoadReport(t, "complete.json"), CollectOptions{
+			ObservedAt: testObservedAt(),
+			SourceURI:  uri,
+		}); err != nil {
+			t.Fatalf("Collect(good URI=%q) error = %v, want nil", uri, err)
+		}
 	}
 }
 

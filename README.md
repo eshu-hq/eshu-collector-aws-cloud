@@ -82,8 +82,11 @@ freshness with `freshness.previousDigest`. All payloads pass
 The collector receives only a bounded claim plus local config. It never gets
 Postgres, graph, queue, lease, reducer, API, or MCP handles. Source
 credentials stay in the collector runtime environment and never enter fact
-payloads, source URIs, logs, or statuses. URIs embedding `user:secret@host`
-or `password=`/`secret=`/`token=` query shapes are refused.
+payloads, source URIs, logs, or statuses. URIs embedding
+`user:secret@host` or known credential query keys are refused, including
+AWS presigned URL keys such as
+`X-Amz-Credential` and `X-Amz-Signature` (even when the key is percent-encoded).
+Ordinary credential-free HTTPS queries and `aws:` source URIs remain valid.
 
 ## Limits
 

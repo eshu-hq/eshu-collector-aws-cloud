@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -48,7 +49,7 @@ func NewResourceFact(observation ResourceObservation) (sdk.Fact, error) {
 	if err != nil {
 		return sdk.Fact{}, err
 	}
-	tags := cloneResourceTags(observation.Tags)
+	tags := observation.Tags
 	payload, err := factschema.EncodeAWSResource(awsv1.Resource{
 		AccountID:    boundary.AccountID,
 		Region:       boundary.Region,
@@ -61,13 +62,24 @@ func NewResourceFact(observation ResourceObservation) (sdk.Fact, error) {
 		Tags:         &tags,
 		Attributes: map[string]any{
 			"collector_instance_id": boundary.CollectorInstanceID,
-			"attributes":            cloneResourceAttributes(observation.Attributes),
+			"attributes":            observation.Attributes,
 		},
 		CorrelationAnchors: normalizedResourceAnchors(observation.CorrelationAnchors, arn, resourceID),
 	})
 	if err != nil {
 		return sdk.Fact{}, fmt.Errorf("encode aws_resource payload: %w", err)
 	}
+	// Check JSON safety before walking the value graph: encoding/json rejects
+	// cycles and unsupported types. Then copy every map, slice, and pointer
+	// before validating, so later caller mutation cannot change the fact.
+	if _, err := json.Marshal(payload); err != nil {
+		return sdk.Fact{}, fmt.Errorf("encode aws_resource payload: %w", err)
+	}
+	clonedPayload, ok := cloneResourceJSONValue(reflect.ValueOf(payload)).Interface().(map[string]any)
+	if !ok {
+		return sdk.Fact{}, fmt.Errorf("copy aws_resource payload: unexpected root type")
+	}
+	payload = clonedPayload
 	// Validate the JSON shape the host will receive. The SDK key walker only
 	// traverses map[string]any; tags and service fields may contain typed maps.
 	encodedPayload, err := json.Marshal(payload)
@@ -161,26 +173,65 @@ func normalizedResourceAnchors(values []string, fallback ...string) []string {
 	return anchors
 }
 
-func cloneResourceTags(input map[string]string) map[string]string {
-	if len(input) == 0 {
-		return nil
+// cloneResourceJSONValue copies JSON-safe data without coercing large integers
+// through float64. The earlier Marshal call rejects cycles and unsupported
+// values before this recursive walk.
+func cloneResourceJSONValue(value reflect.Value) reflect.Value {
+	if !value.IsValid() {
+		return value
 	}
-	output := make(map[string]string, len(input))
-	for key, value := range input {
-		output[key] = value
+	switch value.Kind() {
+	case reflect.Interface:
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
+		}
+		cloned := reflect.New(value.Type()).Elem()
+		cloned.Set(cloneResourceJSONValue(value.Elem()))
+		return cloned
+	case reflect.Pointer:
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
+		}
+		cloned := reflect.New(value.Type().Elem())
+		cloned.Elem().Set(cloneResourceJSONValue(value.Elem()))
+		return cloned
+	case reflect.Map:
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
+		}
+		cloned := reflect.MakeMapWithSize(value.Type(), value.Len())
+		iter := value.MapRange()
+		for iter.Next() {
+			cloned.SetMapIndex(cloneResourceJSONValue(iter.Key()), cloneResourceJSONValue(iter.Value()))
+		}
+		return cloned
+	case reflect.Slice:
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
+		}
+		cloned := reflect.MakeSlice(value.Type(), value.Len(), value.Len())
+		for index := 0; index < value.Len(); index++ {
+			cloned.Index(index).Set(cloneResourceJSONValue(value.Index(index)))
+		}
+		return cloned
+	case reflect.Array:
+		cloned := reflect.New(value.Type()).Elem()
+		for index := 0; index < value.Len(); index++ {
+			cloned.Index(index).Set(cloneResourceJSONValue(value.Index(index)))
+		}
+		return cloned
+	case reflect.Struct:
+		cloned := reflect.New(value.Type()).Elem()
+		cloned.Set(value)
+		for index := 0; index < value.NumField(); index++ {
+			if cloned.Field(index).CanSet() {
+				cloned.Field(index).Set(cloneResourceJSONValue(value.Field(index)))
+			}
+		}
+		return cloned
+	default:
+		return value
 	}
-	return output
-}
-
-func cloneResourceAttributes(input map[string]any) map[string]any {
-	if len(input) == 0 {
-		return nil
-	}
-	output := make(map[string]any, len(input))
-	for key, value := range input {
-		output[key] = value
-	}
-	return output
 }
 
 func resourceStringPointer(value string) *string { return &value }
