@@ -21,7 +21,7 @@ func vpcRecord(vpc ec2types.Vpc, region string) collector.Record {
 	}
 	resource := result.Resource
 	resource.State = string(vpc.State)
-	resource.Tags = vpcTags(vpc.Tags)
+	resource.Tags = ec2Tags(vpc.Tags)
 	resource.Attributes = map[string]any{
 		"cidr_block":                   strings.TrimSpace(aws.ToString(vpc.CidrBlock)),
 		"dhcp_options_id":              strings.TrimSpace(aws.ToString(vpc.DhcpOptionsId)),
@@ -34,7 +34,7 @@ func vpcRecord(vpc ec2types.Vpc, region string) collector.Record {
 	return result
 }
 
-func vpcTags(input []ec2types.Tag) map[string]string {
+func ec2Tags(input []ec2types.Tag) map[string]string {
 	if len(input) == 0 {
 		return nil
 	}

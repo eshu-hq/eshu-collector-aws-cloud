@@ -89,8 +89,8 @@ importable only inside this module, satisfying `boundary_test.go`).
    kinds in `Contract()` + `manifest.yaml`. The standalone SDK supports this
    mechanism; its fixture-only synthetic context is not a live grant.
 4. Complete the typed base envelope (`aws_resource`) in claim-bound collection:
-   the first EC2 identity slice is wired and VPC observations carry state,
-   tags, and DescribeVpcs attributes. Other EC2 attributes, relationships,
+   the first EC2 identity slice is wired; VPC and subnet observations carry
+   state, tags, and their describe-response attributes. Other EC2 attributes, relationships,
    other services, real host grant proof, and replacement of placeholder
    conformance fixtures remain.
 5. Remaining envelopes kind by kind; delete transitional kinds last.

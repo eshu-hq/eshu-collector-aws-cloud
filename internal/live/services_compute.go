@@ -44,7 +44,7 @@ func listEC2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("ec2 describe subnets: %w", err)
 		}
 		for _, subnet := range page.Subnets {
-			records = append(records, record(aws.ToString(subnet.SubnetId), "ec2", region, ec2Name(subnet.Tags, aws.ToString(subnet.SubnetId)), "subnet"))
+			records = append(records, subnetRecord(subnet, region))
 		}
 	}
 	groups := awsec2.NewDescribeSecurityGroupsPaginator(client, &awsec2.DescribeSecurityGroupsInput{})
