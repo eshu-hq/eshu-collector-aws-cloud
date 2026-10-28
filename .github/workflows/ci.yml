@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  COVERAGE_FLOOR: 79
+  COVERAGE_FLOOR: 92
   GOLANGCI_VERSION: v2.12.2
   GOSEC_VERSION: v2.30.0
   GOVULNCHECK_VERSION: v1.9.0
@@ -52,6 +52,7 @@ jobs:
               - 'go.sum'
               - '.golangci.yml'
               - 'manifest.yaml'
+              - 'config.example.yaml'
             fixtures:
               - 'testdata/**'
               - '**/*.json'
@@ -71,6 +72,7 @@ jobs:
               - 'go.sum'
             workflows:
               - '.github/workflows/**'
+              - '.github/dependabot.yml'
 
   lint:
     if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.go == 'true' || needs.changes.outputs.workflows == 'true' || (needs.changes.result != 'success' && github.event_name != 'pull_request' && github.event_name != 'schedule'))
