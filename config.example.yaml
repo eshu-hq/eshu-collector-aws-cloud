@@ -31,3 +31,5 @@ config:
 #    - iam
 #    - ec2
 #    - s3
+
+# ci-skip-proof: fixture-only lane check
