@@ -40,11 +40,15 @@ jobs:
       deps: ${{ steps.filter.outputs.deps }}
       image: ${{ steps.filter.outputs.image }}
       workflows: ${{ steps.filter.outputs.workflows }}
+      misc: ${{ steps.filter.outputs.misc }}
     steps:
       - uses: actions/checkout@v7 # 11d5960a326750d5838078e36cf38b85af677262
       - id: filter
         uses: dorny/paths-filter@v4 # 0e4a8c6effa4802afeda77dc8d303f8176d7dfad
         with:
+          # Needed so the `misc` catch-all below can use `!` negations;
+          # groups without negations behave exactly as before.
+          predicate-quantifier: 'some-with-excludes'
           filters: |
             go:
               - '**/*.go'
@@ -53,11 +57,21 @@ jobs:
               - '.golangci.yml'
               - 'manifest.yaml'
             fixtures:
+              # Every entry is grep-proven test- or embed-consumed (epic
+              # rule: test-class iff a test opens it or go:embed reaches
+              # it): testdata/** via conformance_test.go:375
+              # (os.ReadFile testdata/+name), **/*.json via
+              # grant_test.go:106 (grant.example.json) and
+              # conformance_test.go:375 (testdata/*.json), manifest.yaml
+              # via conformance_test.go:401 plus manifest.go:13 (go:embed
+              # manifest.yaml), grant.example.json explicit (also under
+              # **/*.json). NOT fixtures: config.example.yaml has no test
+              # readers (README-only) and .github/dependabot.yml has none
+              # either, so both stay out; dependabot.yml lands in misc.
               - 'testdata/**'
               - '**/*.json'
-              - '**/*.yaml'
-              - '**/*.yml'
-              - '*.example.*'
+              - 'manifest.yaml'
+              - 'grant.example.json'
             shell:
               - '**/*.sh'
             deps:
@@ -71,9 +85,34 @@ jobs:
               - 'go.sum'
             workflows:
               - '.github/workflows/**'
+            misc:
+              # Fail-closed default required by the epic: anything not
+              # classified above runs the full Go lanes (issue #6: a PR
+              # touching only .gitignore ran zero lanes). The docs skip
+              # set stays negated so docs-only PRs keep skipping; every
+              # classified pattern is negated too so narrow lanes
+              # (fixtures/shell/image) keep their shape. Proven by the
+              # docs-only / shell-only / fixture-only / unclassified-only
+              # skip-proof PRs on the fix branch.
+              - '**'
+              - '!**/*.md'
+              - '!LICENSE'
+              - '!config.example.yaml'
+              - '!**/*.go'
+              - '!go.mod'
+              - '!go.sum'
+              - '!.golangci.yml'
+              - '!testdata/**'
+              - '!**/*.json'
+              - '!manifest.yaml'
+              - '!grant.example.json'
+              - '!**/*.sh'
+              - '!Dockerfile'
+              - '!.dockerignore'
+              - '!.github/workflows/**'
 
   lint:
-    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.go == 'true' || needs.changes.outputs.workflows == 'true' || (needs.changes.result != 'success' && github.event_name != 'pull_request' && github.event_name != 'schedule'))
+    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.go == 'true' || needs.changes.outputs.misc == 'true' || needs.changes.outputs.workflows == 'true' || (needs.changes.result != 'success' && github.event_name != 'pull_request' && github.event_name != 'schedule'))
     needs: [changes]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -96,7 +135,7 @@ jobs:
           actionlint
 
   test:
-    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.go == 'true' || needs.changes.outputs.fixtures == 'true' || needs.changes.outputs.workflows == 'true' || (needs.changes.result != 'success' && github.event_name != 'pull_request' && github.event_name != 'schedule'))
+    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.go == 'true' || needs.changes.outputs.fixtures == 'true' || needs.changes.outputs.misc == 'true' || needs.changes.outputs.workflows == 'true' || (needs.changes.result != 'success' && github.event_name != 'pull_request' && github.event_name != 'schedule'))
     needs: [changes]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -111,7 +150,7 @@ jobs:
       - run: go test ./... -count=1
 
   race:
-    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.go == 'true' || needs.changes.outputs.fixtures == 'true' || needs.changes.outputs.workflows == 'true' || (needs.changes.result != 'success' && github.event_name != 'pull_request' && github.event_name != 'schedule'))
+    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.go == 'true' || needs.changes.outputs.fixtures == 'true' || needs.changes.outputs.misc == 'true' || needs.changes.outputs.workflows == 'true' || (needs.changes.result != 'success' && github.event_name != 'pull_request' && github.event_name != 'schedule'))
     needs: [changes]
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -200,21 +239,44 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      issues: write # scheduled runs file or update a findings issue
     steps:
       - uses: actions/checkout@v7 # 11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-go@v7 # 40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: go.mod
       - run: go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}
-      - run: gosec -no-fail -fmt=sarif -out gosec.sarif ./...
+      # -no-fail: findings are advisory on PRs and pushes; the count below
+      # is the gate. Advisory until the false-positive rate here is
+      # measured; triage happens in the open, never blanket-excluded.
+      - run: gosec -no-fail -fmt=sarif -out=gosec.sarif ./...
       - run: |
           count=$(jq '[.runs[].results[]] | length' gosec.sarif)
           echo "gosec findings: ${count}" >> "$GITHUB_STEP_SUMMARY"
+          echo "gosec findings: ${count}"
+          # Findings fail scheduled runs so the `failure()`-gated issue
+          # step below is reachable; other events stay advisory green.
+          if [ "${count:-0}" -gt 0 ] && [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "gosec findings on a scheduled run; failing to file the issue."
+            exit 1
+          fi
       - uses: github/codeql-action/upload-sarif@v4 # 4bfa242aa49c5f7c6770b98670d354a7dfac05f8
         if: always()
         with:
           sarif_file: gosec.sarif
           category: gosec
+      - if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="gosec findings $(date -u +%F)"
+          body="Scheduled gosec failed on ${{ github.sha }}. See run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}."
+          open=$(gh issue list --search "$title in:title" --state open --json number --jq '.[0].number')
+          if [ -n "$open" ] && [ "$open" != "null" ]; then
+            gh issue comment "$open" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi
 
   ci-complete:
     if: always()
