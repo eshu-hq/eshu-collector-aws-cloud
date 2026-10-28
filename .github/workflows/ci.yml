@@ -41,9 +41,9 @@ jobs:
       image: ${{ steps.filter.outputs.image }}
       workflows: ${{ steps.filter.outputs.workflows }}
     steps:
-      - uses: actions/checkout@v4 # 11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@v7 # 11d5960a326750d5838078e36cf38b85af677262
       - id: filter
-        uses: dorny/paths-filter@v3 # 0e4a8c6effa4802afeda77dc8d303f8176d7dfad
+        uses: dorny/paths-filter@v4 # 0e4a8c6effa4802afeda77dc8d303f8176d7dfad
         with:
           filters: |
             go:
@@ -80,8 +80,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4 # 11d5960a326750d5838078e36cf38b85af677262
-      - uses: actions/setup-go@v5 # 40f1582b2485089dde7abd97c1529aa768e1baff
+      - uses: actions/checkout@v7 # 11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@v7 # 40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: go.mod
       - run: go vet ./...
@@ -103,8 +103,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4 # 11d5960a326750d5838078e36cf38b85af677262
-      - uses: actions/setup-go@v5 # 40f1582b2485089dde7abd97c1529aa768e1baff
+      - uses: actions/checkout@v7 # 11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@v7 # 40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: go.mod
       - run: go build ./...
@@ -118,8 +118,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4 # 11d5960a326750d5838078e36cf38b85af677262
-      - uses: actions/setup-go@v5 # 40f1582b2485089dde7abd97c1529aa768e1baff
+      - uses: actions/checkout@v7 # 11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@v7 # 40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: go.mod
       - run: go test ./... -race -count=1 -covermode=atomic -coverprofile=coverage.out
@@ -137,7 +137,7 @@ jobs:
             awk 'NR > 1 {n=split($1, a, ":"); file=a[1]; pkg=file; sub(/\/[^/]*$/, "", pkg); stmts[pkg]+=$2; if ($3 > 0) cov[pkg]+=$2} END {for (p in stmts) printf "| %s | %d | %d | %.1f%% |\n", p, cov[p]+0, stmts[p], 100*(cov[p]+0)/stmts[p]}' coverage.out | sort
           } >> "$GITHUB_STEP_SUMMARY"
           awk -v total="$total" -v floor="${{ env.COVERAGE_FLOOR }}" 'BEGIN {exit !(total + 0 >= floor + 0)}'
-      - uses: actions/upload-artifact@v4 # ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@v7 # ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: coverage-profile
           path: |
@@ -153,7 +153,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4 # 11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@v7 # 11d5960a326750d5838078e36cf38b85af677262
       - run: git ls-files '*.sh' | xargs shellcheck
 
   image:
@@ -164,7 +164,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4 # 11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@v7 # 11d5960a326750d5838078e36cf38b85af677262
       - run: docker build -t collector:ci .
       - run: |
           test -f .dockerignore
@@ -181,8 +181,8 @@ jobs:
       contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v4 # 11d5960a326750d5838078e36cf38b85af677262
-      - uses: actions/setup-go@v5 # 40f1582b2485089dde7abd97c1529aa768e1baff
+      - uses: actions/checkout@v7 # 11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@v7 # 40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: go.mod
       - run: go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
@@ -201,8 +201,8 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4 # 11d5960a326750d5838078e36cf38b85af677262
-      - uses: actions/setup-go@v5 # 40f1582b2485089dde7abd97c1529aa768e1baff
+      - uses: actions/checkout@v7 # 11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@v7 # 40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: go.mod
       - run: go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}
@@ -210,7 +210,7 @@ jobs:
       - run: |
           count=$(jq '[.runs[].results[]] | length' gosec.sarif)
           echo "gosec findings: ${count}" >> "$GITHUB_STEP_SUMMARY"
-      - uses: github/codeql-action/upload-sarif@v3 # 4bfa242aa49c5f7c6770b98670d354a7dfac05f8
+      - uses: github/codeql-action/upload-sarif@v4 # 4bfa242aa49c5f7c6770b98670d354a7dfac05f8
         if: always()
         with:
           sarif_file: gosec.sarif
