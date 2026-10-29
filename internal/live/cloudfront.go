@@ -152,7 +152,8 @@ func cloudFrontBehaviors(value *cloudfronttypes.CacheBehaviors) []map[string]any
 }
 
 func cloudFrontBehavior(path string, target *string, policy cloudfronttypes.ViewerProtocolPolicy,
-	methods *cloudfronttypes.AllowedMethods, cache, request, response *string, compress *bool) map[string]any {
+	methods *cloudfronttypes.AllowedMethods, cache, request, response *string, compress *bool,
+) map[string]any {
 	attrs := map[string]any{}
 	if value := strings.TrimSpace(path); value != "" {
 		attrs["path_pattern"] = value
