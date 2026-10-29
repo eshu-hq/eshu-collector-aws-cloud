@@ -142,7 +142,7 @@ func ec2Name(tags []ec2types.Tag, fallback string) string {
 }
 
 // listECR mirrors the in-tree ecr scanner: repositories, image digests, and
-// lifecycle-policy presence. Image contents and policy text stay unread.
+// lifecycle-policy metadata. Image contents and policy text are never emitted.
 func listECR(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 	client := awsecr.NewFromConfig(cfg)
 	region := cfg.Region
@@ -177,6 +177,13 @@ func listECR(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 				for _, image := range imagePage.ImageDetails {
 					records = appendUniqueECRImageRecords(records, seenImages, aws.ToString(repository.RepositoryArn), aws.ToString(repository.RepositoryName), image, region)
 				}
+			}
+			policy, err := readECRLifecyclePolicy(ctx, client, repository, region)
+			if err != nil {
+				return nil, err
+			}
+			if policy != nil {
+				records = append(records, *policy)
 			}
 		}
 	}
