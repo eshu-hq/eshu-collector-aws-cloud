@@ -119,6 +119,27 @@ func TestCollectReportDegradesPartialServiceFailure(t *testing.T) {
 	}
 }
 
+func TestCollectReportRetainsOptionalEC2Denial(t *testing.T) {
+	reader := Collector{
+		LoadConfig: fakeConfig(&[]string{}), VerifyIdentity: verifiedIdentity,
+		Loaders: map[string]Loader{"ec2": func(_ context.Context, cfg aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
+			return []collector.Record{record("vpc-123", "ec2", cfg.Region, "network", "vpc")},
+				&optionalReadDenied{denials: []optionalDenial{{operation: "DescribeSecurityGroupRules", resource: "region:us-east-1", effect: "security-group-rules-unavailable"}}}
+		}},
+	}
+	outcome, err := reader.CollectReport(context.Background(), Config{AccountID: "055929692761", Regions: []string{"us-east-1"}, Services: []string{"ec2"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outcome.Resources) != 1 || len(outcome.Warnings) != 1 || len(outcome.WarningObservations) != 1 {
+		t.Fatalf("partial EC2 outcome: resources=%d warnings=%v observations=%v", len(outcome.Resources), outcome.Warnings, outcome.WarningObservations)
+	}
+	got := outcome.WarningObservations[0]
+	if got.WarningKind != "permission_denied" || got.Attributes["operation"] != "DescribeSecurityGroupRules" || got.Attributes["resource"] != "region:us-east-1" || got.Attributes["effect"] != "security-group-rules-unavailable" {
+		t.Fatalf("warning identity: %+v", got)
+	}
+}
+
 // TestCollectReportFailsWhenNothingIsReadable proves a total read failure
 // errors instead of emitting an empty report that would retire good
 // evidence as current.
