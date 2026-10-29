@@ -239,8 +239,11 @@ func listECS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 						return nil, fmt.Errorf("ecs describe tasks: %w", err)
 					}
 					for _, task := range described.Tasks {
-						arn := aws.ToString(task.TaskArn)
-						records = append(records, record(arn, "ecs", region, lastSegment(arn, "/"), "task"))
+						row := ecsTaskRecord(task, region)
+						if row.Resource == nil {
+							return nil, fmt.Errorf("ecs described task has no ARN")
+						}
+						records = append(records, row)
 					}
 				}
 			}
