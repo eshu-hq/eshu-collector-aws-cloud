@@ -111,6 +111,9 @@ func kmsPrimaryKeyARN(c *kmstypes.MultiRegionConfiguration) string {
 	return strings.TrimSpace(aws.ToString(c.PrimaryKey.Arn))
 }
 func kmsAlgorithms(v []kmstypes.EncryptionAlgorithmSpec) []string {
+	if len(v) == 0 {
+		return nil
+	}
 	out := make([]string, 0, len(v))
 	for _, x := range v {
 		out = append(out, string(x))
@@ -118,6 +121,9 @@ func kmsAlgorithms(v []kmstypes.EncryptionAlgorithmSpec) []string {
 	return out
 }
 func kmsSigningAlgorithms(v []kmstypes.SigningAlgorithmSpec) []string {
+	if len(v) == 0 {
+		return nil
+	}
 	out := make([]string, 0, len(v))
 	for _, x := range v {
 		out = append(out, string(x))
@@ -125,6 +131,9 @@ func kmsSigningAlgorithms(v []kmstypes.SigningAlgorithmSpec) []string {
 	return out
 }
 func kmsMACAlgorithms(v []kmstypes.MacAlgorithmSpec) []string {
+	if len(v) == 0 {
+		return nil
+	}
 	out := make([]string, 0, len(v))
 	for _, x := range v {
 		out = append(out, string(x))
@@ -132,6 +141,9 @@ func kmsMACAlgorithms(v []kmstypes.MacAlgorithmSpec) []string {
 	return out
 }
 func kmsAgreementAlgorithms(v []kmstypes.KeyAgreementAlgorithmSpec) []string {
+	if len(v) == 0 {
+		return nil
+	}
 	out := make([]string, 0, len(v))
 	for _, x := range v {
 		out = append(out, string(x))
