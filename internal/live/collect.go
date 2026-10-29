@@ -50,7 +50,8 @@ type Outcome struct {
 	Report   collector.Report
 	Warnings []string
 	// Resources are typed observations retained from successful AWS reads.
-	Resources []collector.ResourceObservation
+	Resources     []collector.ResourceObservation
+	Relationships []collector.RelationshipObservation
 }
 
 func (c Collector) now() time.Time {
@@ -84,6 +85,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 	records := []collector.Record{}
 	warnings := []string{}
 	resources := []collector.ResourceObservation{}
+	relationships := []collector.RelationshipObservation{}
 	for i, region := range config.Regions {
 		cfg, err := c.loadConfig(ctx, region)
 		if err != nil {
@@ -119,6 +121,14 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 			}
 			records = append(records, listed...)
 			for _, item := range listed {
+				if edge := item.Relationship; edge != nil {
+					relationships = append(relationships, collector.RelationshipObservation{
+						Boundary:         collector.Boundary{AccountID: config.AccountID, Region: edge.Region, ServiceKind: edge.ServiceKind},
+						RelationshipType: edge.RelationshipType, SourceResourceID: edge.SourceResourceID, SourceARN: edge.SourceARN,
+						TargetResourceID: edge.TargetResourceID, TargetARN: edge.TargetARN, TargetType: edge.TargetType,
+						SourceRecordID: edge.SourceRecordID, Attributes: edge.Attributes,
+					})
+				}
 				if item.Resource == nil {
 					continue
 				}
@@ -144,8 +154,9 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 			Source:      "aws-live:" + config.AccountID + "/" + strings.Join(config.Regions, ","),
 			Records:     records,
 		},
-		Warnings:  warnings,
-		Resources: resources,
+		Warnings:      warnings,
+		Resources:     resources,
+		Relationships: relationships,
 	}, nil
 }
 

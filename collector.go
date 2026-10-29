@@ -103,6 +103,8 @@ type Record struct {
 	// Resource carries typed metadata from a live AWS read. The placeholder
 	// report format does not accept it from a file.
 	Resource *LiveResource `json:"-"`
+	// Relationship carries one typed edge from a live AWS read.
+	Relationship *LiveRelationship `json:"-"`
 	// Secret is intentionally never emitted: Collect redacts it and records
 	// the redaction instead. Keep a field like this so the redaction path
 	// stays exercised after the template is customized.
@@ -122,6 +124,20 @@ type LiveResource struct {
 	Attributes   map[string]any
 }
 
+// LiveRelationship is one relationship returned by a live AWS read.
+type LiveRelationship struct {
+	Region           string
+	ServiceKind      string
+	RelationshipType string
+	SourceResourceID string
+	SourceARN        string
+	TargetResourceID string
+	TargetARN        string
+	TargetType       string
+	SourceRecordID   string
+	Attributes       map[string]any
+}
+
 // CollectOptions controls emission for one claimed scope.
 type CollectOptions struct {
 	ObservedAt     time.Time
@@ -135,7 +151,7 @@ type CollectOptions struct {
 	Limits ResourceUse
 }
 
-// Contract returns the typed aws_resource kind and the transitional families
+// Contract returns typed AWS resource and relationship kinds plus transitional families
 // still emitted by the scaffold. The host must authorize the core-owned kind
 // with a live grant; synthetic fixture context does not authorize production.
 func Contract() sdk.Contract {
@@ -159,6 +175,11 @@ func Contract() sdk.Contract {
 			},
 			{
 				Kind:             AWSKindResource,
+				SchemaVersions:   []string{"1.0.0"},
+				SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceReported},
+			},
+			{
+				Kind:             AWSKindRelationship,
 				SchemaVersions:   []string{"1.0.0"},
 				SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceReported},
 			},

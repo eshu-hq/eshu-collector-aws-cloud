@@ -12,7 +12,7 @@ import (
 )
 
 // subnetRecord retains the metadata the legacy EC2 scanner reads from
-// DescribeSubnets. The subnet-to-VPC edge requires the relationship fact port.
+// DescribeSubnets. The subnet-to-VPC edge uses the same DescribeSubnets row.
 func subnetRecord(subnet ec2types.Subnet, region string) collector.Record {
 	id := strings.TrimSpace(aws.ToString(subnet.SubnetId))
 	arn := strings.TrimSpace(aws.ToString(subnet.SubnetArn))
@@ -42,6 +42,13 @@ func subnetRecord(subnet ec2types.Subnet, region string) collector.Record {
 		"outpost_arn":                     strings.TrimSpace(aws.ToString(subnet.OutpostArn)),
 		"owner_id":                        strings.TrimSpace(aws.ToString(subnet.OwnerId)),
 		"vpc_id":                          strings.TrimSpace(aws.ToString(subnet.VpcId)),
+	}
+	if vpcID := strings.TrimSpace(aws.ToString(subnet.VpcId)); id != "" && vpcID != "" {
+		result.Relationship = &collector.LiveRelationship{
+			Region: region, ServiceKind: "ec2", RelationshipType: "ec2_subnet_in_vpc",
+			SourceResourceID: id, SourceARN: arn, TargetResourceID: vpcID, TargetType: "aws_ec2_vpc",
+			SourceRecordID: id + "#vpc#" + vpcID,
+		}
 	}
 	return result
 }

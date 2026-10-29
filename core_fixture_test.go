@@ -16,23 +16,25 @@ import (
 // Production authorization comes only from the host's live grant snapshot.
 func coreFixtureRequest(t *testing.T, manifest conformance.Manifest, fixtures []sdk.Result) conformance.Request {
 	t.Helper()
-	schema, ok := fixturepack.SchemaFor(AWSKindResource)
-	if !ok {
-		t.Fatal("pinned fixture pack has no aws_resource schema")
-	}
-	return conformance.Request{
+	request := conformance.Request{
 		Manifest: manifest, Fixtures: fixtures, Mode: conformance.ModeFixture,
-		PayloadSchemas:    map[string]json.RawMessage{AWSKindResource: schema},
-		ReservedFactKinds: []string{AWSKindResource},
+		PayloadSchemas:    map[string]json.RawMessage{},
+		ReservedFactKinds: []string{AWSKindResource, AWSKindRelationship},
 		CoreFacts: &conformance.CoreFactContext{
 			ComponentID: manifest.Metadata.ID, ComponentVersion: manifest.Metadata.Version,
-			Facts: []conformance.CoreFactAuthorization{{
-				Kind: AWSKindResource, PayloadSchemaRef: AWSKindResource,
-				ReducerPhases: []string{"aws_cloud_runtime_drift"},
-				Emissions: []conformance.CoreFactEmission{{
-					CollectorKind: CollectorKind, SchemaVersions: []string{"1.0.0"},
-				}},
-			}},
 		},
 	}
+	for _, kind := range []string{AWSKindResource, AWSKindRelationship} {
+		schema, ok := fixturepack.SchemaFor(kind)
+		if !ok {
+			t.Fatalf("pinned fixture pack has no %s schema", kind)
+		}
+		request.PayloadSchemas[kind] = schema
+		request.CoreFacts.Facts = append(request.CoreFacts.Facts, conformance.CoreFactAuthorization{
+			Kind: kind, PayloadSchemaRef: kind,
+			ReducerPhases: []string{"aws_cloud_runtime_drift"},
+			Emissions:     []conformance.CoreFactEmission{{CollectorKind: CollectorKind, SchemaVersions: []string{"1.0.0"}}},
+		})
+	}
+	return request
 }

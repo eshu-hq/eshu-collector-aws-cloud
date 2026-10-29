@@ -25,6 +25,9 @@ func TestSubnetRecordRetainsLegacyObservation(t *testing.T) {
 	if got.Resource == nil {
 		t.Fatal("subnet typed resource missing")
 	}
+	if got.Relationship == nil || got.Relationship.SourceResourceID != "subnet-123" || got.Relationship.TargetResourceID != "vpc-123" || got.Relationship.RelationshipType != "ec2_subnet_in_vpc" {
+		t.Fatalf("subnet VPC relationship = %#v", got.Relationship)
+	}
 	resource := got.Resource
 	if resource.ResourceID != "subnet-123" || resource.ARN != aws.ToString(subnet.SubnetArn) || resource.Name != "subnet-123" || resource.Tags["environment"] != "qa" {
 		t.Fatalf("subnet identity = %+v", resource)
@@ -38,6 +41,9 @@ func TestSubnetRecordRetainsLegacyObservation(t *testing.T) {
 	}
 	subnet.SubnetId = nil
 	fallback := subnetRecord(subnet, "us-east-1")
+	if fallback.Relationship != nil {
+		t.Fatalf("ARN-only subnet acquired a VPC relationship: %#v", fallback.Relationship)
+	}
 	if fallback.Resource == nil || fallback.Resource.ResourceID != aws.ToString(subnet.SubnetArn) || fallback.Resource.Name != "" {
 		t.Fatalf("subnet ARN fallback = %#v", fallback.Resource)
 	}
