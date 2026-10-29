@@ -12,8 +12,11 @@ cluster identity, tags, status, and reported counts. DescribeServices emits
 typed service identity, tags, status, counts, task-definition binding, and
 load-balancer metadata. DescribeTasks emits typed task identity, status,
 containers, network-interface attachments, and reported runtime metadata.
-ECS task definitions, bucket detail and posture reads, lifecycle policy facts,
-and the full scanner port remain unfinished. This plan
+Task definitions emit safe scalar metadata and tags from DescribeTaskDefinition;
+container definitions, environment redaction, secret references, image
+relationships, and ECS service/task relationships remain deferred. Bucket
+detail and posture reads, lifecycle policy facts, and the full scanner port
+remain unfinished. This plan
 maps the remaining in-tree implementation to standalone locations. No live AWS
 core-kind output or host grant has been proved.
 

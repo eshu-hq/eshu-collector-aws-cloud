@@ -51,8 +51,12 @@ separate detail reads. ECS DescribeClusters emits cluster identity, tags, status
 and reported counts. DescribeServices emits service identity, tags, status,
 reported counts, task-definition binding, and load-balancer metadata.
 DescribeTasks emits task identity, status, containers, network-interface
-attachments, and reported runtime metadata. Task definitions remain placeholder
-records. ECR lifecycle policies and other AWS service readers still lack typed output. The full port removes
+attachments, and reported runtime metadata. DescribeTaskDefinition emits
+task-definition identity, tags, roles, resource sizing, network mode,
+compatibilities, revision, and registration time. Container definitions remain
+excluded until keyed environment redaction and reference handling are ported.
+ECR lifecycle policies and other AWS service readers still lack typed output.
+The full port removes
 those placeholders and declares the other core-owned AWS fact kinds at schema
 `1.0.0`, all with
 `reported` confidence (the in-tree AWS envelopes record facts returned by
