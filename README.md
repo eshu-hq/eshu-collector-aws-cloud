@@ -67,9 +67,17 @@ reads tags through GetBucketTagging. Only NoSuchTagSet means an empty tag set.
 GetBucketEncryption adds reported algorithms, KMS key IDs, and bucket-key state.
 GetBucketVersioning and GetPublicAccessBlock add the reported bucket-level
 versioning and public-access settings. An absent public-access-block
-configuration leaves its four flags unknown. GetBucketPolicyStatus adds
-only the reported public-policy boolean, without reading a policy document;
-a missing policy leaves that boolean unknown. GetBucketOwnershipControls adds
+configuration leaves its four flags unknown. GetBucketPolicyStatus adds the
+reported public-policy boolean; a missing policy leaves that boolean unknown.
+A separate required GetBucketPolicy read derives policy presence, public
+AWS-principal grants, and cross-account AWS-principal grants into the typed
+`s3_bucket_posture` fact. The raw document is discarded; malformed or ambiguous
+Allow principals fail the S3 read with a sanitized error. No policy is reported
+as known absent with unknown grant flags, while an empty successful response
+leaves all three flags unknown. This adds one read per bucket and requires
+`s3:GetBucketPolicy`; live IAM access, cost, and reducer graph integration
+remain unverified. BPA fields are not emitted into the typed posture fact.
+GetBucketOwnershipControls adds
 reported ownership enum values; missing or empty controls yield null. Both
 reads bind the verified bucket owner. Their denials fail the S3 read; live
 access and cost remain unverified. GetBucketWebsite records whether hosting is

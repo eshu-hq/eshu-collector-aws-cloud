@@ -20,7 +20,7 @@ func s3BucketPostureDeclaration() sdk.FactDeclaration {
 	return sdk.FactDeclaration{Kind: AWSKindS3BucketPosture, SchemaVersions: []string{"1.0.0"}, SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceReported}}
 }
 
-// NewS3BucketPostureFact builds the replication-only typed bucket posture fact.
+// NewS3BucketPostureFact builds the reported typed bucket posture fact.
 func NewS3BucketPostureFact(observation S3BucketPostureObservation) (sdk.Fact, error) {
 	if err := validateResourceBoundary(observation.Boundary); err != nil {
 		return sdk.Fact{}, err
@@ -74,7 +74,9 @@ func NewS3BucketPostureFact(observation S3BucketPostureObservation) (sdk.Fact, e
 		AccountID: observation.Boundary.AccountID, Region: observation.Boundary.Region,
 		ServiceKind: &service, CollectorInstanceID: &instance,
 		BucketARN: arnValue, BucketName: nameValue, ReplicationEnabled: observation.ReplicationEnabled,
-		CorrelationAnchors: anchors,
+		PolicyPresent: observation.PolicyPresent, PolicyGrantsPublic: observation.PolicyGrantsPublic,
+		PolicyGrantsCrossAccount: observation.PolicyGrantsCrossAccount,
+		CorrelationAnchors:       anchors,
 	})
 	if err != nil {
 		return sdk.Fact{}, fmt.Errorf("encode s3_bucket_posture payload: %w", err)
