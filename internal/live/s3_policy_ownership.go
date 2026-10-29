@@ -26,7 +26,7 @@ func readS3PolicyAndOwnership(ctx context.Context, api s3BucketDetailsAPI, name,
 		}
 		policy = nil
 	}
-	attrs := map[string]any{"policy_is_public": nil, "ownership_controls": []string{}}
+	attrs := map[string]any{"policy_is_public": nil, "ownership_controls": nil}
 	if policy != nil && policy.PolicyStatus != nil {
 		attrs["policy_is_public"] = optionalS3Bool(policy.PolicyStatus.IsPublic)
 	}
@@ -40,13 +40,15 @@ func readS3PolicyAndOwnership(ctx context.Context, api s3BucketDetailsAPI, name,
 		ownership = nil
 	}
 	if ownership != nil && ownership.OwnershipControls != nil {
-		values := []string{}
+		var values []string
 		for _, rule := range ownership.OwnershipControls.Rules {
 			if value := strings.TrimSpace(string(rule.ObjectOwnership)); value != "" {
 				values = append(values, value)
 			}
 		}
-		attrs["ownership_controls"] = values
+		if len(values) > 0 {
+			attrs["ownership_controls"] = values
+		}
 	}
 	return attrs, nil
 }

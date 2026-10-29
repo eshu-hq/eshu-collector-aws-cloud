@@ -71,7 +71,8 @@ corresponding S3 permissions; their live cost and access are not yet verified.
 GetBucketPolicyStatus adds only the reported public-policy boolean, without
 reading a policy document. A missing policy leaves that boolean unknown.
 GetBucketOwnershipControls adds the reported ownership enum values; a missing
-configuration yields an empty list. Both reads bind the verified bucket owner.
+configuration or one with no reported values yields null, matching the legacy
+wire shape. Both reads bind the verified bucket owner.
 Their denials fail the S3 read, and live access and cost remain unverified.
 For encryption, the explicit missing-configuration response means a known
 empty configuration. Encryption AccessDenied leaves those attributes absent,
