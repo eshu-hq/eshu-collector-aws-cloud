@@ -18,7 +18,10 @@ func TestVolumeRecordRetainsReportedEBSMetadata(t *testing.T) {
 		AvailabilityZone: aws.String("us-east-1a"), Encrypted: aws.Bool(true),
 		Iops: aws.Int32(3000), Size: aws.Int32(64), KmsKeyId: aws.String("key-123"),
 		CreateTime: &created, VolumeType: ec2types.VolumeTypeGp3,
-		Tags:        []ec2types.Tag{{Key: aws.String("environment"), Value: aws.String("qa")}},
+		Tags: []ec2types.Tag{
+			{Key: aws.String("environment"), Value: aws.String("qa")},
+			{Key: aws.String("Name"), Value: aws.String("database volume")},
+		},
 		Attachments: []ec2types.VolumeAttachment{{InstanceId: aws.String("i-123"), Device: aws.String("/dev/xvda")}},
 	}
 	got := volumeRecord(volume, "us-east-1")
@@ -26,6 +29,9 @@ func TestVolumeRecordRetainsReportedEBSMetadata(t *testing.T) {
 		t.Fatal("typed volume missing")
 	}
 	resource := got.Resource
+	if got.Name != "database volume" {
+		t.Fatalf("placeholder name = %q", got.Name)
+	}
 	if resource.ResourceID != "vol-123" || resource.Name != "vol-123" || resource.State != "in-use" || resource.Tags["environment"] != "qa" {
 		t.Fatalf("volume identity/state/tags = %+v", resource)
 	}

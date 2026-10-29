@@ -16,11 +16,12 @@ import (
 // The volume ARN still needs the verified account and partition from the claim boundary.
 func volumeRecord(volume ec2types.Volume, region string) collector.Record {
 	id := strings.TrimSpace(aws.ToString(volume.VolumeId))
-	result := record(id, "ec2", region, id, "volume")
+	result := record(id, "ec2", region, ec2Name(volume.Tags, id), "volume")
 	if result.Resource == nil {
 		return result
 	}
 	resource := result.Resource
+	resource.Name = id
 	resource.State = string(volume.State)
 	resource.Tags = ec2Tags(volume.Tags)
 	resource.Attributes = map[string]any{
