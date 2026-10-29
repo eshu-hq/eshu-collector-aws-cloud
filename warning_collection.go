@@ -77,9 +77,18 @@ func NewWarningFact(w WarningObservation) (sdk.Fact, error) {
 	if err := validateResourceBoundary(w.Boundary); err != nil {
 		return sdk.Fact{}, err
 	}
-	operation, _ := w.Attributes["operation"].(string)
-	resource, _ := w.Attributes["resource"].(string)
-	effect, _ := w.Attributes["effect"].(string)
+	operation, ok := w.Attributes["operation"].(string)
+	if !ok {
+		operation = ""
+	}
+	resource, rok := w.Attributes["resource"].(string)
+	if !rok {
+		resource = ""
+	}
+	effect, eok := w.Attributes["effect"].(string)
+	if !eok {
+		effect = ""
+	}
 	if strings.TrimSpace(w.WarningKind) == "" || operation == "" || resource == "" || effect == "" {
 		return sdk.Fact{}, fmt.Errorf("aws warning requires kind, operation, resource and effect")
 	}
@@ -122,8 +131,10 @@ func NewWarningFact(w WarningObservation) (sdk.Fact, error) {
 	return sdk.Fact{
 		Kind: AWSKindWarning, SchemaVersion: "1.0.0", StableKey: key,
 		SourceConfidence: sdk.SourceConfidenceReported, ObservedAt: w.Boundary.ObservedAt,
-		SourceRef: sdk.SourceRef{SourceSystem: SourceSystem, ScopeID: w.Boundary.ScopeID,
+		SourceRef: sdk.SourceRef{
+			SourceSystem: SourceSystem, ScopeID: w.Boundary.ScopeID,
 			GenerationID: w.Boundary.GenerationID, FactKey: key, URI: w.SourceURI,
-			RecordID: recordID}, Payload: payload,
+			RecordID: recordID,
+		}, Payload: payload,
 	}, nil
 }

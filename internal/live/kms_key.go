@@ -98,18 +98,21 @@ func kmsTime(t *time.Time) string {
 	}
 	return t.UTC().Format(time.RFC3339)
 }
+
 func kmsMultiRegionType(c *kmstypes.MultiRegionConfiguration) string {
 	if c == nil {
 		return ""
 	}
 	return string(c.MultiRegionKeyType)
 }
+
 func kmsPrimaryKeyARN(c *kmstypes.MultiRegionConfiguration) string {
 	if c == nil || c.PrimaryKey == nil {
 		return ""
 	}
 	return strings.TrimSpace(aws.ToString(c.PrimaryKey.Arn))
 }
+
 func kmsAlgorithms(v []kmstypes.EncryptionAlgorithmSpec) []string {
 	if len(v) == 0 {
 		return nil
@@ -120,6 +123,7 @@ func kmsAlgorithms(v []kmstypes.EncryptionAlgorithmSpec) []string {
 	}
 	return out
 }
+
 func kmsSigningAlgorithms(v []kmstypes.SigningAlgorithmSpec) []string {
 	if len(v) == 0 {
 		return nil
@@ -130,6 +134,7 @@ func kmsSigningAlgorithms(v []kmstypes.SigningAlgorithmSpec) []string {
 	}
 	return out
 }
+
 func kmsMACAlgorithms(v []kmstypes.MacAlgorithmSpec) []string {
 	if len(v) == 0 {
 		return nil
@@ -140,6 +145,7 @@ func kmsMACAlgorithms(v []kmstypes.MacAlgorithmSpec) []string {
 	}
 	return out
 }
+
 func kmsAgreementAlgorithms(v []kmstypes.KeyAgreementAlgorithmSpec) []string {
 	if len(v) == 0 {
 		return nil

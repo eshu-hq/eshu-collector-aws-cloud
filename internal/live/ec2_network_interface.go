@@ -79,7 +79,10 @@ func networkInterfaceRelationships(iface ec2types.NetworkInterface, region strin
 	}
 	if attachment != nil {
 		targetID := strings.TrimSpace(aws.ToString(iface.Attachment.InstanceId))
-		targetARN, _ := attachment["attached_resource_arn"].(string)
+		targetARN, ok := attachment["attached_resource_arn"].(string)
+		if !ok {
+			targetARN = ""
+		}
 		if targetID == "" {
 			targetID = targetARN
 		}
@@ -87,7 +90,10 @@ func networkInterfaceRelationships(iface ec2types.NetworkInterface, region strin
 			edge := base
 			edge.RelationshipType, edge.TargetResourceID = "ec2_network_interface_attached_to_resource", targetID
 			edge.TargetARN = targetARN
-			edge.TargetType, _ = attachment["attached_resource_type"].(string)
+			edge.TargetType, ok = attachment["attached_resource_type"].(string)
+			if !ok {
+				edge.TargetType = ""
+			}
 			edge.SourceRecordID = id + "#attachment#" + targetID
 			edge.Attributes = attachment
 			edges = append(edges, edge)

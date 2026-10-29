@@ -67,7 +67,10 @@ func TestNetworkInterfaceRecordRetainsLegacyObservation(t *testing.T) {
 	}
 	interfaceData.Attachment.InstanceOwnerId = aws.String("999999999999")
 	owned := networkInterfaceRecord(interfaceData, "us-gov-west-1", VerifiedIdentity{AccountID: "123456789012", Partition: "aws-us-gov"})
-	ownedAttachment := owned.Resource.Attributes["attachment"].(map[string]any)
+	ownedAttachment, ok := owned.Resource.Attributes["attachment"].(map[string]any)
+	if !ok {
+		t.Fatalf("owned attachment has unexpected type %T", owned.Resource.Attributes["attachment"])
+	}
 	if ownedAttachment["attached_resource_arn"] != "arn:aws-us-gov:ec2:us-gov-west-1:999999999999:instance/i-123" {
 		t.Fatalf("reported instance owner was lost: %#v", ownedAttachment)
 	}

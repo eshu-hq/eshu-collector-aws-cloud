@@ -115,7 +115,15 @@ func TestIAMRoleTrustPolicyShapeMatchesLegacy(t *testing.T) {
 		if err != nil {
 			t.Fatalf("empty trust %q: %v", raw, err)
 		}
-		if row.Resource.Attributes["trust_policy_present"] != false || row.Resource.Attributes["attached_policy_arns"].([]string) != nil || row.Resource.Attributes["inline_policy_names"].([]string) != nil {
+		attached, ok := row.Resource.Attributes["attached_policy_arns"].([]string)
+		if !ok {
+			t.Fatalf("empty trust/list shape %q: attached_policy_arns has unexpected type %T", raw, row.Resource.Attributes["attached_policy_arns"])
+		}
+		inline, ok := row.Resource.Attributes["inline_policy_names"].([]string)
+		if !ok {
+			t.Fatalf("empty trust/list shape %q: inline_policy_names has unexpected type %T", raw, row.Resource.Attributes["inline_policy_names"])
+		}
+		if row.Resource.Attributes["trust_policy_present"] != false || attached != nil || inline != nil {
 			t.Fatalf("empty trust/list shape %q: %#v", raw, row.Resource.Attributes)
 		}
 		encoded, err := json.Marshal(row.Resource.Attributes)

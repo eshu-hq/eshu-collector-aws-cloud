@@ -144,6 +144,11 @@ func eksOIDCTestConfig(t *testing.T, listError, getError string) (aws.Config, *m
 	t.Helper()
 	calls := map[string]int{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		serve := func(body string) {
+			if _, err := w.Write([]byte(body)); err != nil {
+				t.Errorf("write fixture response: %v", err)
+			}
+		}
 		if err := r.ParseForm(); err != nil {
 			t.Error(err)
 			return
@@ -173,30 +178,30 @@ func eksOIDCTestConfig(t *testing.T, listError, getError string) (aws.Config, *m
 			}
 			if code != "" {
 				w.WriteHeader(http.StatusForbidden)
-				fmt.Fprintf(w, `<ErrorResponse><Error><Code>%s</Code><Message>denied</Message></Error></ErrorResponse>`, code)
+				serve(fmt.Sprintf(`<ErrorResponse><Error><Code>%s</Code><Message>denied</Message></Error></ErrorResponse>`, code))
 				return
 			}
 			if action == "ListOpenIDConnectProviders" {
 				if listError == "NoMatch" {
-					fmt.Fprint(w, `<ListOpenIDConnectProvidersResponse><ListOpenIDConnectProvidersResult><OpenIDConnectProviderList/></ListOpenIDConnectProvidersResult></ListOpenIDConnectProvidersResponse>`)
+					serve(`<ListOpenIDConnectProvidersResponse><ListOpenIDConnectProvidersResult><OpenIDConnectProviderList/></ListOpenIDConnectProvidersResult></ListOpenIDConnectProvidersResponse>`)
 					return
 				}
-				fmt.Fprint(w, `<ListOpenIDConnectProvidersResponse><ListOpenIDConnectProvidersResult><OpenIDConnectProviderList><member><Arn>arn:aws:iam::123456789012:oidc-provider/issuer.example.invalid/id/demo</Arn></member></OpenIDConnectProviderList></ListOpenIDConnectProvidersResult></ListOpenIDConnectProvidersResponse>`)
+				serve(`<ListOpenIDConnectProvidersResponse><ListOpenIDConnectProvidersResult><OpenIDConnectProviderList><member><Arn>arn:aws:iam::123456789012:oidc-provider/issuer.example.invalid/id/demo</Arn></member></OpenIDConnectProviderList></ListOpenIDConnectProvidersResult></ListOpenIDConnectProvidersResponse>`)
 			} else {
-				fmt.Fprint(w, `<GetOpenIDConnectProviderResponse><GetOpenIDConnectProviderResult><Url>issuer.example.invalid/id/demo</Url><ClientIDList><member>sts.amazonaws.com</member></ClientIDList><ThumbprintList><member>abc123</member></ThumbprintList></GetOpenIDConnectProviderResult></GetOpenIDConnectProviderResponse>`)
+				serve(`<GetOpenIDConnectProviderResponse><GetOpenIDConnectProviderResult><Url>issuer.example.invalid/id/demo</Url><ClientIDList><member>sts.amazonaws.com</member></ClientIDList><ThumbprintList><member>abc123</member></ThumbprintList></GetOpenIDConnectProviderResult></GetOpenIDConnectProviderResponse>`)
 			}
 			return
 		}
 		w.Header().Set("Content-Type", "application/x-amz-json-1.1")
 		switch action {
 		case "ListClusters":
-			fmt.Fprint(w, `{"clusters":["one","two"]}`)
+			serve(`{"clusters":["one","two"]}`)
 		case "DescribeCluster":
-			fmt.Fprint(w, `{"cluster":{"name":"one","arn":"arn:aws:eks:us-east-1:123456789012:cluster/one","identity":{"oidc":{"issuer":"https://issuer.example.invalid/id/demo"}}}}`)
+			serve(`{"cluster":{"name":"one","arn":"arn:aws:eks:us-east-1:123456789012:cluster/one","identity":{"oidc":{"issuer":"https://issuer.example.invalid/id/demo"}}}}`)
 		case "ListNodegroups":
-			fmt.Fprint(w, `{"nodegroups":[]}`)
+			serve(`{"nodegroups":[]}`)
 		case "ListAddons":
-			fmt.Fprint(w, `{"addons":[]}`)
+			serve(`{"addons":[]}`)
 		default:
 			t.Errorf("unexpected AWS action %q", action)
 			w.WriteHeader(http.StatusBadRequest)

@@ -23,7 +23,7 @@ func lambdaFunctionRecord(function lambdatypes.FunctionConfiguration, region str
 	arn := strings.TrimSpace(aws.ToString(function.FunctionArn))
 	name := strings.TrimSpace(aws.ToString(function.FunctionName))
 	if arn == "" && name == "" {
-		return collector.Record{}, fmt.Errorf("Lambda function has no source identity")
+		return collector.Record{}, fmt.Errorf("lambda function has no source identity")
 	}
 	result := record(arn, "lambda", region, name, "function")
 	resourceID := arn
@@ -68,7 +68,7 @@ var lambdaECRImageReference = regexp.MustCompile(`^[0-9]{12}\.dkr\.ecr\.[a-z0-9-
 // stable code references without copying package URLs, environment, or tags.
 func lambdaGetFunctionRecord(listed lambdatypes.FunctionConfiguration, output *awslambda.GetFunctionOutput, region string) (collector.Record, error) {
 	if output == nil {
-		return collector.Record{}, fmt.Errorf("Lambda GetFunction returned no response")
+		return collector.Record{}, fmt.Errorf("lambda GetFunction returned no response")
 	}
 	configuration := listed
 	if output.Configuration != nil {
@@ -83,12 +83,12 @@ func lambdaGetFunctionRecord(listed lambdatypes.FunctionConfiguration, output *a
 		actualID = strings.TrimSpace(aws.ToString(configuration.FunctionName))
 	}
 	if listedID != actualID {
-		return collector.Record{}, fmt.Errorf("Lambda GetFunction identity differs from ListFunctions")
+		return collector.Record{}, fmt.Errorf("lambda GetFunction identity differs from ListFunctions")
 	}
 	listedName := strings.TrimSpace(aws.ToString(listed.FunctionName))
 	actualName := strings.TrimSpace(aws.ToString(configuration.FunctionName))
 	if listedName != "" && actualName != "" && listedName != actualName {
-		return collector.Record{}, fmt.Errorf("Lambda GetFunction name differs from ListFunctions")
+		return collector.Record{}, fmt.Errorf("lambda GetFunction name differs from ListFunctions")
 	}
 	result, err := lambdaFunctionRecord(configuration, region)
 	if err != nil {
@@ -107,13 +107,16 @@ func lambdaGetFunctionRecord(listed lambdatypes.FunctionConfiguration, output *a
 			continue
 		}
 		if !lambdaECRImageReference.MatchString(value) {
-			return collector.Record{}, fmt.Errorf("Lambda GetFunction returned unsafe image reference")
+			return collector.Record{}, fmt.Errorf("lambda GetFunction returned unsafe image reference")
 		}
 		result.Resource.Attributes[key] = value
 		result.Resource.CorrelationAnchors = append(result.Resource.CorrelationAnchors, value)
 	}
 	if imageURI, ok := result.Resource.Attributes["image_uri"].(string); ok && result.Resource.ARN != "" {
-		resolved, _ := result.Resource.Attributes["resolved_image_uri"].(string)
+		resolved, ok := result.Resource.Attributes["resolved_image_uri"].(string)
+		if !ok {
+			resolved = ""
+		}
 		arn := result.Resource.ARN
 		result.Relationship = &collector.LiveRelationship{
 			Region: region, ServiceKind: "lambda", RelationshipType: "lambda_function_uses_image",
@@ -130,7 +133,7 @@ func lambdaGetFunctionRecord(listed lambdatypes.FunctionConfiguration, output *a
 		if err != nil || parsed.Service != "kms" || parsed.Partition != partitionForRegion(region) ||
 			parsed.Region != region || !regionPattern.MatchString(parsed.Region) ||
 			!accountPattern.MatchString(parsed.AccountID) || !lambdaKMSKeyResource.MatchString(parsed.Resource) {
-			return collector.Record{}, fmt.Errorf("Lambda GetFunction returned unsafe source KMS key ARN")
+			return collector.Record{}, fmt.Errorf("lambda GetFunction returned unsafe source KMS key ARN")
 		}
 		result.Resource.Attributes["source_kms_key_arn"] = keyARN
 	}

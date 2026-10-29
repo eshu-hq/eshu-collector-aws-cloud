@@ -105,7 +105,8 @@ func TestS3PolicyAndOwnershipMetadata(t *testing.T) {
 		ownership:    &awss3.GetBucketOwnershipControlsOutput{OwnershipControls: &s3types.OwnershipControls{Rules: []s3types.OwnershipControlsRule{{ObjectOwnership: s3types.ObjectOwnershipBucketOwnerEnforced}}}},
 	}
 	attrs, err := readS3PolicyAndOwnership(context.Background(), api, "assets", "123456789012")
-	if err != nil || attrs["policy_is_public"] != false || attrs["ownership_controls"].([]string)[0] != "BucketOwnerEnforced" || api.policyOwner != "123456789012" || api.ownershipOwner != "123456789012" {
+	controls, ok := attrs["ownership_controls"].([]string)
+	if err != nil || attrs["policy_is_public"] != false || !ok || len(controls) == 0 || controls[0] != "BucketOwnerEnforced" || api.policyOwner != "123456789012" || api.ownershipOwner != "123456789012" {
 		t.Fatalf("attrs=%v policyOwner=%q ownershipOwner=%q err=%v", attrs, api.policyOwner, api.ownershipOwner, err)
 	}
 	api.policyErr = &smithy.GenericAPIError{Code: "NoSuchBucketPolicy"}
@@ -272,7 +273,8 @@ func TestS3EncryptionReadKeepsDeniedStateUnknown(t *testing.T) {
 	}
 	api.encryptionErr = &smithy.GenericAPIError{Code: "ServerSideEncryptionConfigurationNotFoundError"}
 	attrs, denied, err = readS3BucketEncryption(context.Background(), api, "assets", "123456789012")
-	if err != nil || denied || len(attrs["default_encryption_algorithms"].([]string)) != 0 || attrs["bucket_key_enabled"] != false {
+	algorithms, ok := attrs["default_encryption_algorithms"].([]string)
+	if err != nil || denied || !ok || len(algorithms) != 0 || attrs["bucket_key_enabled"] != false {
 		t.Fatalf("missing configuration: attrs=%v denied=%t err=%v", attrs, denied, err)
 	}
 	api.encryptionErr = &smithy.GenericAPIError{Code: "ThrottlingException"}
@@ -293,8 +295,14 @@ func TestS3EncryptionReadMapsReportedRules(t *testing.T) {
 	if err != nil || denied {
 		t.Fatalf("denied=%t err=%v", denied, err)
 	}
-	algorithms := attrs["default_encryption_algorithms"].([]string)
-	keys := attrs["kms_master_key_ids"].([]string)
+	algorithms, ok := attrs["default_encryption_algorithms"].([]string)
+	if !ok {
+		t.Fatalf("default_encryption_algorithms has unexpected type %T", attrs["default_encryption_algorithms"])
+	}
+	keys, ok := attrs["kms_master_key_ids"].([]string)
+	if !ok {
+		t.Fatalf("kms_master_key_ids has unexpected type %T", attrs["kms_master_key_ids"])
+	}
 	if len(algorithms) != 2 || algorithms[0] != "AES256" || algorithms[1] != "aws:kms" || len(keys) != 1 || keys[0] != "alias/team" || attrs["bucket_key_enabled"] != true {
 		t.Fatalf("encryption attributes: %v", attrs)
 	}

@@ -88,10 +88,14 @@ func NewImageReferenceFact(observation ImageReferenceObservation) (sdk.Fact, err
 	if recordID == "" {
 		recordID = name + "@" + digest + "#" + tag
 	}
-	return sdk.Fact{Kind: AWSKindImageReference, SchemaVersion: "1.0.0", StableKey: key,
+	return sdk.Fact{
+		Kind: AWSKindImageReference, SchemaVersion: "1.0.0", StableKey: key,
 		SourceConfidence: sdk.SourceConfidenceReported, ObservedAt: observedAt,
-		SourceRef: sdk.SourceRef{SourceSystem: SourceSystem, ScopeID: observation.Boundary.ScopeID,
-			GenerationID: observation.Boundary.GenerationID, FactKey: key, URI: uri, RecordID: recordID}, Payload: payload}, nil
+		SourceRef: sdk.SourceRef{
+			SourceSystem: SourceSystem, ScopeID: observation.Boundary.ScopeID,
+			GenerationID: observation.Boundary.GenerationID, FactKey: key, URI: uri, RecordID: recordID,
+		}, Payload: payload,
+	}, nil
 }
 
 func imageTimePointer(value time.Time) *time.Time {

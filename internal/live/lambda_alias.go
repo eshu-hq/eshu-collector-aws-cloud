@@ -24,14 +24,14 @@ func lambdaAliasRecord(functionARN string, alias lambdatypes.AliasConfiguration,
 	// and the reported qualifier exactly. A suffix match cannot bind a
 	// name-only parent to the account, region, or function in that ARN.
 	if aliasARN != "" && (functionARN == "" || name == "" || aliasARN != functionARN+":"+name) {
-		return collector.Record{}, fmt.Errorf("Lambda alias identity differs from parent function or name")
+		return collector.Record{}, fmt.Errorf("lambda alias identity differs from parent function or name")
 	}
 	resourceID := aliasARN
 	if resourceID == "" && functionARN != "" && name != "" {
 		resourceID = functionARN + ":" + name
 	}
 	if resourceID == "" {
-		return collector.Record{}, fmt.Errorf("Lambda alias has no source identity")
+		return collector.Record{}, fmt.Errorf("lambda alias has no source identity")
 	}
 	weights := map[string]float64(nil)
 	if alias.RoutingConfig != nil && len(alias.RoutingConfig.AdditionalVersionWeights) != 0 {

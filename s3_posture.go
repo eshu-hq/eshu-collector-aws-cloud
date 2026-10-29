@@ -114,8 +114,10 @@ func NewS3BucketPostureFact(observation S3BucketPostureObservation) (sdk.Fact, e
 	return sdk.Fact{
 		Kind: AWSKindS3BucketPosture, SchemaVersion: "1.0.0", StableKey: stableKey,
 		SourceConfidence: sdk.SourceConfidenceReported, ObservedAt: observedAt,
-		SourceRef: sdk.SourceRef{SourceSystem: SourceSystem, ScopeID: observation.Boundary.ScopeID,
-			GenerationID: observation.Boundary.GenerationID, FactKey: stableKey, URI: uri, RecordID: recordID},
+		SourceRef: sdk.SourceRef{
+			SourceSystem: SourceSystem, ScopeID: observation.Boundary.ScopeID,
+			GenerationID: observation.Boundary.GenerationID, FactKey: stableKey, URI: uri, RecordID: recordID,
+		},
 		Payload: payload,
 	}, nil
 }

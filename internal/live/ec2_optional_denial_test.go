@@ -18,6 +18,11 @@ func TestEC2RuleDenialKeepsCoreResourcesAndLaterReads(t *testing.T) {
 		t.Run(code, func(t *testing.T) {
 			calls := map[string]int{}
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				serve := func(body string) {
+					if _, err := w.Write([]byte(body)); err != nil {
+						t.Errorf("write fixture response: %v", err)
+					}
+				}
 				if err := r.ParseForm(); err != nil {
 					t.Error(err)
 					return
@@ -27,21 +32,22 @@ func TestEC2RuleDenialKeepsCoreResourcesAndLaterReads(t *testing.T) {
 				w.Header().Set("Content-Type", "text/xml")
 				if action == "DescribeSecurityGroupRules" {
 					w.WriteHeader(http.StatusForbidden)
-					fmt.Fprintf(w, `<Response><Errors><Error><Code>%s</Code><Message>denied</Message></Error></Errors><RequestID>x</RequestID></Response>`, code)
+					serve(fmt.Sprintf(`<Response><Errors><Error><Code>%s</Code><Message>denied</Message></Error></Errors><RequestID>x</RequestID></Response>`, code))
 					return
 				}
 				if action == "DescribeVpcs" {
-					fmt.Fprint(w, `<DescribeVpcsResponse><requestId>x</requestId><vpcSet><item><vpcId>vpc-123</vpcId></item></vpcSet></DescribeVpcsResponse>`)
+					serve(`<DescribeVpcsResponse><requestId>x</requestId><vpcSet><item><vpcId>vpc-123</vpcId></item></vpcSet></DescribeVpcsResponse>`)
 					return
 				}
 				if action == "DescribeInstances" {
-					fmt.Fprint(w, `<DescribeInstancesResponse><requestId>x</requestId><reservationSet><item><reservationId>r-123</reservationId><instancesSet><item><instanceId>i-123</instanceId></item></instancesSet></item></reservationSet></DescribeInstancesResponse>`)
+					serve(`<DescribeInstancesResponse><requestId>x</requestId><reservationSet><item><reservationId>r-123</reservationId><instancesSet><item><instanceId>i-123</instanceId></item></instancesSet></item></reservationSet></DescribeInstancesResponse>`)
 					return
 				}
-				fmt.Fprintf(w, `<%sResponse><requestId>x</requestId></%sResponse>`, action, action)
+				serve(fmt.Sprintf(`<%sResponse><requestId>x</requestId></%sResponse>`, action, action))
 			}))
 			defer server.Close()
-			cfg := aws.Config{Region: "us-east-1", BaseEndpoint: aws.String(server.URL), HTTPClient: server.Client(),
+			cfg := aws.Config{
+				Region: "us-east-1", BaseEndpoint: aws.String(server.URL), HTTPClient: server.Client(),
 				Credentials: aws.CredentialsProviderFunc(func(context.Context) (aws.Credentials, error) {
 					return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
 				}),

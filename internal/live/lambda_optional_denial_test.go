@@ -24,31 +24,37 @@ func TestLambdaMappingDenialKeepsFunctionsAliasesAndOtherMappings(t *testing.T) 
 		t.Run(code, func(t *testing.T) {
 			calls := map[string]int{}
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				serve := func(body string) {
+					if _, err := w.Write([]byte(body)); err != nil {
+						t.Errorf("write fixture response: %v", err)
+					}
+				}
 				w.Header().Set("Content-Type", "application/json")
 				path := r.URL.Path
 				calls[path]++
 				switch {
 				case path == "/2015-03-31/functions":
-					fmt.Fprintf(w, `{"Functions":[{"FunctionName":"first","FunctionArn":%q},{"FunctionName":"second","FunctionArn":%q}]}`, firstARN, secondARN)
+					serve(fmt.Sprintf(`{"Functions":[{"FunctionName":"first","FunctionArn":%q},{"FunctionName":"second","FunctionArn":%q}]}`, firstARN, secondARN))
 				case strings.HasPrefix(path, "/2015-03-31/functions/") && !strings.HasSuffix(path, "/aliases"):
 					functionARN := strings.TrimPrefix(path, "/2015-03-31/functions/")
-					fmt.Fprintf(w, `{"Configuration":{"FunctionName":%q,"FunctionArn":%q}}`, functionARN[strings.LastIndex(functionARN, ":")+1:], functionARN)
+					serve(fmt.Sprintf(`{"Configuration":{"FunctionName":%q,"FunctionArn":%q}}`, functionARN[strings.LastIndex(functionARN, ":")+1:], functionARN))
 				case strings.HasSuffix(path, "/aliases"):
 					functionARN := strings.TrimSuffix(strings.TrimPrefix(path, "/2015-03-31/functions/"), "/aliases")
-					fmt.Fprintf(w, `{"Aliases":[{"Name":"live","AliasArn":%q}]}`, functionARN+":live")
+					serve(fmt.Sprintf(`{"Aliases":[{"Name":"live","AliasArn":%q}]}`, functionARN+":live"))
 				case path == "/2015-03-31/event-source-mappings" && r.URL.Query().Get("FunctionName") == firstARN:
 					w.Header().Set("X-Amzn-Errortype", code)
 					w.WriteHeader(http.StatusForbidden)
-					fmt.Fprintf(w, `{"Type":"%s","message":"denied"}`, code)
+					serve(fmt.Sprintf(`{"Type":"%s","message":"denied"}`, code))
 				case path == "/2015-03-31/event-source-mappings":
-					fmt.Fprint(w, `{"EventSourceMappings":[{"UUID":"mapping-2","EventSourceArn":"arn:aws:sqs:us-east-1:123456789012:source"}]}`)
+					serve(`{"EventSourceMappings":[{"UUID":"mapping-2","EventSourceArn":"arn:aws:sqs:us-east-1:123456789012:source"}]}`)
 				default:
 					t.Errorf("unexpected Lambda request: %s", r.URL)
 					w.WriteHeader(http.StatusNotFound)
 				}
 			}))
 			defer server.Close()
-			cfg := aws.Config{Region: "us-east-1", BaseEndpoint: aws.String(server.URL), HTTPClient: server.Client(),
+			cfg := aws.Config{
+				Region: "us-east-1", BaseEndpoint: aws.String(server.URL), HTTPClient: server.Client(),
 				Credentials: aws.CredentialsProviderFunc(func(context.Context) (aws.Credentials, error) {
 					return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
 				}),
@@ -92,11 +98,13 @@ func TestLambdaMappingDenialKeepsFunctionsAliasesAndOtherMappings(t *testing.T) 
 				t.Fatalf("Lambda outcome: warnings=%v observations=%v resources=%d records=%d", outcome.Warnings, outcome.WarningObservations, len(outcome.Resources), len(outcome.Report.Records))
 			}
 			observedAt := time.Now().UTC()
-			claim := sdk.Claim{ComponentID: collector.ComponentID, InstanceID: "aws-cloud-primary",
+			claim := sdk.Claim{
+				ComponentID: collector.ComponentID, InstanceID: "aws-cloud-primary",
 				CollectorKind: collector.CollectorKind, SourceSystem: collector.SourceSystem,
 				Scope:       sdk.Scope{ID: "component:aws-cloud-primary", Kind: "component"},
 				SourceRunID: "run-1", GenerationID: "generation-1", WorkItemID: "work-1", FencingToken: "fence-1",
-				Attempt: 1, Deadline: observedAt.Add(time.Hour), ConfigHandle: "component-config:aws-cloud"}
+				Attempt: 1, Deadline: observedAt.Add(time.Hour), ConfigHandle: "component-config:aws-cloud",
+			}
 			sourceURI := "aws://123456789012/us-east-1"
 			limits := collector.DefaultResourceUse()
 			result, err := collector.CollectPartial(claim, outcome.Report, collector.CollectOptions{
@@ -131,23 +139,29 @@ func TestLambdaGetFunctionEnrichesSafeMetadataWithoutSecrets(t *testing.T) {
 	const image = "123456789012.dkr.ecr.us-east-1.amazonaws.com/team/worker:prod"
 	const resolved = "123456789012.dkr.ecr.us-east-1.amazonaws.com/team/worker@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		serve := func(body string) {
+			if _, err := w.Write([]byte(body)); err != nil {
+				t.Errorf("write fixture response: %v", err)
+			}
+		}
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/2015-03-31/functions":
-			fmt.Fprintf(w, `{"Functions":[{"FunctionName":"worker","FunctionArn":%q,"Runtime":"python3.12"}]}`, arn)
+			serve(fmt.Sprintf(`{"Functions":[{"FunctionName":"worker","FunctionArn":%q,"Runtime":"python3.12"}]}`, arn))
 		case "/2015-03-31/functions/" + arn:
-			fmt.Fprintf(w, `{"Configuration":{"FunctionName":"worker","FunctionArn":%q,"Runtime":"python3.13","Environment":{"Variables":{"API_KEY":"raw-secret"}}},"Code":{"ImageUri":%q,"ResolvedImageUri":%q,"SourceKMSKeyArn":"arn:aws:kms:us-east-1:123456789012:key/code","Location":"https://download.example/?token=raw-secret"},"Tags":{"team":"platform"}}`, arn, image, resolved)
+			serve(fmt.Sprintf(`{"Configuration":{"FunctionName":"worker","FunctionArn":%q,"Runtime":"python3.13","Environment":{"Variables":{"API_KEY":"raw-secret"}}},"Code":{"ImageUri":%q,"ResolvedImageUri":%q,"SourceKMSKeyArn":"arn:aws:kms:us-east-1:123456789012:key/code","Location":"https://download.example/?token=raw-secret"},"Tags":{"team":"platform"}}`, arn, image, resolved))
 		case "/2015-03-31/functions/" + arn + "/aliases":
-			fmt.Fprint(w, `{}`)
+			serve(`{}`)
 		case "/2015-03-31/event-source-mappings":
-			fmt.Fprint(w, `{}`)
+			serve(`{}`)
 		default:
 			t.Errorf("unexpected Lambda request: %s", r.URL)
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}))
 	defer server.Close()
-	cfg := aws.Config{Region: "us-east-1", BaseEndpoint: aws.String(server.URL), HTTPClient: server.Client(),
+	cfg := aws.Config{
+		Region: "us-east-1", BaseEndpoint: aws.String(server.URL), HTTPClient: server.Client(),
 		Credentials: aws.CredentialsProviderFunc(func(context.Context) (aws.Credentials, error) {
 			return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
 		}),
@@ -187,9 +201,11 @@ func TestLambdaGetFunctionEnrichesSafeMetadataWithoutSecrets(t *testing.T) {
 	if err != nil || len(outcome.Relationships) != 1 {
 		t.Fatalf("Lambda outcome relationships=%#v err=%v", outcome.Relationships, err)
 	}
-	claim := sdk.Claim{ComponentID: collector.ComponentID, InstanceID: "test-instance", CollectorKind: collector.CollectorKind,
+	claim := sdk.Claim{
+		ComponentID: collector.ComponentID, InstanceID: "test-instance", CollectorKind: collector.CollectorKind,
 		SourceSystem: collector.SourceSystem, Scope: sdk.Scope{ID: "component:test-instance", Kind: "component"},
-		GenerationID: "generation-1", FencingToken: "fence-1"}
+		GenerationID: "generation-1", FencingToken: "fence-1",
+	}
 	uri := "aws://123456789012/us-east-1"
 	limits := collector.ResourceUse{MaxRecordsPerClaim: 4, MaxPayloadBytes: 65536}
 	base, err := collector.Collect(claim, outcome.Report, collector.CollectOptions{SourceURI: uri, ObservedAt: time.Now().UTC(), Limits: limits})

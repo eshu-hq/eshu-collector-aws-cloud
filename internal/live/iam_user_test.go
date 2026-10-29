@@ -19,12 +19,15 @@ type fakeIAMUserAPI struct{ user iamtypes.User }
 func (f fakeIAMUserAPI) ListUsers(context.Context, *awsiam.ListUsersInput, ...func(*awsiam.Options)) (*awsiam.ListUsersOutput, error) {
 	return &awsiam.ListUsersOutput{Users: []iamtypes.User{f.user}}, nil
 }
+
 func (f fakeIAMUserAPI) GetUser(context.Context, *awsiam.GetUserInput, ...func(*awsiam.Options)) (*awsiam.GetUserOutput, error) {
 	return &awsiam.GetUserOutput{User: &f.user}, nil
 }
+
 func (f fakeIAMUserAPI) ListAttachedUserPolicies(context.Context, *awsiam.ListAttachedUserPoliciesInput, ...func(*awsiam.Options)) (*awsiam.ListAttachedUserPoliciesOutput, error) {
 	return &awsiam.ListAttachedUserPoliciesOutput{}, nil
 }
+
 func (f fakeIAMUserAPI) ListUserPolicies(context.Context, *awsiam.ListUserPoliciesInput, ...func(*awsiam.Options)) (*awsiam.ListUserPoliciesOutput, error) {
 	return &awsiam.ListUserPoliciesOutput{}, nil
 }
