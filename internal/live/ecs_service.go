@@ -21,12 +21,12 @@ func ecsServiceDescribeInput(clusterARN string, serviceARNs []string) *awsecs.De
 }
 
 // ecsServiceRecord carries reported DescribeServices metadata into a typed resource.
-func ecsServiceRecord(service awsecstypes.Service, region string) collector.Record {
+func ecsServiceRecord(service awsecstypes.Service, region string) (collector.Record, error) {
 	arn := strings.TrimSpace(aws.ToString(service.ServiceArn))
 	name := aws.ToString(service.ServiceName)
 	row := record(arn, "ecs", region, name, "service")
 	if arn == "" {
-		return row
+		return row, nil
 	}
 	taskDefinitionARN := strings.TrimSpace(aws.ToString(service.TaskDefinition))
 	row.Resource = &collector.LiveResource{
@@ -48,8 +48,12 @@ func ecsServiceRecord(service awsecstypes.Service, region string) collector.Reco
 	if edge, ok := ecsServiceTaskDefinitionRelationship(arn, taskDefinitionARN, region); ok {
 		row.Relationship = &edge
 	}
-	row.Relationships = ecsServiceLoadBalancerRelationships(arn, region, service.LoadBalancers)
-	return row
+	var err error
+	row.Relationships, err = ecsServiceLoadBalancerRelationships(arn, region, service.LoadBalancers)
+	if err != nil {
+		return collector.Record{}, err
+	}
+	return row, nil
 }
 
 func ecsServiceLoadBalancers(loadBalancers []awsecstypes.LoadBalancer) []map[string]any {

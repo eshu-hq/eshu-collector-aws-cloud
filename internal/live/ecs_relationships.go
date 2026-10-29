@@ -4,6 +4,7 @@
 package live
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -30,10 +31,10 @@ func ecsServiceTaskDefinitionRelationship(serviceARN, definitionARN, region stri
 }
 
 // ecsServiceLoadBalancerRelationships carries each target reported by DescribeServices.
-func ecsServiceLoadBalancerRelationships(serviceARN, region string, balancers []awsecstypes.LoadBalancer) []collector.LiveRelationship {
+func ecsServiceLoadBalancerRelationships(serviceARN, region string, balancers []awsecstypes.LoadBalancer) ([]collector.LiveRelationship, error) {
 	serviceARN = strings.TrimSpace(serviceARN)
 	if serviceARN == "" {
-		return nil
+		return nil, nil
 	}
 	var edges []collector.LiveRelationship
 	for _, balancer := range balancers {
@@ -45,7 +46,7 @@ func ecsServiceLoadBalancerRelationships(serviceARN, region string, balancers []
 			targetType = "aws_elb_load_balancer"
 		}
 		if targetID == "" {
-			continue
+			return nil, fmt.Errorf("ecs described service has load balancer without target group ARN or load balancer name")
 		}
 		edges = append(edges, collector.LiveRelationship{
 			Region: region, ServiceKind: "ecs",
@@ -59,7 +60,7 @@ func ecsServiceLoadBalancerRelationships(serviceARN, region string, balancers []
 			SourceRecordID: serviceARN + "#load-balancer#" + targetID,
 		})
 	}
-	return edges
+	return edges, nil
 }
 
 // ecsTaskNetworkInterfaceRelationships carries ENI IDs reported on task attachments.

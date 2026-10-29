@@ -4,6 +4,7 @@
 package live
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -14,7 +15,7 @@ import (
 func TestECSServiceTaskDefinitionRelationshipMatchesLegacy(t *testing.T) {
 	serviceARN := "arn:aws:ecs:us-east-1:123456789012:service/prod/web"
 	definitionARN := "arn:aws:ecs:us-east-1:123456789012:task-definition/web:4"
-	row := ecsServiceRecord(awsecstypes.Service{ServiceArn: aws.String(serviceARN), TaskDefinition: aws.String(" " + definitionARN + " ")}, "us-east-1")
+	row := mustECSServiceRecord(t, awsecstypes.Service{ServiceArn: aws.String(serviceARN), TaskDefinition: aws.String(" " + definitionARN + " ")}, "us-east-1")
 	if row.Relationship == nil {
 		t.Fatal("service task definition relationship missing")
 	}
@@ -33,7 +34,7 @@ func TestECSServiceTaskDefinitionRelationshipRequiresBothARNs(t *testing.T) {
 		{ServiceArn: aws.String("arn:aws:ecs:us-east-1:123456789012:service/prod/web")},
 		{TaskDefinition: aws.String("arn:aws:ecs:us-east-1:123456789012:task-definition/web:4")},
 	} {
-		if row := ecsServiceRecord(service, "us-east-1"); row.Relationship != nil {
+		if row := mustECSServiceRecord(t, service, "us-east-1"); row.Relationship != nil {
 			t.Fatalf("invented relationship: %+v", row.Relationship)
 		}
 	}
@@ -42,7 +43,7 @@ func TestECSServiceTaskDefinitionRelationshipRequiresBothARNs(t *testing.T) {
 func TestECSServiceLoadBalancerRelationshipsMatchLegacy(t *testing.T) {
 	serviceARN := "arn:aws:ecs:us-east-1:123456789012:service/prod/web"
 	targetARN := "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/web/abc"
-	row := ecsServiceRecord(awsecstypes.Service{
+	row := mustECSServiceRecord(t, awsecstypes.Service{
 		ServiceArn: aws.String(serviceARN),
 		LoadBalancers: []awsecstypes.LoadBalancer{
 			{TargetGroupArn: aws.String(" " + targetARN + " "), LoadBalancerName: aws.String("ignored"), ContainerName: aws.String(" web "), ContainerPort: aws.Int32(8080)},
@@ -71,12 +72,12 @@ func TestECSServiceLoadBalancerRelationshipsMatchLegacy(t *testing.T) {
 }
 
 func TestECSServiceLoadBalancerRelationshipsNeedReportedTarget(t *testing.T) {
-	row := ecsServiceRecord(awsecstypes.Service{
+	_, err := ecsServiceRecord(awsecstypes.Service{
 		ServiceArn:    aws.String("arn:aws:ecs:us-east-1:123456789012:service/prod/web"),
 		LoadBalancers: []awsecstypes.LoadBalancer{{ContainerName: aws.String("web"), ContainerPort: aws.Int32(80)}},
 	}, "us-east-1")
-	if len(row.Relationships) != 0 {
-		t.Fatalf("invented load balancer relationship: %+v", row.Relationships)
+	if err == nil || !strings.Contains(err.Error(), "load balancer without target") {
+		t.Fatalf("missing load balancer target should fail ECS read: %v", err)
 	}
 }
 

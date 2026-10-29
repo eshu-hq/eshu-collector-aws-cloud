@@ -50,7 +50,10 @@ func listECS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 						return nil, fmt.Errorf("ecs describe services: %w", err)
 					}
 					for _, service := range described.Services {
-						row := ecsServiceRecord(service, region)
+						row, err := ecsServiceRecord(service, region)
+						if err != nil {
+							return nil, err
+						}
 						if row.Resource == nil {
 							return nil, fmt.Errorf("ecs described service has no ARN")
 						}
