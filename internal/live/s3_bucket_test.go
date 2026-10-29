@@ -5,9 +5,10 @@ package live
 
 import (
 	"context"
-	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 	"testing"
 	"time"
+
+	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
