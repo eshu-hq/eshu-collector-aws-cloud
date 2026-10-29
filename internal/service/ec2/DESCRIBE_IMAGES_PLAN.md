@@ -134,8 +134,11 @@ value/timestamp constraints. No scope change is assumed here.
 
 ## 6. #9298 field-name handshake (agreed, implementation pending both sides)
 
-- Producer (this lane, after #8852 + redaction decision): emit the nine keys
-  above on `aws_ec2_ami` `aws_resource@1.0.0` facts only.
+- Producer (this lane, after #8852): emit the seven admitted typed fields
+  only (`platform_details`, `platform`, `architecture`, `creation_date`,
+  `deprecation_time`, `owner_alias`, `root_device_type`) on `aws_ec2_ami`
+  `aws_resource@1.0.0` facts only. `name`/`description` stay rejected per the
+  arbiter ruling 2026-10-29 (#9525) and are never emitted.
 - Read side (#9298 owner): extend the closed allowlist deliberately per key
   once the redaction policy settles; update OpenAPI +
   `docs/public/reference/http-api/cloud-inventory.md` + capability row in the

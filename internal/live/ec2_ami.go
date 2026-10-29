@@ -93,8 +93,10 @@ func amiDetailFromImage(image ec2types.Image) amiImageDetail {
 // matching AMI records. Identity records and the instance relationship survive
 // every degradation path: a denial degrades to one warning, a truncated set
 // warns with the dropped count, and images the call cannot see warn as
-// unresolved without inferring an OS version or a reason. A non-denial
-// transport failure stays fatal.
+// unresolved without inferring an OS version or a reason. An unknown or
+// invisible id fails the whole batched call with InvalidAMIID.NotFound or
+// InvalidAMIID.Unavailable; that error isolates the bad ids per id instead of
+// failing the scan. A non-denial transport failure stays fatal.
 func appendAMIDetails(ctx context.Context, client *awsec2.Client, region string, records []collector.Record, amiIDs map[string]struct{}) (*optionalReadDenied, error) {
 	ids := make([]string, 0, len(amiIDs))
 	for id := range amiIDs {
@@ -134,29 +136,17 @@ func appendAMIDetails(ctx context.Context, client *awsec2.Client, region string,
 			})
 			return &optionalReadDenied{denials: denials}, nil
 		}
+		if isAMIImageNotFound(err) {
+			return appendAMIDetailsSingles(ctx, client, region, records, ids, denials)
+		}
 		return nil, fmt.Errorf("ec2 describe images: %w", err)
 	}
-	byID := make(map[string]*collector.Record, len(ids))
-	for i := range records {
-		row := &records[i]
-		if row.Resource == nil || row.Resource.ResourceType != awsv1.ResourceTypeEC2AMI {
-			continue
-		}
-		byID[row.Resource.ResourceID] = row
-	}
-	resolved := make(map[string]struct{}, len(ids))
+	byID := indexAMIRecords(records, len(ids))
+	var images []ec2types.Image
 	if output != nil {
-		for _, image := range output.Images {
-			detail := amiDetailFromImage(image)
-			if detail.imageID == "" {
-				continue
-			}
-			resolved[detail.imageID] = struct{}{}
-			if row, ok := byID[detail.imageID]; ok && row.Resource != nil {
-				row.Resource.Attributes = detail.attributes()
-			}
-		}
+		images = output.Images
 	}
+	resolved := stampAMIDetails(byID, images)
 	unresolved := 0
 	for _, id := range ids {
 		if _, ok := resolved[id]; !ok {
@@ -177,6 +167,109 @@ func appendAMIDetails(ctx context.Context, client *awsec2.Client, region string,
 		return nil, nil
 	}
 	return &optionalReadDenied{denials: denials}, nil
+}
+
+// indexAMIRecords maps the scan's AMI identity records by AMI id for stamping.
+func indexAMIRecords(records []collector.Record, size int) map[string]*collector.Record {
+	byID := make(map[string]*collector.Record, size)
+	for i := range records {
+		row := &records[i]
+		if row.Resource == nil || row.Resource.ResourceType != awsv1.ResourceTypeEC2AMI {
+			continue
+		}
+		byID[row.Resource.ResourceID] = row
+	}
+	return byID
+}
+
+// stampAMIDetails projects each image onto the admitted typed fields of its
+// AMI record and reports the stamped ids. Images the scan never referenced
+// still stamp when present; callers count unresolved ids against the request.
+func stampAMIDetails(byID map[string]*collector.Record, images []ec2types.Image) map[string]struct{} {
+	resolved := make(map[string]struct{}, len(images))
+	for _, image := range images {
+		detail := amiDetailFromImage(image)
+		if detail.imageID == "" {
+			continue
+		}
+		resolved[detail.imageID] = struct{}{}
+		if row, ok := byID[detail.imageID]; ok && row.Resource != nil {
+			row.Resource.Attributes = detail.attributes()
+		}
+	}
+	return resolved
+}
+
+// appendAMIDetailsSingles isolates unknown or invisible AMI ids after the
+// batched call failed with InvalidAMIID.NotFound or InvalidAMIID.Unavailable.
+// Each id resolves alone: survivors stamp the admitted typed fields and the
+// unresolvable ids count toward one ami-image-unresolved warning. A denial on
+// a single degrades the whole enrichment to ami-details-unavailable; any other
+// single failure stays fatal. This path only runs after a whole-batch failure,
+// so the extra calls stay off the healthy path.
+func appendAMIDetailsSingles(ctx context.Context, client *awsec2.Client, region string, records []collector.Record, ids []string, denials []optionalDenial) (*optionalReadDenied, error) {
+	var images []ec2types.Image
+	for _, id := range ids {
+		output, err := client.DescribeImages(ctx, &awsec2.DescribeImagesInput{
+			ImageIds:          []string{id},
+			IncludeDeprecated: aws.Bool(true),
+		})
+		if err != nil {
+			if isAMIDescribeDenial(err) {
+				denials = append(denials, optionalDenial{
+					operation: "DescribeImages",
+					resource:  "region:" + region,
+					effect:    "ami-details-unavailable",
+				})
+				return &optionalReadDenied{denials: denials}, nil
+			}
+			if isAMIImageNotFound(err) {
+				continue
+			}
+			return nil, fmt.Errorf("ec2 describe images: %w", err)
+		}
+		if output != nil {
+			images = append(images, output.Images...)
+		}
+	}
+	resolved := stampAMIDetails(indexAMIRecords(records, len(ids)), images)
+	unresolved := 0
+	for _, id := range ids {
+		if _, ok := resolved[id]; !ok {
+			unresolved++
+		}
+	}
+	if unresolved > 0 {
+		denials = append(denials, optionalDenial{
+			operation: "DescribeImages",
+			resource:  "region:" + region,
+			effect:    "ami-image-unresolved",
+			message: fmt.Sprintf("DescribeImages left %d AMI image(s) unresolved for region:%s; ami-image-unresolved",
+				unresolved, region),
+			attributes: map[string]any{"unresolved_count": unresolved},
+		})
+	}
+	if len(denials) == 0 {
+		return nil, nil
+	}
+	return &optionalReadDenied{denials: denials}, nil
+}
+
+// isAMIImageNotFound recognizes the EC2 unknown-or-invisible-image errors for
+// the reviewed optional enrichment. Unlike a denial, these name unresolvable
+// ids rather than an unavailable call, so the caller isolates the bad ids and
+// stamps the survivors instead of failing the scan.
+func isAMIImageNotFound(err error) bool {
+	var apiErr smithy.APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	switch apiErr.ErrorCode() {
+	case "InvalidAMIID.NotFound", "InvalidAMIID.Unavailable":
+		return true
+	default:
+		return false
+	}
 }
 
 // isAMIDescribeDenial recognizes the EC2 authorization errors for the one
