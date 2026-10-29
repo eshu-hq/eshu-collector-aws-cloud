@@ -110,7 +110,7 @@ func TestTrustedCoreKindConformance(t *testing.T) {
 	// all declared core kinds.
 	families := request.Manifest.Spec.EmittedFacts[:0:0]
 	for _, family := range request.Manifest.Spec.EmittedFacts {
-		if family.Kind != AWSKindRelationship && family.Kind != AWSKindImageReference && family.Kind != AWSKindWarning && family.Kind != AWSKindEC2InstancePosture {
+		if family.Kind != AWSKindRelationship && family.Kind != AWSKindImageReference && family.Kind != AWSKindWarning && family.Kind != AWSKindEC2InstancePosture && family.Kind != AWSKindRDSInstancePosture {
 			families = append(families, family)
 		}
 	}

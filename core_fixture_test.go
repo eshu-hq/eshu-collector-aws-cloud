@@ -19,12 +19,12 @@ func coreFixtureRequest(t *testing.T, manifest conformance.Manifest, fixtures []
 	request := conformance.Request{
 		Manifest: manifest, Fixtures: fixtures, Mode: conformance.ModeFixture,
 		PayloadSchemas:    map[string]json.RawMessage{},
-		ReservedFactKinds: []string{AWSKindResource, AWSKindRelationship, AWSKindImageReference, AWSKindWarning, AWSKindEC2InstancePosture},
+		ReservedFactKinds: []string{AWSKindResource, AWSKindRelationship, AWSKindImageReference, AWSKindWarning, AWSKindEC2InstancePosture, AWSKindRDSInstancePosture},
 		CoreFacts: &conformance.CoreFactContext{
 			ComponentID: manifest.Metadata.ID, ComponentVersion: manifest.Metadata.Version,
 		},
 	}
-	for _, kind := range []string{AWSKindResource, AWSKindRelationship, AWSKindImageReference, AWSKindWarning, AWSKindEC2InstancePosture} {
+	for _, kind := range []string{AWSKindResource, AWSKindRelationship, AWSKindImageReference, AWSKindWarning, AWSKindEC2InstancePosture, AWSKindRDSInstancePosture} {
 		schema, ok := fixturepack.SchemaFor(kind)
 		if !ok {
 			t.Fatalf("pinned fixture pack has no %s schema", kind)
