@@ -59,14 +59,14 @@ emission at runtime. See [PORT_PLAN.md](PORT_PLAN.md).
 The typed `aws_resource` envelope is connected to claim-bound live EC2 reads.
 VPC, subnet, and volume observations carry reported state, tags, and API
 attributes, including CIDR associations and volume attachments. Security-group
-observations carry the reported group name, tags, description, owner, and VPC
-ID. Instance identity observations carry state and launch AMI ID from the same
-`DescribeInstances` response. Subnet-to-VPC and volume-to-KMS are the two
-typed relationships currently emitted; other EC2 resource types still carry
-identity and name only. This is staged implementation, not a full parity or
-live host admission claim. Instance and volume ARNs use the account and
-partition verified by STS before EC2 reads; a partition mismatch fails before
-a service read.
+observations carry the reported group name, tags, description, owner, VPC ID,
+and legacy group-ID/name correlation anchors. Instance identity observations
+carry state and launch AMI ID from the same `DescribeInstances` response.
+Subnet-to-VPC and volume-to-KMS are the two typed relationships currently
+emitted; other EC2 resource types still carry identity and name only. This is
+staged implementation, not a full parity or live host admission claim.
+Instance and volume ARNs use the account and partition verified by STS before
+EC2 reads; a partition mismatch fails before a service read.
 Sensitive-shaped resource attribute keys fail closed.
 See [PORT_PLAN.md](PORT_PLAN.md#resource-envelope-seam-status) for the
 remaining redaction and host-grant boundary.
@@ -128,9 +128,10 @@ with `docs/public/extend/sdk-compatibility.md` in the core repo.
 
 Core-owned fact kinds require a live #6709 producer grant naming this
 producer, version, kind, schema, and scope; namespaced kinds need none.
-The planned AWS emission requires thirteen grants, one per core kind at
-schema `1.0.0`; the current transitional manifest declares none of those
-kinds. `TestManifestEmissionsAreAuthorized` fails when a declared kind is
+The AWS issuance request set contains thirteen grants, one per core kind at
+schema `1.0.0`. The current manifest declares `aws_resource` and
+`aws_relationship` alongside three transitional namespaced kinds.
+`TestManifestEmissionsAreAuthorized` fails when a declared kind is
 outside the collector's namespace and has no live grant scoped to a
 collector kind. This repo cannot see the core registry, so it treats any
 kind outside its namespace as potentially core-owned, including dotted

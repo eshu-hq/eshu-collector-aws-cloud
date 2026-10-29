@@ -140,7 +140,8 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 					ARN: item.Resource.ARN, ResourceID: item.Resource.ResourceID,
 					ResourceType: item.Resource.ResourceType, Name: item.Resource.Name,
 					State: item.Resource.State, Tags: item.Resource.Tags,
-					Attributes: item.Resource.Attributes,
+					Attributes:         item.Resource.Attributes,
+					CorrelationAnchors: append([]string(nil), item.Resource.CorrelationAnchors...),
 				})
 			}
 		}
