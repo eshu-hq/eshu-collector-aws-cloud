@@ -296,6 +296,14 @@ func partitionForRegion(region string) string {
 		return "aws-us-gov"
 	case strings.HasPrefix(region, "cn-"):
 		return "aws-cn"
+	case strings.HasPrefix(region, "us-iso-"):
+		return "aws-iso"
+	case strings.HasPrefix(region, "us-isob-"):
+		return "aws-iso-b"
+	case strings.HasPrefix(region, "us-isoe-"), strings.HasPrefix(region, "eu-isoe-"):
+		return "aws-iso-e"
+	case strings.HasPrefix(region, "us-isof-"):
+		return "aws-iso-f"
 	default:
 		return "aws"
 	}

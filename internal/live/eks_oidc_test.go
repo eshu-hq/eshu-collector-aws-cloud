@@ -215,3 +215,90 @@ func eksOIDCTestConfig(t *testing.T, listError, getError string) (aws.Config, *m
 		}),
 	}, &calls
 }
+
+// TestEKSOIDCMatchLaterInProviderList proves the loader scans the whole
+// ListOpenIDConnectProviders response: the match is last in a three-provider
+// list, so an early-exit scan would emit a false issuer-only row. The IAM
+// ListOpenIDConnectProviders API takes no Marker/MaxItems parameters and the
+// pinned SDK models it with an empty input and no paginator, so the single
+// call already returns the complete service-side list.
+func TestEKSOIDCMatchLaterInProviderList(t *testing.T) {
+	const account = "123456789012"
+	const issuer = "https://issuer.example.invalid/id/demo"
+	const matchARN = "arn:aws:iam::123456789012:oidc-provider/issuer.example.invalid/id/demo"
+	calls := map[string]int{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		serve := func(body string) {
+			if _, err := w.Write([]byte(body)); err != nil {
+				t.Errorf("write fixture response: %v", err)
+			}
+		}
+		if err := r.ParseForm(); err != nil {
+			t.Error(err)
+			return
+		}
+		action := r.Form.Get("Action")
+		if action == "" {
+			switch {
+			case r.URL.Path == "/clusters":
+				action = "ListClusters"
+			case strings.HasSuffix(r.URL.Path, "/node-groups"):
+				action = "ListNodegroups"
+			case strings.HasSuffix(r.URL.Path, "/addons"):
+				action = "ListAddons"
+			case strings.HasPrefix(r.URL.Path, "/clusters/"):
+				action = "DescribeCluster"
+			}
+		}
+		calls[action]++
+		w.Header().Set("Content-Type", "text/xml")
+		switch action {
+		case "GetOpenIDConnectProvider":
+			url := strings.TrimPrefix(r.Form.Get("OpenIDConnectProviderArn"), "arn:aws:iam::123456789012:oidc-provider/")
+			serve(`<GetOpenIDConnectProviderResponse><GetOpenIDConnectProviderResult><Url>` + url + `</Url><ClientIDList><member>sts.amazonaws.com</member></ClientIDList><ThumbprintList><member>abc123</member></ThumbprintList></GetOpenIDConnectProviderResult></GetOpenIDConnectProviderResponse>`)
+			return
+		case "ListOpenIDConnectProviders":
+			serve(`<ListOpenIDConnectProvidersResponse><ListOpenIDConnectProvidersResult><OpenIDConnectProviderList><member><Arn>arn:aws:iam::123456789012:oidc-provider/other-one.example.invalid</Arn></member><member><Arn>arn:aws:iam::123456789012:oidc-provider/other-two.example.invalid</Arn></member><member><Arn>` + matchARN + `</Arn></member></OpenIDConnectProviderList></ListOpenIDConnectProvidersResult></ListOpenIDConnectProvidersResponse>`)
+			return
+		}
+		w.Header().Set("Content-Type", "application/x-amz-json-1.1")
+		switch action {
+		case "ListClusters":
+			serve(`{"clusters":["one"]}`)
+		case "DescribeCluster":
+			serve(`{"cluster":{"name":"one","arn":"arn:aws:eks:us-east-1:123456789012:cluster/one","identity":{"oidc":{"issuer":"https://issuer.example.invalid/id/demo"}}}}`)
+		case "ListNodegroups":
+			serve(`{"nodegroups":[]}`)
+		case "ListAddons":
+			serve(`{"addons":[]}`)
+		default:
+			t.Errorf("unexpected AWS action %q", action)
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	}))
+	t.Cleanup(server.Close)
+	cfg := aws.Config{
+		Region: "us-east-1", BaseEndpoint: aws.String(server.URL), HTTPClient: server.Client(), RetryMaxAttempts: 1,
+		Credentials: aws.CredentialsProviderFunc(func(context.Context) (aws.Credentials, error) {
+			return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
+		}),
+	}
+	records, err := listEKS(context.Background(), cfg, VerifiedIdentity{AccountID: account, Partition: "aws"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls["ListOpenIDConnectProviders"] != 1 || calls["GetOpenIDConnectProvider"] != 3 {
+		t.Fatalf("IAM calls = %v, want one list and a get per listed provider", calls)
+	}
+	for _, row := range records {
+		if row.Resource == nil || row.Resource.ResourceType != "aws_eks_cluster" {
+			continue
+		}
+		provider, ok := row.Resource.Attributes["oidc_provider"].(map[string]any)
+		if !ok || provider["arn"] != matchARN || provider["issuer_url"] != issuer {
+			t.Fatalf("paginated provider enrichment = %v, want match on %s", row.Resource.Attributes["oidc_provider"], matchARN)
+		}
+		return
+	}
+	t.Fatal("no cluster record enriched")
+}

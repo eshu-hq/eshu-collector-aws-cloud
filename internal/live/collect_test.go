@@ -373,3 +373,26 @@ func TestCollectReportCarriesNetworkInterfaceRelationships(t *testing.T) {
 		}
 	}
 }
+
+// TestPartitionForRegionMapsISOPartitions locks the claim-verification
+// partition for every AWS partition: an ISO-region claim with identical
+// credentials must verify instead of failing closed on the default.
+func TestPartitionForRegionMapsISOPartitions(t *testing.T) {
+	cases := map[string]string{
+		"us-east-1":       "aws",
+		"us-gov-west-1":   "aws-us-gov",
+		"cn-north-1":      "aws-cn",
+		"us-iso-east-1":   "aws-iso",
+		"us-iso-west-1":   "aws-iso",
+		"us-isob-east-1":  "aws-iso-b",
+		"eu-isoe-west-1":  "aws-iso-e",
+		"us-isof-east-1":  "aws-iso-f",
+		"us-isof-south-1": "aws-iso-f",
+		"":                "aws",
+	}
+	for region, want := range cases {
+		if got := partitionForRegion(region); got != want {
+			t.Errorf("partitionForRegion(%q) = %q, want %q", region, got, want)
+		}
+	}
+}
