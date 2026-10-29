@@ -55,14 +55,14 @@ func readS3Replication(ctx context.Context, api s3BucketDetailsAPI, name, accoun
 // readS3WebsiteLogging maps only the legacy metadata fields. A missing website
 // configuration and an empty logging response are known disabled states;
 // denied or otherwise failed reads abort the bucket inventory.
-func readS3WebsiteLogging(ctx context.Context, api s3BucketDetailsAPI, name, accountID string) (map[string]any, error) {
+func readS3WebsiteLogging(ctx context.Context, api s3BucketDetailsAPI, name, accountID string) (map[string]any, bool, error) {
 	website, err := api.GetBucketWebsite(ctx, &awss3.GetBucketWebsiteInput{
 		Bucket: aws.String(name), ExpectedBucketOwner: aws.String(accountID),
 	})
 	if err != nil {
 		var apiErr smithy.APIError
 		if !errors.As(err, &apiErr) || apiErr.ErrorCode() != "NoSuchWebsiteConfiguration" {
-			return nil, fmt.Errorf("s3 get bucket website %q: %w", name, err)
+			return nil, false, fmt.Errorf("s3 get bucket website %q: %w", name, err)
 		}
 		website = nil
 	}
@@ -70,7 +70,7 @@ func readS3WebsiteLogging(ctx context.Context, api s3BucketDetailsAPI, name, acc
 		Bucket: aws.String(name), ExpectedBucketOwner: aws.String(accountID),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("s3 get bucket logging %q: %w", name, err)
+		return nil, false, fmt.Errorf("s3 get bucket logging %q: %w", name, err)
 	}
 	attrs := map[string]any{
 		"website_enabled":            website != nil,
@@ -92,7 +92,7 @@ func readS3WebsiteLogging(ctx context.Context, api s3BucketDetailsAPI, name, acc
 		attrs["logging_target_bucket"] = strings.TrimSpace(aws.ToString(logging.LoggingEnabled.TargetBucket))
 		attrs["logging_target_prefix"] = strings.TrimSpace(aws.ToString(logging.LoggingEnabled.TargetPrefix))
 	}
-	return attrs, nil
+	return attrs, logging != nil, nil
 }
 
 // readS3BucketPosture returns only reported bucket-level settings. An absent
@@ -153,6 +153,7 @@ func readS3BucketEncryption(ctx context.Context, api s3BucketDetailsAPI, name, a
 	output, err := api.GetBucketEncryption(ctx, &awss3.GetBucketEncryptionInput{
 		Bucket: aws.String(name), ExpectedBucketOwner: aws.String(accountID),
 	})
+	knownMissing := false
 	if err != nil {
 		var apiErr smithy.APIError
 		if errors.As(err, &apiErr) {
@@ -161,12 +162,16 @@ func readS3BucketEncryption(ctx context.Context, api s3BucketDetailsAPI, name, a
 				return nil, true, nil
 			case "ServerSideEncryptionConfigurationNotFoundError":
 				output = nil
+				knownMissing = true
 			default:
 				return nil, false, fmt.Errorf("s3 get bucket encryption %q: %w", name, err)
 			}
 		} else {
 			return nil, false, fmt.Errorf("s3 get bucket encryption %q: %w", name, err)
 		}
+	}
+	if output == nil && !knownMissing {
+		return nil, false, nil
 	}
 	var algorithms []string
 	var keyIDs []string

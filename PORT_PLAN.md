@@ -175,12 +175,16 @@ importable only inside this module, satisfying `boundary_test.go`).
    Encryption denial retains the bucket with unknown encryption and a partial
    result. Versioning and public-access-block errors fail the S3 read; a
    multi-service claim may still be partial when another service succeeds.
-   A replication-only typed `s3_bucket_posture` fact now reports rule presence
+   A typed `s3_bucket_posture` fact reports replication rule presence
    through one ExpectedBucketOwner-bound GetBucketReplication call per bucket.
    The explicit missing-config error means false; a nil response remains
    unknown. Rule detail and replication roles are excluded. It requires
    `s3:GetReplicationConfiguration`; live access and request cost are unverified.
-   Other typed posture fields and policy facts remain deferred.
+   Existing successful reads also supply logging enabled/target, versioning,
+   MFA-delete, ownership/ACL-disabled, and confirmed encryption fields. Nil
+   responses and denied encryption do not become false posture. Public-access
+   and policy-derived posture and policy facts remain deferred pending the
+   bucket-policy presence/grant parser.
 5. Remaining envelopes kind by kind; delete transitional kinds last.
 6. `awsruntime` + `service/` scanners service by service.
 7. `recordpolicy` / `freshness` / `catalog` / `checkpoint` integration.

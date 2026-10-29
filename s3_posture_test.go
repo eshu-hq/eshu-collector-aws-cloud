@@ -59,3 +59,28 @@ func TestAppendLiveS3PostureBindsClaimAndValidates(t *testing.T) {
 		t.Fatalf("budget: state=%s err=%v", bounded.State, err)
 	}
 }
+
+func TestS3PostureFactEncodesConfirmedFields(t *testing.T) {
+	trueValue, falseValue := true, false
+	status := "Enabled"
+	fact, err := NewS3BucketPostureFact(S3BucketPostureObservation{
+		Boundary:  Boundary{AccountID: "123456789012", Region: "us-east-1", ServiceKind: "s3", ScopeID: "scope", GenerationID: "generation", CollectorInstanceID: "instance", ClaimToken: "fence"},
+		BucketARN: "arn:aws:s3:::assets", BucketName: "assets", SourceURI: "aws:source",
+		LoggingEnabled: &trueValue, LoggingTargetBucket: "audit",
+		VersioningStatus: &status, VersioningEnabled: &trueValue, MFADeleteEnabled: &falseValue,
+		ObjectOwnership: []string{"BucketOwnerEnforced"}, ACLDisabled: &trueValue,
+		DefaultEncryptionEnabled: &trueValue, EncryptionAlgorithms: []string{"aws:kms"},
+		SSEKMSKeyARN: "alias/team", BucketKeyEnabled: &trueValue,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fact.Payload["logging_enabled"] != true || fact.Payload["logging_target_bucket"] != "audit" || fact.Payload["versioning_status"] != "Enabled" || fact.Payload["mfa_delete_enabled"] != false || fact.Payload["acl_disabled"] != true || fact.Payload["default_encryption_enabled"] != true || fact.Payload["sse_kms_key_arn"] != "alias/team" || fact.Payload["bucket_key_enabled"] != true {
+		t.Fatalf("confirmed posture fields: %v", fact.Payload)
+	}
+	for _, field := range []string{"policy_present", "policy_grants_public", "block_public_acls", "block_public_access_all"} {
+		if _, present := fact.Payload[field]; present {
+			t.Fatalf("unproved posture field %s: %v", field, fact.Payload)
+		}
+	}
+}

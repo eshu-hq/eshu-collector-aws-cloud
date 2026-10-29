@@ -39,15 +39,26 @@ type ResourceObservation struct {
 	SourceRecordID     string
 }
 
-// S3BucketPostureObservation carries only reported replication presence for a bucket.
-// Nil means the control-plane response did not establish presence or absence.
+// S3BucketPostureObservation carries only reported bucket control-plane posture.
+// Nil pointers mean the relevant read did not establish a value.
 type S3BucketPostureObservation struct {
-	Boundary           Boundary
-	BucketARN          string
-	BucketName         string
-	ReplicationEnabled *bool
-	SourceURI          string
-	SourceRecordID     string
+	Boundary                 Boundary
+	BucketARN                string
+	BucketName               string
+	ReplicationEnabled       *bool
+	LoggingEnabled           *bool
+	LoggingTargetBucket      string
+	VersioningStatus         *string
+	VersioningEnabled        *bool
+	MFADeleteEnabled         *bool
+	ObjectOwnership          []string
+	ACLDisabled              *bool
+	DefaultEncryptionEnabled *bool
+	EncryptionAlgorithms     []string
+	SSEKMSKeyARN             string
+	BucketKeyEnabled         *bool
+	SourceURI                string
+	SourceRecordID           string
 }
 
 // RelationshipObservation describes one relationship reported by AWS APIs.
