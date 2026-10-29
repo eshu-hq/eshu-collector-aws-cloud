@@ -35,6 +35,7 @@ var loaders = map[string]Loader{
 	"eventbridge":    withoutIdentity(listEventBridge),
 	"iam":            withoutIdentity(listIAM),
 	"lambda":         withoutIdentity(listLambda),
+	"kms":            listKMS,
 	"rds":            withoutIdentity(listRDS),
 	"route53":        withoutIdentity(listRoute53),
 	"s3":             listS3,

@@ -41,8 +41,8 @@ func TestParseConfigAcceptsHostActivation(t *testing.T) {
 	if len(parsed.Regions) != 1 || parsed.Regions[0] != "us-east-1" {
 		t.Fatalf("Regions = %v, want [us-east-1]", parsed.Regions)
 	}
-	if len(parsed.Services) != len(SupportedServices) {
-		t.Fatalf("len(Services) = %d, want %d", len(parsed.Services), len(SupportedServices))
+	if len(parsed.Services) != len(hostConfig()["allowed_services"].([]any)) {
+		t.Fatalf("len(Services) = %d, want host allowlist length", len(parsed.Services))
 	}
 	if parsed.SourceURI != "aws://055929692761" {
 		t.Fatalf("SourceURI = %q, want aws://055929692761", parsed.SourceURI)
