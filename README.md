@@ -266,6 +266,37 @@ AWS presigned URL keys such as
 `X-Amz-Credential` and `X-Amz-Signature` (even when the key is percent-encoded).
 Ordinary credential-free HTTPS queries and `aws:` source URIs remain valid.
 
+## `permission_denied` contract (optional-call degradation)
+
+A denial on a core listing call stays terminal: the service contributes no
+evidence, and a claim with nothing readable fails instead of emitting a
+partial result. A denial on a reviewed optional enrichment call degrades
+instead: the collector keeps the core inventory, marks the SDK result
+`ResultPartial` with a warning status, and emits one typed `aws_warning`
+fact per skipped call carrying the service, the denied operation, the
+affected resource, and the effect (`operation`, `resource`, `effect`
+attributes plus a `permission_denied` warning kind and error class).
+Warning identity covers operation, resource, and effect, so repeated
+denials of one read collapse to a single fact. The warning statuses ride
+the emitted claim, which is what the host persists to collector status,
+readiness, and `list_collectors`; a log line alone is not the signal.
+An unread setting stays unknown in its attributes and is never reported
+as disabled or absent.
+
+Core/optional split per service:
+
+- EC2: core is the VPC, subnet, security-group, network-interface,
+  instance, AMI, and volume listings; optional is
+  `DescribeSecurityGroupRules` only.
+- EKS: core is the cluster, nodegroup, and add-on listings plus
+  `GetOpenIDConnectProvider`; optional is
+  `iam:ListOpenIDConnectProviders` only.
+- Lambda: core is `ListFunctions`, `GetFunction`, and `ListAliases`;
+  optional is `ListEventSourceMappings` only.
+- S3: core is the bucket, tag, versioning, public-access-block, policy,
+  ownership, website, logging, and replication reads (their denials fail
+  the S3 read); optional is `GetBucketEncryption` only.
+
 ## EC2 rule-read denial
 
 A permission denial from EC2 `DescribeSecurityGroupRules` makes the live claim

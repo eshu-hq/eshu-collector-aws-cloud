@@ -4,6 +4,9 @@
 package collector
 
 import (
+	"encoding/json"
+	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -45,6 +48,87 @@ func TestWarningFactIdentityIncludesOperationResourceEffect(t *testing.T) {
 	}
 	if len(result.Facts) != 1 || result.Statuses[0].WarningCount != 1 || result.Statuses[0].FactCount != 1 {
 		t.Fatalf("result = %+v", result)
+	}
+}
+
+// TestWarningFactPayloadMatchesGolden pins the optional-denial input to the
+// emitted aws_warning payload (#9297). A drift in the encoded payload fails
+// here before it ever reaches a reducer.
+func TestWarningFactPayloadMatchesGolden(t *testing.T) {
+	t.Parallel()
+
+	raw, err := os.ReadFile("testdata/optional-denial-warning.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var golden struct {
+		Input struct {
+			AccountID           string `json:"account_id"`
+			Region              string `json:"region"`
+			Service             string `json:"service"`
+			ScopeID             string `json:"scope_id"`
+			GenerationID        string `json:"generation_id"`
+			CollectorInstanceID string `json:"collector_instance_id"`
+			ClaimToken          string `json:"claim_token"`
+			ObservedAt          string `json:"observed_at"`
+			WarningKind         string `json:"warning_kind"`
+			ErrorClass          string `json:"error_class"`
+			Message             string `json:"message"`
+			SourceRecordID      string `json:"source_record_id"`
+			SourceURI           string `json:"source_uri"`
+			Operation           string `json:"operation"`
+			Resource            string `json:"resource"`
+			Effect              string `json:"effect"`
+		} `json:"input"`
+		Expected struct {
+			Kind           string         `json:"kind"`
+			SchemaVersion  string         `json:"schema_version"`
+			StableKey      string         `json:"stable_key"`
+			SourceRecordID string         `json:"source_record_id"`
+			SourceURI      string         `json:"source_uri"`
+			Payload        map[string]any `json:"payload"`
+		} `json:"expected"`
+	}
+	if err := json.Unmarshal(raw, &golden); err != nil {
+		t.Fatal(err)
+	}
+	observedAt, err := time.Parse(time.RFC3339, golden.Input.ObservedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fact, err := NewWarningFact(WarningObservation{
+		Boundary: Boundary{
+			AccountID: golden.Input.AccountID, Region: golden.Input.Region,
+			ServiceKind: golden.Input.Service, ScopeID: golden.Input.ScopeID,
+			GenerationID: golden.Input.GenerationID, CollectorInstanceID: golden.Input.CollectorInstanceID,
+			ClaimToken: golden.Input.ClaimToken, ObservedAt: observedAt,
+		},
+		WarningKind: golden.Input.WarningKind, ErrorClass: golden.Input.ErrorClass,
+		Message: golden.Input.Message, SourceRecordID: golden.Input.SourceRecordID,
+		SourceURI: golden.Input.SourceURI,
+		Attributes: map[string]any{
+			"operation": golden.Input.Operation,
+			"resource":  golden.Input.Resource, "effect": golden.Input.Effect,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fact.Kind != golden.Expected.Kind || fact.SchemaVersion != golden.Expected.SchemaVersion ||
+		fact.StableKey != golden.Expected.StableKey || fact.SourceRef.RecordID != golden.Expected.SourceRecordID ||
+		fact.SourceRef.URI != golden.Expected.SourceURI {
+		t.Fatalf("warning identity = %+v, want %+v", fact, golden.Expected)
+	}
+	if !reflect.DeepEqual(fact.Payload, golden.Expected.Payload) {
+		got, err := json.Marshal(fact.Payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, err := json.Marshal(golden.Expected.Payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Fatalf("warning payload drift:\n got: %s\nwant: %s", got, want)
 	}
 }
 
