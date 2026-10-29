@@ -91,6 +91,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 	relationships := []collector.RelationshipObservation{}
 	imageReferences := []collector.ImageReferenceObservation{}
 	warningObservations := []collector.WarningObservation{}
+	ordinaryFailure := false
 	for i, region := range config.Regions {
 		cfg, err := c.loadConfig(ctx, region)
 		if err != nil {
@@ -134,6 +135,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 						})
 					}
 				} else {
+					ordinaryFailure = true
 					warnings = append(warnings, fmt.Sprintf("%s/%s: %s", service, region, firstLine(err.Error())))
 					continue
 				}
@@ -175,7 +177,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 			}
 		}
 	}
-	if len(records) == 0 && len(resources) == 0 && len(warnings) > 0 {
+	if len(records) == 0 && len(resources) == 0 && len(warnings) > 0 && (ordinaryFailure || len(warningObservations) == 0) {
 		return Outcome{}, fmt.Errorf("live collection read nothing: %s", strings.Join(warnings, "; "))
 	}
 	return Outcome{
