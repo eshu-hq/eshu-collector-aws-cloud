@@ -147,8 +147,19 @@ presence. Raw trust documents and normalized permission statements are excluded.
 A missing GetRole detail uses
 the listed role; read errors fail the IAM service. Enrichment adds at least
 three reads per listed role, with pagination possibly adding more. Live IAM
-access and request cost remain unverified. Other service readers remain partial
-ports.
+access and request cost remain unverified. The IAM user reader emits typed
+`aws_iam_user` resources from ListUsers, ListAttachedUserPolicies,
+ListUserPolicies, and GetUser. It binds regionless user ARNs to the verified
+account and partition, checks the reported user name, and emits at the
+`aws-global` boundary. It retains the legacy path, attached-policy ARN and
+inline-policy name lists (including null for empty lists), and permissions
+boundary metadata. It excludes policy documents, normalized permission
+statements, and credential material. A missing GetUser detail uses the listed
+user; any read error fails the IAM service. Each listed user adds at least
+three IAM requests, with additional pages increasing the count. The required
+IAM actions are `iam:ListUsers`, `iam:ListAttachedUserPolicies`,
+`iam:ListUserPolicies`, and `iam:GetUser`; live grants and request cost remain
+unverified. Other service readers remain partial ports.
 The full port removes those placeholders and declares the other core-owned AWS
 fact kinds at schema `1.0.0`, all with
 `reported` confidence (the in-tree AWS envelopes record facts returned by
