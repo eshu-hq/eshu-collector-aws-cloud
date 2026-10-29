@@ -196,12 +196,16 @@ func listECS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("ecs list clusters: %w", err)
 		}
 		for _, arn := range page.ClusterArns {
-			described, err := client.DescribeClusters(ctx, &awsecs.DescribeClustersInput{Clusters: []string{arn}})
+			described, err := client.DescribeClusters(ctx, ecsClusterDescribeInput(arn))
 			if err != nil {
 				return nil, fmt.Errorf("ecs describe clusters: %w", err)
 			}
 			for _, cluster := range described.Clusters {
-				records = append(records, record(aws.ToString(cluster.ClusterArn), "ecs", region, aws.ToString(cluster.ClusterName), "cluster"))
+				row := ecsClusterRecord(cluster, region)
+				if row.Resource == nil {
+					return nil, fmt.Errorf("ecs described cluster has no ARN")
+				}
+				records = append(records, row)
 			}
 			services := awsecs.NewListServicesPaginator(client, &awsecs.ListServicesInput{Cluster: aws.String(arn)})
 			for services.HasMorePages() {

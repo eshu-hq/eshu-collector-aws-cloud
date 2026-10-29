@@ -49,9 +49,11 @@ The S3 reader emits typed bucket identity, region, and creation time from
 regional ListBuckets. It verifies the expected owner with HeadBucket and
 reads tags through GetBucketTagging. Only NoSuchTagSet means an empty tag set.
 Other errors fail the S3 read; a multi-service claim may return partial evidence
-when another service succeeds. Encryption and posture remain unknown
-pending detail reads. ECR lifecycle policies and other AWS service readers
-still lack typed output. The full port removes
+when another service succeeds. Encryption and posture remain unknown pending
+detail reads. ECS DescribeClusters emits cluster identity, tags, status, and
+reported counts; services, tasks, and task definitions remain placeholder
+records. ECR lifecycle policies and other AWS service readers still lack typed
+output. The full port removes
 those placeholders and declares the other core-owned AWS fact kinds at schema
 `1.0.0`, all with
 `reported` confidence (the in-tree AWS envelopes record facts returned by
