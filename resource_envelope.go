@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -72,7 +73,7 @@ func NewResourceFact(observation ResourceObservation) (sdk.Fact, error) {
 		CorrelationAnchors: normalizedResourceAnchors(observation.CorrelationAnchors, arn, resourceID),
 	})
 	if err != nil {
-		return sdk.Fact{}, fmt.Errorf("encode aws_resource payload: %w", err)
+		return sdk.Fact{}, errors.New("encode aws_resource payload failed")
 	}
 	observedAt := boundary.ObservedAt.UTC()
 	if observedAt.IsZero() {
@@ -138,7 +139,7 @@ func resourceStableKey(accountID, region, resourceID, resourceType string) (stri
 	}
 	encoded, err := json.Marshal(record)
 	if err != nil {
-		return "", fmt.Errorf("encode aws_resource identity: %w", err)
+		return "", errors.New("encode aws_resource identity failed")
 	}
 	sum := sha256.Sum256(encoded)
 	return hex.EncodeToString(sum[:]), nil
@@ -170,13 +171,13 @@ func snapshotResourceAttributes(input map[string]any) (map[string]any, error) {
 	}
 	encoded, err := json.Marshal(input)
 	if err != nil {
-		return nil, fmt.Errorf("encode aws_resource attributes: %w", err)
+		return nil, errors.New("encode aws_resource attributes failed")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(encoded))
 	decoder.UseNumber()
 	var cloned map[string]any
 	if err := decoder.Decode(&cloned); err != nil {
-		return nil, fmt.Errorf("decode aws_resource attributes: %w", err)
+		return nil, errors.New("decode aws_resource attributes failed")
 	}
 	return cloned, nil
 }

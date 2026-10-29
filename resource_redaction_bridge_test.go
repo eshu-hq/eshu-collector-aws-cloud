@@ -5,6 +5,7 @@ package collector
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -24,6 +25,24 @@ func awsTestMarker(t *testing.T, source string) map[string]any {
 		"reason":          value.Reason,
 		"source":          value.Source,
 		"ruleset_version": "aws-launch-2026-05-14",
+	}
+}
+
+type failingResourceAttributeMarshaler struct{}
+
+func (failingResourceAttributeMarshaler) MarshalJSON() ([]byte, error) {
+	return nil, errors.New("raw-secret-marshaler-canary")
+}
+
+func TestResourceFactDoesNotEchoAttributeMarshalError(t *testing.T) {
+	observation := resourceParityObservation(t)
+	observation.Attributes = map[string]any{"opaque": failingResourceAttributeMarshaler{}}
+	fact, err := NewResourceFact(observation)
+	if err == nil || fact.Kind != "" {
+		t.Fatalf("failed attribute marshal admitted: kind=%q error=%v", fact.Kind, err)
+	}
+	if strings.Contains(err.Error(), "raw-secret-marshaler-canary") {
+		t.Fatalf("marshal error echoed credential: %v", err)
 	}
 }
 

@@ -5,6 +5,7 @@ package collector
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -55,7 +56,7 @@ func AppendLiveResources(result sdk.Result, resources []ResourceObservation, sou
 		}
 		encoded, err := json.Marshal(fact.Payload)
 		if err != nil {
-			return sdk.Result{}, fmt.Errorf("encode live AWS resource payload: %w", err)
+			return sdk.Result{}, errors.New("encode live AWS resource payload failed")
 		}
 		if len(encoded) > limits.MaxPayloadBytes {
 			return terminalResult(result.Claim, result.Generation.ObservedAt, "payload-budget-exceeded"), nil
