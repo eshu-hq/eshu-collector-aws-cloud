@@ -121,8 +121,9 @@ importable only inside this module, satisfying `boundary_test.go`).
    redaction, aliases, event-source mappings, and Lambda relationships remain
    deferred. S3 buckets emit typed identity, listed region, and creation time
    from region-filtered ListBuckets. HeadBucket verifies the expected owner,
-   and GetBucketTagging supplies tags. Only NoSuchTagSet means an empty tag set;
-   other read errors fail the claim. Encryption, access controls, posture, and
+   and GetBucketTagging supplies tags. Only NoSuchTagSet means an empty tag set.
+   Other errors fail the S3 read; a multi-service claim may be partial when
+   another service succeeds. Encryption, access controls, posture, and
    policy facts await separate detail reads. Missing encryption is not
    treated as disabled.
 5. Remaining envelopes kind by kind; delete transitional kinds last.

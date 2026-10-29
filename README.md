@@ -47,8 +47,9 @@ logging configuration. Function environment values, tags, and resolved image
 metadata remain deferred with the legacy GetFunction and keyed redaction path.
 The S3 reader emits typed bucket identity, region, and creation time from
 regional ListBuckets. It verifies the expected owner with HeadBucket and
-reads tags through GetBucketTagging. Only NoSuchTagSet means an empty tag set;
-other read errors fail the claim. Encryption and posture remain unknown
+reads tags through GetBucketTagging. Only NoSuchTagSet means an empty tag set.
+Other errors fail the S3 read; a multi-service claim may return partial evidence
+when another service succeeds. Encryption and posture remain unknown
 pending detail reads. ECR lifecycle policies and other AWS service readers
 still lack typed output. The full port removes
 those placeholders and declares the other core-owned AWS fact kinds at schema
