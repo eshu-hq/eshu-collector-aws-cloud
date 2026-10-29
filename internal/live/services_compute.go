@@ -108,7 +108,7 @@ func listEC2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 		}
 		for _, reservation := range page.Reservations {
 			for _, instance := range reservation.Instances {
-				records, err = appendEC2Record(records, record(aws.ToString(instance.InstanceId), "ec2", region, ec2Name(instance.Tags, aws.ToString(instance.InstanceId)), "instance"))
+				records, err = appendEC2Record(records, instanceRecord(instance, region))
 				if err != nil {
 					return nil, err
 				}
