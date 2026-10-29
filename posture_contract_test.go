@@ -26,3 +26,25 @@ func TestEC2InstancePostureDeclaredForEmission(t *testing.T) {
 	}
 	t.Fatal("EC2 instance posture is absent from manifest")
 }
+
+func TestRDSInstancePostureDeclaredForEmission(t *testing.T) {
+	declared := false
+	for _, fact := range Contract().Facts {
+		if fact.Kind == AWSKindRDSInstancePosture {
+			declared = true
+			if len(fact.SchemaVersions) != 1 || fact.SchemaVersions[0] != "1.0.0" {
+				t.Fatalf("RDS posture schema versions = %#v", fact.SchemaVersions)
+			}
+		}
+	}
+	if !declared {
+		t.Fatal("RDS posture is not declared")
+	}
+	manifest := loadManifest(t)
+	for _, fact := range manifest.Spec.EmittedFacts {
+		if fact.Kind == AWSKindRDSInstancePosture {
+			return
+		}
+	}
+	t.Fatal("RDS posture is absent from manifest")
+}

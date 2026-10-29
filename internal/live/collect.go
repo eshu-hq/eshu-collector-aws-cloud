@@ -56,6 +56,7 @@ type Outcome struct {
 	Relationships   []collector.RelationshipObservation
 	ImageReferences []collector.ImageReferenceObservation
 	EC2Postures     []collector.EC2InstancePostureObservation
+	RDSPostures     []collector.RDSPostureObservation
 }
 
 func (c Collector) now() time.Time {
@@ -92,6 +93,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 	relationships := []collector.RelationshipObservation{}
 	imageReferences := []collector.ImageReferenceObservation{}
 	ec2Postures := []collector.EC2InstancePostureObservation{}
+	rdsPostures := []collector.RDSPostureObservation{}
 	warningObservations := []collector.WarningObservation{}
 	ordinaryFailure := false
 	for i, region := range config.Regions {
@@ -166,6 +168,11 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 					observation.Boundary = collector.Boundary{AccountID: config.AccountID, Region: region, ServiceKind: "ec2"}
 					ec2Postures = append(ec2Postures, observation)
 				}
+				if posture := item.RDSPosture; posture != nil {
+					observation := *posture
+					observation.Boundary = collector.Boundary{AccountID: config.AccountID, Region: region, ServiceKind: "rds"}
+					rdsPostures = append(rdsPostures, observation)
+				}
 				if item.Resource == nil {
 					continue
 				}
@@ -199,6 +206,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 		Relationships:       relationships,
 		ImageReferences:     imageReferences,
 		EC2Postures:         ec2Postures,
+		RDSPostures:         rdsPostures,
 	}, nil
 }
 

@@ -48,8 +48,8 @@ const (
 // and external-principal-grant families. Confidence is reported: the
 // in-tree AWS envelopes record facts returned by the AWS APIs as
 // facts.SourceConfidenceReported. Resource, relationship, image reference,
-// warning, and EC2 instance posture are declared in Contract() and
-// manifest.yaml; the other eight follow their
+// warning, EC2 instance posture, and RDS posture are declared in Contract() and
+// manifest.yaml; the other seven follow their
 // typed emitter ports and trusted host grant context (#8909).
 const (
 	AWSKindResource                 = "aws_resource"
@@ -103,6 +103,8 @@ type Record struct {
 	Resource *LiveResource `json:"-"`
 	// EC2Posture carries metadata from the same DescribeInstances item.
 	EC2Posture *EC2InstancePostureObservation `json:"-"`
+	// RDSPosture carries metadata from the same DescribeDBInstances or DescribeDBClusters item.
+	RDSPosture *RDSPostureObservation `json:"-"`
 	// ImageReference carries a typed image digest and tag from DescribeImages.
 	ImageReference *LiveImageReference `json:"-"`
 	// Relationship carries one typed edge from a live AWS read.
@@ -171,7 +173,7 @@ type CollectOptions struct {
 }
 
 // Contract returns typed AWS resource, relationship, image-reference, warning,
-// and EC2 instance posture kinds
+// EC2 instance posture, and RDS posture kinds
 // alongside transitional families still emitted by the scaffold. The host must
 // authorize each core-owned kind with a live grant; synthetic fixture context
 // does not authorize production.
@@ -216,6 +218,11 @@ func Contract() sdk.Contract {
 			},
 			{
 				Kind:             AWSKindEC2InstancePosture,
+				SchemaVersions:   []string{"1.0.0"},
+				SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceReported},
+			},
+			{
+				Kind:             AWSKindRDSInstancePosture,
 				SchemaVersions:   []string{"1.0.0"},
 				SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceReported},
 			},

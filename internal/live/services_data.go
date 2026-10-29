@@ -56,7 +56,11 @@ func listRDS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("rds describe DB instances: %w", err)
 		}
 		for _, instance := range page.DBInstances {
-			records = append(records, record(aws.ToString(instance.DBInstanceArn), "rds", region, aws.ToString(instance.DBInstanceIdentifier), "db-instance"))
+			row := rdsInstanceRecord(instance, region)
+			if row.Resource.ResourceID == "" {
+				return nil, fmt.Errorf("rds DB instance has no source identity")
+			}
+			records = append(records, row)
 		}
 	}
 	clusters := awsrds.NewDescribeDBClustersPaginator(client, &awsrds.DescribeDBClustersInput{})
@@ -66,7 +70,11 @@ func listRDS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("rds describe DB clusters: %w", err)
 		}
 		for _, cluster := range page.DBClusters {
-			records = append(records, record(aws.ToString(cluster.DBClusterArn), "rds", region, aws.ToString(cluster.DBClusterIdentifier), "db-cluster"))
+			row := rdsClusterRecord(cluster, region)
+			if row.Resource.ResourceID == "" {
+				return nil, fmt.Errorf("rds DB cluster has no source identity")
+			}
+			records = append(records, row)
 		}
 	}
 	subnets := awsrds.NewDescribeDBSubnetGroupsPaginator(client, &awsrds.DescribeDBSubnetGroupsInput{})
@@ -76,7 +84,11 @@ func listRDS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("rds describe DB subnet groups: %w", err)
 		}
 		for _, group := range page.DBSubnetGroups {
-			records = append(records, record(aws.ToString(group.DBSubnetGroupArn), "rds", region, aws.ToString(group.DBSubnetGroupName), "db-subnet-group"))
+			row := rdsSubnetGroupRecord(group, region)
+			if row.Resource.ResourceID == "" {
+				return nil, fmt.Errorf("rds DB subnet group has no source identity")
+			}
+			records = append(records, row)
 		}
 	}
 	return records, nil
