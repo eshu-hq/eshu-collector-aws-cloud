@@ -35,6 +35,25 @@ func TestNetworkInterfaceRecordRetainsLegacyObservation(t *testing.T) {
 	if resource.ResourceID != "eni-123" || resource.Name != "eni-123" || resource.State != "in-use" || resource.Tags["environment"] != "qa" {
 		t.Fatalf("network interface identity = %+v", resource)
 	}
+	if len(got.Relationships) != 4 {
+		t.Fatalf("network interface relationships = %#v, want subnet, VPC, security group, attachment", got.Relationships)
+	}
+	for i, want := range []struct{ kind, targetID, targetType, recordID string }{
+		{"ec2_network_interface_in_subnet", "subnet-123", "aws_ec2_subnet", "eni-123#subnet#subnet-123"},
+		{"ec2_network_interface_in_vpc", "vpc-123", "aws_ec2_vpc", "eni-123#vpc#vpc-123"},
+		{"ec2_network_interface_uses_security_group", "sg-123", "aws_ec2_security_group", "eni-123#security-group#sg-123"},
+		{"ec2_network_interface_attached_to_resource", "i-123", "aws_ec2_instance", "eni-123#attachment#i-123"},
+	} {
+		edge := got.Relationships[i]
+		if edge.RelationshipType != want.kind || edge.SourceResourceID != "eni-123" || edge.TargetResourceID != want.targetID || edge.TargetType != want.targetType || edge.SourceRecordID != want.recordID {
+			t.Fatalf("network interface edge %d = %#v", i, edge)
+		}
+	}
+	if got.Relationships[2].Attributes["group_name"] != "web" ||
+		got.Relationships[3].TargetARN != "arn:aws-us-gov:ec2:us-gov-west-1:123456789012:instance/i-123" ||
+		got.Relationships[3].Attributes["attachment_id"] != "eni-attach-123" {
+		t.Fatalf("network interface relationship details = %#v", got.Relationships)
+	}
 	if len(resource.CorrelationAnchors) != 1 || resource.CorrelationAnchors[0] != "eni-123" {
 		t.Fatalf("network interface anchors = %v", resource.CorrelationAnchors)
 	}
@@ -52,6 +71,9 @@ func TestNetworkInterfaceRecordRetainsLegacyObservation(t *testing.T) {
 	if ownedAttachment["attached_resource_arn"] != "arn:aws-us-gov:ec2:us-gov-west-1:999999999999:instance/i-123" {
 		t.Fatalf("reported instance owner was lost: %#v", ownedAttachment)
 	}
+	if owned.Relationships[3].TargetARN != "arn:aws-us-gov:ec2:us-gov-west-1:999999999999:instance/i-123" {
+		t.Fatalf("reported instance owner was lost on attachment edge: %#v", owned.Relationships[3])
+	}
 	groups, ok := attrs["security_groups"].([]map[string]string)
 	if !ok || len(groups) != 1 || groups[0]["group_id"] != "sg-123" {
 		t.Fatalf("network interface groups = %#v", attrs["security_groups"])
@@ -65,8 +87,20 @@ func TestNetworkInterfaceRecordRetainsLegacyObservation(t *testing.T) {
 		t.Fatalf("network interface IPv6 addresses = %#v", attrs["ipv6_addresses"])
 	}
 	interfaceData.NetworkInterfaceId = nil
-	if missing := networkInterfaceRecord(interfaceData, "us-gov-west-1", VerifiedIdentity{AccountID: "123456789012", Partition: "aws-us-gov"}); missing.Resource != nil {
-		t.Fatalf("network interface without ID emitted typed resource = %#v", missing.Resource)
+	if missing := networkInterfaceRecord(interfaceData, "us-gov-west-1", VerifiedIdentity{AccountID: "123456789012", Partition: "aws-us-gov"}); missing.Resource != nil || len(missing.Relationships) != 0 {
+		t.Fatalf("network interface without ID emitted typed facts = %#v", missing)
+	}
+}
+
+func TestNetworkInterfaceRelationshipsSkipMissingTargets(t *testing.T) {
+	iface := ec2types.NetworkInterface{
+		NetworkInterfaceId: aws.String("eni-123"),
+		Groups:             []ec2types.GroupIdentifier{{GroupName: aws.String("no-id")}},
+		Attachment:         &ec2types.NetworkInterfaceAttachment{AttachmentId: aws.String("eni-attach-123")},
+	}
+	got := networkInterfaceRecord(iface, "us-east-1", VerifiedIdentity{AccountID: "123456789012", Partition: "aws"})
+	if len(got.Relationships) != 0 {
+		t.Fatalf("relationships without target identity = %#v", got.Relationships)
 	}
 }
 

@@ -98,7 +98,9 @@ importable only inside this module, satisfying `boundary_test.go`).
    interface, and volume observations carry state, tags, and their reported
    API attributes. Security groups retain group-ID/name anchors; rules carry
    metadata, tags, and rule/group anchors. Network interfaces retain attachment,
-   address, and security-group metadata. Instance identity observations carry
+   address, and security-group metadata, plus subnet, VPC, security-group, and
+   attached-instance relationships from the same DescribeNetworkInterfaces row.
+   Instance identity observations carry
    state, launch AMI ID, and an ARN from the verified STS account and partition.
    Volume ARNs and KMS links use that same identity; subnet-to-VPC relationships
    are also emitted. The instance-to-AMI link uses the DescribeInstances row,

@@ -124,12 +124,10 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 					records = append(records, item)
 				}
 				if edge := item.Relationship; edge != nil {
-					relationships = append(relationships, collector.RelationshipObservation{
-						Boundary:         collector.Boundary{AccountID: config.AccountID, Region: edge.Region, ServiceKind: edge.ServiceKind},
-						RelationshipType: edge.RelationshipType, SourceResourceID: edge.SourceResourceID, SourceARN: edge.SourceARN,
-						TargetResourceID: edge.TargetResourceID, TargetARN: edge.TargetARN, TargetType: edge.TargetType,
-						SourceRecordID: edge.SourceRecordID, Attributes: edge.Attributes,
-					})
+					relationships = append(relationships, relationshipObservation(config.AccountID, *edge))
+				}
+				for _, edge := range item.Relationships {
+					relationships = append(relationships, relationshipObservation(config.AccountID, edge))
 				}
 				if item.Resource == nil {
 					continue
@@ -161,6 +159,15 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 		Resources:     resources,
 		Relationships: relationships,
 	}, nil
+}
+
+func relationshipObservation(accountID string, edge collector.LiveRelationship) collector.RelationshipObservation {
+	return collector.RelationshipObservation{
+		Boundary:         collector.Boundary{AccountID: accountID, Region: edge.Region, ServiceKind: edge.ServiceKind},
+		RelationshipType: edge.RelationshipType, SourceResourceID: edge.SourceResourceID, SourceARN: edge.SourceARN,
+		TargetResourceID: edge.TargetResourceID, TargetARN: edge.TargetARN, TargetType: edge.TargetType,
+		SourceRecordID: edge.SourceRecordID, Attributes: edge.Attributes,
+	}
 }
 
 var ec2ResourceTypes = map[string]string{

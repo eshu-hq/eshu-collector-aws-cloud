@@ -28,9 +28,9 @@ review). Keep internal helpers private.
 transitional placeholder kinds (`collector-aws-cloud.snapshot/record/warning`).
 The live EC2 reader emits typed resource identity for VPCs, subnets, security
 groups and rules, network interfaces, instances, AMI identities, and volumes,
-plus subnet-to-VPC, volume-to-KMS, and instance-to-AMI relationships when
-their IDs are reported. Before any live service read, it verifies the active
-credentials account with STS in each configured region and fails the claim
+plus subnet-to-VPC, volume-to-KMS, instance-to-AMI, and network-interface
+relationships when their IDs are reported. Before any live service read, it
+verifies the active credentials account with STS in each configured region and fails the claim
 if it differs from the target account.
 Typed EC2 names follow legacy scanner identity rules: stable IDs for VPCs,
 subnets, instances, AMIs, and volumes; group names for security groups. Missing
@@ -64,10 +64,12 @@ observations carry the reported group name, tags, description, owner, VPC ID,
 and legacy group-ID/name correlation anchors. Security group rule observations
 carry rule metadata, tags, and rule/group correlation anchors. Network
 interface observations carry status, tags, attachment, address, and security
-group metadata. Instance identity observations carry state and launch AMI ID
-from the same `DescribeInstances` response. Subnet-to-VPC, volume-to-KMS, and
-instance-to-AMI are the typed relationships currently emitted. AMI identities
-are deduplicated by ID within each regional EC2 scan. AMI targets add typed
+group metadata. Network interface edges link reported subnets, VPCs, security
+groups, and attached instances; attachment targets use the reported owner and
+verified partition. Instance identity observations carry state and launch AMI
+ID from the same `DescribeInstances` response. These edges, subnet-to-VPC,
+volume-to-KMS, and instance-to-AMI are the typed relationships currently
+emitted. AMI identities are deduplicated by ID within each regional EC2 scan. AMI targets add typed
 facts without adding transitional record facts; all emitted facts count toward
 the claim's record limit.
 

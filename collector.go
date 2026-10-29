@@ -104,6 +104,8 @@ type Record struct {
 	Resource *LiveResource `json:"-"`
 	// Relationship carries one typed edge from a live AWS read.
 	Relationship *LiveRelationship `json:"-"`
+	// Relationships carries multiple typed edges from one live AWS read.
+	Relationships []LiveRelationship `json:"-"`
 	// TypedOnly keeps a synthetic typed target out of transitional record facts.
 	TypedOnly bool `json:"-"`
 	// Secret is intentionally never emitted: Collect redacts it and records

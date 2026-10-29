@@ -24,8 +24,9 @@ func networkInterfaceRecord(iface ec2types.NetworkInterface, region string, iden
 	resource.State = string(iface.Status)
 	resource.Tags = ec2Tags(iface.TagSet)
 	resource.CorrelationAnchors = []string{id}
+	attachment := networkInterfaceAttachment(iface.Attachment, region, identity)
 	resource.Attributes = map[string]any{
-		"attachment":                 networkInterfaceAttachment(iface.Attachment, region, identity),
+		"attachment":                 attachment,
 		"availability_zone":          strings.TrimSpace(aws.ToString(iface.AvailabilityZone)),
 		"description":                strings.TrimSpace(aws.ToString(iface.Description)),
 		"interface_type":             strings.TrimSpace(string(iface.InterfaceType)),
@@ -42,7 +43,57 @@ func networkInterfaceRecord(iface ec2types.NetworkInterface, region string, iden
 		"subnet_id":                  strings.TrimSpace(aws.ToString(iface.SubnetId)),
 		"vpc_id":                     strings.TrimSpace(aws.ToString(iface.VpcId)),
 	}
+	result.Relationships = networkInterfaceRelationships(iface, region, attachment)
 	return result
+}
+
+func networkInterfaceRelationships(iface ec2types.NetworkInterface, region string, attachment map[string]any) []collector.LiveRelationship {
+	id := strings.TrimSpace(aws.ToString(iface.NetworkInterfaceId))
+	if id == "" {
+		return nil
+	}
+	base := collector.LiveRelationship{Region: region, ServiceKind: "ec2", SourceResourceID: id}
+	var edges []collector.LiveRelationship
+	if subnetID := strings.TrimSpace(aws.ToString(iface.SubnetId)); subnetID != "" {
+		edge := base
+		edge.RelationshipType, edge.TargetResourceID, edge.TargetType = "ec2_network_interface_in_subnet", subnetID, "aws_ec2_subnet"
+		edge.SourceRecordID = id + "#subnet#" + subnetID
+		edges = append(edges, edge)
+	}
+	if vpcID := strings.TrimSpace(aws.ToString(iface.VpcId)); vpcID != "" {
+		edge := base
+		edge.RelationshipType, edge.TargetResourceID, edge.TargetType = "ec2_network_interface_in_vpc", vpcID, "aws_ec2_vpc"
+		edge.SourceRecordID = id + "#vpc#" + vpcID
+		edges = append(edges, edge)
+	}
+	for _, group := range iface.Groups {
+		groupID := strings.TrimSpace(aws.ToString(group.GroupId))
+		if groupID == "" {
+			continue
+		}
+		edge := base
+		edge.RelationshipType, edge.TargetResourceID, edge.TargetType = "ec2_network_interface_uses_security_group", groupID, "aws_ec2_security_group"
+		edge.SourceRecordID = id + "#security-group#" + groupID
+		edge.Attributes = map[string]any{"group_name": strings.TrimSpace(aws.ToString(group.GroupName))}
+		edges = append(edges, edge)
+	}
+	if attachment != nil {
+		targetID := strings.TrimSpace(aws.ToString(iface.Attachment.InstanceId))
+		targetARN, _ := attachment["attached_resource_arn"].(string)
+		if targetID == "" {
+			targetID = targetARN
+		}
+		if targetID != "" {
+			edge := base
+			edge.RelationshipType, edge.TargetResourceID = "ec2_network_interface_attached_to_resource", targetID
+			edge.TargetARN = targetARN
+			edge.TargetType, _ = attachment["attached_resource_type"].(string)
+			edge.SourceRecordID = id + "#attachment#" + targetID
+			edge.Attributes = attachment
+			edges = append(edges, edge)
+		}
+	}
+	return edges
 }
 
 func networkInterfaceAttachment(attachment *ec2types.NetworkInterfaceAttachment, region string, identity VerifiedIdentity) map[string]any {
