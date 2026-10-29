@@ -256,7 +256,18 @@ func listECS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("ecs list task definitions: %w", err)
 		}
 		for _, arn := range page.TaskDefinitionArns {
-			records = append(records, record(arn, "ecs", region, lastSegment(arn, "/"), "task-definition"))
+			described, err := client.DescribeTaskDefinition(ctx, ecsTaskDefinitionDescribeInput(arn))
+			if err != nil {
+				return nil, fmt.Errorf("ecs describe task definition: %w", err)
+			}
+			if described == nil || described.TaskDefinition == nil {
+				return nil, fmt.Errorf("ecs described task definition has no body")
+			}
+			row := ecsTaskDefinitionRecord(arn, *described.TaskDefinition, described.Tags, region)
+			if row.Resource == nil {
+				return nil, fmt.Errorf("ecs described task definition has no matching ARN")
+			}
+			records = append(records, row)
 		}
 	}
 	return records, nil

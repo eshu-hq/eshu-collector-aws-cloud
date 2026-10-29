@@ -54,9 +54,14 @@ detail reads. ECS DescribeClusters emits cluster identity, tags, status, and
 reported counts. DescribeServices emits service identity, tags, status, counts,
 task-definition binding, and load-balancer metadata. DescribeTasks emits
 task identity, status, containers, network-interface attachments, and reported
-runtime metadata. ECS task definitions remain placeholder records. EKS
-DescribeCluster emits typed cluster
-identity, status, tags, version, and reported control-plane metadata, including
+runtime metadata. DescribeTaskDefinition emits task-definition identity,
+tags, roles, resource sizing, network mode, compatibilities, revision, and
+registration time. Container definitions, environment values, and secret
+references remain excluded until keyed redaction and reference handling land.
+The live read requires `ecs:DescribeTaskDefinition` and adds one describe call
+per listed task definition, increasing ECS API request volume and claim latency.
+EKS DescribeCluster emits typed cluster identity, status, tags, version, and
+reported control-plane metadata, including
 the OIDC issuer URL. DescribeNodegroup emits managed nodegroup identity,
 status, tags, version, AMI and capacity type, node role, network placement,
 and scaling counts. EKS DescribeAddon emits add-on identity, status, tags,

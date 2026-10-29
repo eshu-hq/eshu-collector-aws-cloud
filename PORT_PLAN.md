@@ -12,7 +12,11 @@ GetBucketTagging reads. ECS DescribeClusters and DescribeServices emit typed
 cluster and service identity, tags, status, counts, task-definition binding,
 and load-balancer metadata. DescribeTasks emits typed task identity, status,
 containers, network-interface attachments, and reported runtime metadata.
-EKS DescribeCluster and DescribeNodegroup emit
+DescribeTaskDefinition emits safe scalar metadata and tags, with one additional
+read per listed ARN and a required `ecs:DescribeTaskDefinition` permission.
+Container definitions, environment values, secret references, image
+relationships, and ECS service/task relationships remain deferred. EKS
+DescribeCluster and DescribeNodegroup emit
 typed cluster and managed nodegroup identity, status, tags, version, and
 reported control-plane and nodegroup metadata. EKS DescribeAddon emits typed
 add-on identity, status, tags, version, timestamps, and service-account role
@@ -21,9 +25,9 @@ emits reported service-role, subnet, and security-group relationships.
 Reported nodegroup and add-on roles, nodegroup subnets, and cluster membership
 also emit typed relationships. Membership uses the observed parent list
 request and rejects a nonblank conflicting child cluster name. IAM OIDC provider
-enrichment and its relationship remain unported. ECS task definitions,
-remaining bucket detail and posture reads,
-lifecycle policy facts, and the full scanner port remain unfinished. This plan
+enrichment and its relationship remain unported. Remaining bucket detail
+and posture reads, lifecycle policy facts, and the full scanner port remain
+unfinished. This plan
 maps the remaining in-tree implementation to standalone locations. No live AWS
 core-kind output or host grant has been proved.
 
