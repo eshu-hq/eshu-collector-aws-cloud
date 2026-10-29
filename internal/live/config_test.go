@@ -122,6 +122,38 @@ func TestParseConfigReadsScopeCredentials(t *testing.T) {
 	}
 }
 
+// TestParseConfigReadsMapShapeCredentials proves a map-shape target_scopes
+// (first-class host input per parseAccount) carries credentials like the
+// singleton list does, and a multi-scope list with credentials fails closed
+// instead of silently reading ambient.
+func TestParseConfigReadsMapShapeCredentials(t *testing.T) {
+	t.Parallel()
+
+	creds := map[string]any{
+		"mode":        "central_assume_role",
+		"role_arn":    "arn:aws:iam::111122223333:role/irsa-eshu-aws-collector-cross-account-role",
+		"external_id": "eshu-ops-qa-collector",
+	}
+	mapShape := hostConfig()
+	mapShape["target_scopes"] = map[string]any{"account_id": "111122223333", "credentials": creds}
+	parsed, err := ParseConfig(mapShape)
+	if err != nil {
+		t.Fatalf("ParseConfig(map credentials) error = %v", err)
+	}
+	if parsed.RoleARN == "" || parsed.ExternalID != "eshu-ops-qa-collector" {
+		t.Fatalf("RoleARN/ExternalID = %q/%q, want the map-shape scope role", parsed.RoleARN, parsed.ExternalID)
+	}
+
+	multi := hostConfig()
+	multi["target_scopes"] = []any{
+		map[string]any{"account_id": "111122223333", "credentials": creds},
+		map[string]any{"account_id": "444455556666"},
+	}
+	if _, err := ParseConfig(multi); err == nil {
+		t.Fatal("ParseConfig(multi-scope credentials) error = nil, want fail-closed")
+	}
+}
+
 // TestParseConfigAcceptsScopeVariants proves liberal scope shapes: a bare
 // account string, a one-element scope list, and nested source-block keys all
 // resolve, while multi-account scopes fail closed.

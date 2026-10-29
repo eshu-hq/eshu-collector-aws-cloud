@@ -14,5 +14,7 @@
 // credentials, credential keys, or secret values, and every emitted record
 // carries control-plane metadata only, mirroring the in-tree scanner
 // contracts. Secret values, policy documents, message bodies, and parameter
-// values are never read.
+// values are never read. A scope may opt in to cross-account reads with a
+// credentials block (STS AssumeRole of a role pinned to the scope account);
+// the session credentials live only in memory for the claim.
 package live

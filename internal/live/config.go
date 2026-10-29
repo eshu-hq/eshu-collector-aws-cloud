@@ -242,6 +242,39 @@ func scopeSingleton(config map[string]any) map[string]any {
 	return scope
 }
 
+// credentialScope resolves the scope object that may carry a credentials
+// block: the singleton-list element or a map-shape target_scopes (both are
+// first-class host input per parseAccount). A bare account string has no
+// scope object. A multi-scope list with credentials anywhere fails closed:
+// the role cannot be attributed to one account.
+func credentialScope(config map[string]any) (map[string]any, error) {
+	raw := firstPresent(config, "target_scopes")
+	if raw == nil {
+		if nested, ok := config["source"].(map[string]any); ok {
+			raw = firstPresent(nested, "target_scopes")
+		}
+	}
+	switch value := raw.(type) {
+	case nil:
+		return nil, nil
+	case map[string]any:
+		return value, nil
+	case []any:
+		// Multi-scope lists already fail closed in parseAccount before this
+		// runs; only the singleton element can carry credentials.
+		if len(value) == 1 {
+			scope, ok := value[0].(map[string]any)
+			if !ok {
+				return nil, nil
+			}
+			return scope, nil
+		}
+		return nil, nil
+	default:
+		return nil, nil
+	}
+}
+
 // roleARNPattern admits only IAM role ARNs: no user, policy, or
 // instance-profile ARN can smuggle through the credentials block.
 var roleARNPattern = regexp.MustCompile(`^arn:(aws|aws-us-gov):iam::([0-9]{12}):role/(.+)$`)
@@ -253,7 +286,10 @@ var roleARNPattern = regexp.MustCompile(`^arn:(aws|aws-us-gov):iam::([0-9]{12}):
 // account: the guard pins the assume target to the scope so a copied block
 // can never read a foreign account.
 func parseCredentials(config map[string]any, account string) (string, string, error) {
-	scope := scopeSingleton(config)
+	scope, err := credentialScope(config)
+	if err != nil {
+		return "", "", err
+	}
 	if scope == nil {
 		return "", "", nil
 	}
