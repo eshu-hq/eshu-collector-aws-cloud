@@ -52,8 +52,10 @@ Other errors fail the S3 read; a multi-service claim may return partial evidence
 when another service succeeds. Encryption and posture remain unknown pending
 detail reads. ECS DescribeClusters emits cluster identity, tags, status, and
 reported counts. DescribeServices emits service identity, tags, status, counts,
-task-definition binding, and load-balancer metadata. ECS tasks and task
-definitions remain placeholder records. EKS DescribeCluster emits typed cluster
+task-definition binding, and load-balancer metadata. DescribeTasks emits
+task identity, status, containers, network-interface attachments, and reported
+runtime metadata. ECS task definitions remain placeholder records. EKS
+DescribeCluster emits typed cluster
 identity, status, tags, version, and reported control-plane metadata, including
 the OIDC issuer URL. DescribeNodegroup emits managed nodegroup identity,
 status, tags, version, AMI and capacity type, node role, network placement,
