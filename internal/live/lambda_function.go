@@ -5,18 +5,20 @@ package live
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awsarn "github.com/aws/aws-sdk-go-v2/aws/arn"
+	awslambda "github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 	awsv1 "github.com/eshu-hq/eshu-sdk/factschema/aws/v1"
 )
 
-// lambdaFunctionRecord retains only fields supplied by ListFunctions. Tags,
-// environment values, code download URLs, and resolved image evidence require
-// separate reads or keyed redaction before they can be emitted.
+// lambdaFunctionRecord retains safe configuration fields. Environment values
+// require a keyed redaction path and never enter this record.
 func lambdaFunctionRecord(function lambdatypes.FunctionConfiguration, region string) (collector.Record, error) {
 	arn := strings.TrimSpace(aws.ToString(function.FunctionArn))
 	name := strings.TrimSpace(aws.ToString(function.FunctionName))
@@ -59,6 +61,63 @@ func lambdaFunctionRecord(function lambdatypes.FunctionConfiguration, region str
 	}
 	return result, nil
 }
+
+var lambdaECRImageReference = regexp.MustCompile(`^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com(?:\.cn)?/[A-Za-z0-9._/-]+(?::[A-Za-z0-9._-]+|@sha256:[a-fA-F0-9]{6,64})$`)
+
+// lambdaGetFunctionRecord maps the authoritative GetFunction configuration and
+// stable code references without copying package URLs, environment, or tags.
+func lambdaGetFunctionRecord(listed lambdatypes.FunctionConfiguration, output *awslambda.GetFunctionOutput, region string) (collector.Record, error) {
+	if output == nil {
+		return collector.Record{}, fmt.Errorf("Lambda GetFunction returned no response")
+	}
+	configuration := listed
+	if output.Configuration != nil {
+		configuration = *output.Configuration
+	}
+	listedID := strings.TrimSpace(aws.ToString(listed.FunctionArn))
+	if listedID == "" {
+		listedID = strings.TrimSpace(aws.ToString(listed.FunctionName))
+	}
+	actualID := strings.TrimSpace(aws.ToString(configuration.FunctionArn))
+	if actualID == "" {
+		actualID = strings.TrimSpace(aws.ToString(configuration.FunctionName))
+	}
+	if listedID != actualID {
+		return collector.Record{}, fmt.Errorf("Lambda GetFunction identity differs from ListFunctions")
+	}
+	result, err := lambdaFunctionRecord(configuration, region)
+	if err != nil {
+		return collector.Record{}, err
+	}
+	if output.Code == nil {
+		return result, nil
+	}
+	for _, reference := range []struct{ key, value string }{
+		{key: "image_uri", value: aws.ToString(output.Code.ImageUri)},
+		{key: "resolved_image_uri", value: aws.ToString(output.Code.ResolvedImageUri)},
+	} {
+		key, value := reference.key, reference.value
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if !lambdaECRImageReference.MatchString(value) {
+			return collector.Record{}, fmt.Errorf("Lambda GetFunction returned unsafe image reference")
+		}
+		result.Resource.Attributes[key] = value
+		result.Resource.CorrelationAnchors = append(result.Resource.CorrelationAnchors, value)
+	}
+	if keyARN := strings.TrimSpace(aws.ToString(output.Code.SourceKMSKeyArn)); keyARN != "" {
+		parsed, err := awsarn.Parse(keyARN)
+		if err != nil || parsed.Service != "kms" || !lambdaKMSKeyResource.MatchString(parsed.Resource) {
+			return collector.Record{}, fmt.Errorf("Lambda GetFunction returned unsafe source KMS key ARN")
+		}
+		result.Resource.Attributes["source_kms_key_arn"] = keyARN
+	}
+	return result, nil
+}
+
+var lambdaKMSKeyResource = regexp.MustCompile(`^key/[A-Za-z0-9-]+$`)
 
 func lambdaArchitectures(values []lambdatypes.Architecture) []string {
 	if len(values) == 0 {

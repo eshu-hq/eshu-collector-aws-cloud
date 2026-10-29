@@ -361,8 +361,9 @@ func listELBV2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) 
 	return records, nil
 }
 
-// listLambda mirrors the in-tree lambda scanner: functions, aliases, and
-// event-source mappings. Function code and environment values stay unread.
+// listLambda mirrors the in-tree lambda scanner: functions, GetFunction
+// metadata, aliases, and event-source mappings. Function code and raw
+// environment values stay unread.
 func listLambda(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 	client := awslambda.NewFromConfig(cfg)
 	region := cfg.Region
@@ -375,7 +376,18 @@ func listLambda(ctx context.Context, cfg aws.Config) ([]collector.Record, error)
 			return nil, fmt.Errorf("lambda list functions: %w", err)
 		}
 		for _, function := range page.Functions {
-			functionRecord, err := lambdaFunctionRecord(function, region)
+			functionID := strings.TrimSpace(aws.ToString(function.FunctionArn))
+			if functionID == "" {
+				functionID = strings.TrimSpace(aws.ToString(function.FunctionName))
+			}
+			if functionID == "" {
+				return nil, fmt.Errorf("lambda function identity: no source identity")
+			}
+			getOutput, err := client.GetFunction(ctx, &awslambda.GetFunctionInput{FunctionName: aws.String(functionID)})
+			if err != nil {
+				return nil, fmt.Errorf("lambda get function: %w", err)
+			}
+			functionRecord, err := lambdaGetFunctionRecord(function, getOutput, region)
 			if err != nil {
 				return nil, fmt.Errorf("lambda function identity: %w", err)
 			}
