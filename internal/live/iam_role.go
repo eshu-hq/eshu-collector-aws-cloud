@@ -5,7 +5,9 @@ package live
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -119,13 +121,17 @@ func iamRoleRecord(listed iamtypes.Role, detail *iamtypes.Role, attached, inline
 	if path == "" {
 		path = strings.TrimSpace(aws.ToString(listed.Path))
 	}
+	trustPresent, err := iamTrustPolicyPresent(aws.ToString(role.AssumeRolePolicyDocument))
+	if err != nil {
+		return collector.Record{}, err
+	}
 	attrs := map[string]any{
-		"attached_policy_arns":     append([]string{}, attached...),
-		"inline_policy_names":      append([]string{}, inline...),
+		"attached_policy_arns":     append([]string(nil), attached...),
+		"inline_policy_names":      append([]string(nil), inline...),
 		"path":                     path,
 		"permission_boundary_arn":  "",
 		"permission_boundary_type": "",
-		"trust_policy_present":     strings.TrimSpace(aws.ToString(role.AssumeRolePolicyDocument)) != "",
+		"trust_policy_present":     trustPresent,
 	}
 	if role.PermissionsBoundary != nil {
 		attrs["permission_boundary_arn"] = strings.TrimSpace(aws.ToString(role.PermissionsBoundary.PermissionsBoundaryArn))
@@ -135,4 +141,22 @@ func iamRoleRecord(listed iamtypes.Role, detail *iamtypes.Role, attached, inline
 	row.Resource = &collector.LiveResource{Region: region, ServiceKind: "iam", ResourceType: "aws_iam_role", ResourceID: arn, ARN: arn, Name: name,
 		Attributes: attrs, CorrelationAnchors: []string{arn, name}, SourceRecordID: arn}
 	return row, nil
+}
+
+// iamTrustPolicyPresent follows the legacy adapter's URL decode and JSON map
+// semantics. The document and parser error never enter facts or status.
+func iamTrustPolicyPresent(raw string) (bool, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return false, nil
+	}
+	decoded, err := url.QueryUnescape(raw)
+	if err != nil {
+		decoded = raw
+	}
+	var document map[string]any
+	if err := json.Unmarshal([]byte(decoded), &document); err != nil {
+		return false, fmt.Errorf("invalid IAM role trust policy document")
+	}
+	return len(document) > 0, nil
 }
