@@ -5,6 +5,7 @@ package live
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
@@ -29,12 +30,12 @@ var loaders = map[string]Loader{
 	"dynamodb":       withoutIdentity(listDynamoDB),
 	"ec2":            listEC2,
 	"ecr":            withoutIdentity(listECR),
-	"ecs":            withoutIdentity(listECS),
+	"ecs":            keyRequiredLoader("ecs"),
 	"eks":            listEKS,
 	"elbv2":          withoutIdentity(listELBV2),
 	"eventbridge":    withoutIdentity(listEventBridge),
 	"iam":            withoutIdentity(listIAM),
-	"lambda":         withoutIdentity(listLambda),
+	"lambda":         keyRequiredLoader("lambda"),
 	"rds":            withoutIdentity(listRDS),
 	"route53":        withoutIdentity(listRoute53),
 	"s3":             listS3,
@@ -51,4 +52,10 @@ var globalServices = map[string]bool{
 	"cloudfront": true,
 	"iam":        true,
 	"route53":    true,
+}
+
+func keyRequiredLoader(service string) Loader {
+	return func(context.Context, aws.Config, VerifiedIdentity) ([]collector.Record, error) {
+		return nil, fmt.Errorf("live %s requires ESHU_AWS_REDACTION_KEY", service)
+	}
 }

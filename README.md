@@ -50,8 +50,8 @@ The GetFunction ARN and nonempty function name must match the listed identity.
 Only validated ECR image URIs enter attributes and correlation anchors;
 unsafe URIs fail the Lambda read without logging the value.
 Presigned package download URLs never enter records. Function environment
-values and tags remain deferred until this collector has the legacy keyed
-redaction path. GetFunction requires `lambda:GetFunction`; AWS may also require
+values now enter the typed resource as four-field keyed markers; tags remain
+deferred. GetFunction requires `lambda:GetFunction`; AWS may also require
 `lambda:ListTags` to populate tags, though this port does not emit them.
 ListAliases pages emit typed `aws_lambda_alias` resources and
 `lambda_alias_targets_function` relationships with reported version and
@@ -81,8 +81,10 @@ task identity, status, containers, network-interface attachments, and reported
 runtime metadata. DescribeTaskDefinition emits task-definition identity,
 tags, roles, resource sizing, network mode, compatibilities, revision, and
 registration time. Services link to reported task definitions and tasks
-link to reported ENIs. Container definitions, environment values, and secret
-references remain excluded until keyed redaction and reference handling land.
+link to reported ENIs. Task-definition containers now include environment
+values as four-field keyed markers and secret references as `{name,value_from}`
+metadata. Secret contents
+are never fetched.
 The live read requires `ecs:DescribeTaskDefinition` and makes one describe
 call per distinct listed or service-referenced task definition, including
 inactive revisions referenced by services. This increases ECS API request
@@ -179,9 +181,19 @@ directory is a repository root).
 
 Copy `config.example.yaml`. The collector reads one source document
 (`source.input`), emits against one credential-free `sourceURI`, and tracks
-freshness with `freshness.previousDigest`. All payloads pass
+freshness with `freshness.previousDigest`. Payload emission applies
 `ValidateShareSafeKeys`; anything sensitive must be redacted before emission
 (see `collector.go` and the redaction test).
+
+For live activations selecting Lambda or ECS, set
+`source.redactionKeyEnv: ESHU_AWS_REDACTION_KEY` and deliver that environment
+variable to the collector process through the host workload secret mechanism.
+The activation document holds only the fixed variable name. Missing, blank, or
+zero key material fails before AWS configuration or source reads; accepted
+bytes are used unchanged. The SDK rc.4 host validator still rejects redacted
+AWS environment maps keyed by sensitive names. This payload cannot be deployed
+until the validator exception is released, this collector pins that release,
+and the host is upgraded. Host key delivery and rollout remain unverified.
 
 ## Least-privilege credentials
 

@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
+	"github.com/eshu-hq/eshu-sdk/collector/marker"
 	awsv1 "github.com/eshu-hq/eshu-sdk/factschema/aws/v1"
 )
 
@@ -71,11 +72,21 @@ func (c Collector) loadConfig(ctx context.Context, region string) (aws.Config, e
 	return loadAmbientConfig(ctx, region)
 }
 
-func (c Collector) loaders() map[string]Loader {
+func (c Collector) loaders(key marker.Key) map[string]Loader {
 	if c.Loaders != nil {
 		return c.Loaders
 	}
-	return loaders
+	selected := make(map[string]Loader, len(loaders))
+	for name, loader := range loaders {
+		selected[name] = loader
+	}
+	selected["lambda"] = withoutIdentity(func(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
+		return listLambda(ctx, cfg, key)
+	})
+	selected["ecs"] = withoutIdentity(func(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
+		return listECS(ctx, cfg, key)
+	})
+	return selected
 }
 
 // CollectReport lists every configured service in every configured region.
@@ -84,7 +95,12 @@ func (c Collector) loaders() map[string]Loader {
 // services returned. When every pair fails the report would be an empty
 // success that retires good evidence, so CollectReport errors instead.
 func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, error) {
-	registry := c.loaders()
+	for _, service := range config.Services {
+		if (service == "lambda" || service == "ecs") && config.RedactionKey.IsZero() {
+			return Outcome{}, fmt.Errorf("live %s requires ESHU_AWS_REDACTION_KEY before source acquisition", service)
+		}
+	}
+	registry := c.loaders(config.RedactionKey)
 	records := []collector.Record{}
 	warnings := []string{}
 	resources := []collector.ResourceObservation{}

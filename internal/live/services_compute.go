@@ -19,6 +19,7 @@ import (
 	awslambda "github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/smithy-go"
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
+	"github.com/eshu-hq/eshu-sdk/collector/marker"
 )
 
 // listEC2 mirrors the in-tree ec2 scanner's read surface (VPCs, subnets,
@@ -362,9 +363,12 @@ func listELBV2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) 
 }
 
 // listLambda mirrors the in-tree lambda scanner: functions, GetFunction
-// metadata, aliases, and event-source mappings. Function code and raw
-// environment values stay unread.
-func listLambda(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
+// metadata, aliases, and event-source mappings. Function code stays unread;
+// environment values are replaced by keyed markers before record emission.
+func listLambda(ctx context.Context, cfg aws.Config, key marker.Key) ([]collector.Record, error) {
+	if key.IsZero() {
+		return nil, fmt.Errorf("live lambda requires ESHU_AWS_REDACTION_KEY")
+	}
 	client := awslambda.NewFromConfig(cfg)
 	region := cfg.Region
 	records := []collector.Record{}
@@ -387,7 +391,7 @@ func listLambda(ctx context.Context, cfg aws.Config) ([]collector.Record, error)
 			if err != nil {
 				return nil, fmt.Errorf("lambda get function: %w", err)
 			}
-			functionRecord, err := lambdaGetFunctionRecord(function, getOutput, region)
+			functionRecord, err := lambdaGetFunctionRecord(function, getOutput, region, key)
 			if err != nil {
 				return nil, fmt.Errorf("lambda function identity: %w", err)
 			}

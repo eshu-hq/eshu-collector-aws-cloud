@@ -32,7 +32,7 @@ func TestOptionalDenialsAcrossServicesKeepEvidenceAndWarnings(t *testing.T) {
 	reader := Collector{LoadConfig: fakeConfig(&[]string{}), VerifyIdentity: func(context.Context, aws.Config) (VerifiedIdentity, error) {
 		return VerifiedIdentity{AccountID: account, Partition: "aws"}, nil
 	}, Loaders: loaders}
-	outcome, err := reader.CollectReport(context.Background(), Config{AccountID: account, Regions: []string{"us-east-1"}, Services: []string{"ec2", "s3", "lambda", "eks"}})
+	outcome, err := reader.CollectReport(context.Background(), Config{AccountID: account, Regions: []string{"us-east-1"}, Services: []string{"ec2", "s3", "lambda", "eks"}, RedactionKey: testRedactionKey()})
 	if err != nil {
 		t.Fatal(err)
 	}

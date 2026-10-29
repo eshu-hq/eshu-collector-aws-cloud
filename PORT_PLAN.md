@@ -17,9 +17,10 @@ per distinct listed or service-referenced ARN, including inactive revisions
 referenced by services. It requires `ecs:DescribeTaskDefinition` permission.
 Services link to their reported task definitions and tasks to reported ENIs.
 The legacy scanner records a task-definition ARN on each task as an attribute
-and anchor, without a separate task-to-definition edge. Container definitions,
-environment values, secret references, image relationships, and service
-load-balancer relationships remain deferred. EKS
+and anchor, without a separate task-to-definition edge. Container
+environment values now use legacy keyed markers, and secret references remain
+metadata-only. Image and service load-balancer relationships
+remain deferred. EKS
 DescribeCluster and DescribeNodegroup emit
 typed cluster and managed nodegroup identity, status, tags, version, and
 reported control-plane and nodegroup metadata. EKS DescribeAddon emits typed
@@ -197,3 +198,19 @@ float64's integer precision; historical `time.Time` attributes become their
 RFC3339 JSON strings. Fields hidden by `json:"-"` remain absent, as they are
 on the wire. Values that JSON cannot encode, including exposed cycles, fail
 closed with no fact.
+
+## Keyed AWS environment values (#8852)
+
+The private AWS launch policy wraps the published SDK `collector/marker`
+helper. Lambda environment maps preserve variable names and replace every
+value, including empty and ordinary-name values, with marker, reason, source,
+and `aws-launch-2026-05-14` ruleset version. ECS task-definition containers
+carry the same markers under `environment[].value` and preserve `secrets[]`
+`name`/`value_from` references without resolving secret contents. The key is
+resolved from the fixed `ESHU_AWS_REDACTION_KEY` environment reference at the
+command boundary and is required before Lambda or ECS source acquisition.
+
+Deployment dependency: pinned SDK rc.4 currently rejects sensitive-looking
+Lambda environment map keys despite marker values. The SDK validator release,
+collector pin update, host upgrade, and host secret delivery still need proof.
+This branch proves local mapping and fail-closed behavior only.

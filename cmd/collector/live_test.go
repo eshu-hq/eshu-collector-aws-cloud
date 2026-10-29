@@ -6,6 +6,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/eshu-hq/eshu-collector-aws-cloud/internal/live"
+	"github.com/eshu-hq/eshu-sdk/collector/marker"
 	"strings"
 	"testing"
 )
@@ -105,5 +107,39 @@ func TestLiveOptionsIgnoreLegacyPlaceholderDigest(t *testing.T) {
 	opts := liveCollectOptions(plan)
 	if opts.PreviousDigest != "" {
 		t.Fatalf("live previous digest = %q, want disabled until typed digest covers resources and failures", opts.PreviousDigest)
+	}
+}
+
+func TestResolveLiveRedactionKeyFailsClosedAndPreservesBytes(t *testing.T) {
+	config := live.Config{Services: []string{"lambda", "ecs"}, RedactionKeyEnv: "ESHU_AWS_REDACTION_KEY"}
+	calls := 0
+	lookup := func(string) (string, bool) {
+		calls++
+		return "", false
+	}
+	if _, err := resolveLiveRedactionKey(config, lookup); err == nil || calls != 1 {
+		t.Fatalf("missing key: err=%v calls=%d", err, calls)
+	}
+	for _, material := range []string{"", " \t\n"} {
+		if _, err := resolveLiveRedactionKey(config, func(string) (string, bool) { return material, true }); err == nil {
+			t.Fatalf("blank key %q accepted", material)
+		}
+	}
+	material := "  accepted key bytes  "
+	key, err := resolveLiveRedactionKey(config, func(name string) (string, bool) {
+		if name != "ESHU_AWS_REDACTION_KEY" {
+			t.Fatalf("lookup name = %q", name)
+		}
+		return material, true
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := marker.NewKey([]byte(material))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if marker.String("value", "reason", "source", key) != marker.String("value", "reason", "source", want) {
+		t.Fatal("accepted key bytes changed")
 	}
 }

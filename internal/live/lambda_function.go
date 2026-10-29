@@ -14,12 +14,13 @@ import (
 	awslambda "github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
+	"github.com/eshu-hq/eshu-sdk/collector/marker"
 	awsv1 "github.com/eshu-hq/eshu-sdk/factschema/aws/v1"
 )
 
-// lambdaFunctionRecord retains safe configuration fields. Environment values
-// require a keyed redaction path and never enter this record.
-func lambdaFunctionRecord(function lambdatypes.FunctionConfiguration, region string) (collector.Record, error) {
+// lambdaFunctionRecord retains safe configuration fields and replaces every
+// environment value with a deployment-keyed marker.
+func lambdaFunctionRecord(function lambdatypes.FunctionConfiguration, region string, key marker.Key) (collector.Record, error) {
 	arn := strings.TrimSpace(aws.ToString(function.FunctionArn))
 	name := strings.TrimSpace(aws.ToString(function.FunctionName))
 	if arn == "" && name == "" {
@@ -45,6 +46,7 @@ func lambdaFunctionRecord(function lambdatypes.FunctionConfiguration, region str
 			"code_sha256":        strings.TrimSpace(aws.ToString(function.CodeSha256)),
 			"code_size":          function.CodeSize,
 			"description":        strings.TrimSpace(aws.ToString(function.Description)),
+			"environment":        lambdaEnvironment(function.Environment, key),
 			"handler":            strings.TrimSpace(aws.ToString(function.Handler)),
 			"kms_key_arn":        strings.TrimSpace(aws.ToString(function.KMSKeyArn)),
 			"last_modified":      lambdaLastModified(aws.ToString(function.LastModified)),
@@ -65,8 +67,8 @@ func lambdaFunctionRecord(function lambdatypes.FunctionConfiguration, region str
 var lambdaECRImageReference = regexp.MustCompile(`^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com(?:\.cn)?/[A-Za-z0-9._/-]+(?::[A-Za-z0-9._-]+|@sha256:[a-fA-F0-9]{64})$`)
 
 // lambdaGetFunctionRecord maps the authoritative GetFunction configuration and
-// stable code references without copying package URLs, environment, or tags.
-func lambdaGetFunctionRecord(listed lambdatypes.FunctionConfiguration, output *awslambda.GetFunctionOutput, region string) (collector.Record, error) {
+// stable code references without copying package URLs, raw environment, or tags.
+func lambdaGetFunctionRecord(listed lambdatypes.FunctionConfiguration, output *awslambda.GetFunctionOutput, region string, key marker.Key) (collector.Record, error) {
 	if output == nil {
 		return collector.Record{}, fmt.Errorf("Lambda GetFunction returned no response")
 	}
@@ -90,7 +92,7 @@ func lambdaGetFunctionRecord(listed lambdatypes.FunctionConfiguration, output *a
 	if listedName != "" && actualName != "" && listedName != actualName {
 		return collector.Record{}, fmt.Errorf("Lambda GetFunction name differs from ListFunctions")
 	}
-	result, err := lambdaFunctionRecord(configuration, region)
+	result, err := lambdaFunctionRecord(configuration, region, key)
 	if err != nil {
 		return collector.Record{}, err
 	}
@@ -188,4 +190,19 @@ func lambdaLastModified(value string) any {
 		}
 	}
 	return nil
+}
+
+func lambdaEnvironment(environment *lambdatypes.EnvironmentResponse, key marker.Key) map[string]any {
+	if environment == nil || len(environment.Variables) == 0 {
+		return nil
+	}
+	result := make(map[string]any, len(environment.Variables))
+	for name, value := range environment.Variables {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		result[name] = redactAWSString(value, "lambda.function.environment."+name, key)
+	}
+	return result
 }

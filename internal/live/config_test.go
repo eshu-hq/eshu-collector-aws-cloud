@@ -175,3 +175,16 @@ func TestRecordFallsBackToStableTriple(t *testing.T) {
 		t.Fatalf("record = %+v, want name and metadata", recorded)
 	}
 }
+
+func TestParseConfigAcceptsOnlyFixedRedactionKeyReference(t *testing.T) {
+	config := hostConfig()
+	config["source"] = map[string]any{"redactionKeyEnv": "ESHU_AWS_REDACTION_KEY"}
+	parsed, err := ParseConfig(config)
+	if err != nil || parsed.RedactionKeyEnv != "ESHU_AWS_REDACTION_KEY" {
+		t.Fatalf("fixed key reference: parsed=%+v err=%v", parsed, err)
+	}
+	config["source"] = map[string]any{"redactionKeyEnv": "RAW_SECRET"}
+	if _, err := ParseConfig(config); err == nil {
+		t.Fatal("arbitrary redaction key reference accepted")
+	}
+}

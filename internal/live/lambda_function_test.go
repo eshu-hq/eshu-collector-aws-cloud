@@ -22,7 +22,7 @@ func TestLambdaFunctionRecordCarriesListFunctionsMetadata(t *testing.T) {
 		Role:         aws.String("arn:aws:iam::123456789012:role/worker"),
 		Environment:  &lambdatypes.EnvironmentResponse{Variables: map[string]string{"API_KEY": "sensitive-value"}},
 	}
-	got, err := lambdaFunctionRecord(function, "us-east-1")
+	got, err := lambdaFunctionRecord(function, "us-east-1", testRedactionKey())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,8 +32,10 @@ func TestLambdaFunctionRecordCarriesListFunctionsMetadata(t *testing.T) {
 	if got.Resource.Attributes["role_arn"] != *function.Role || got.Resource.Attributes["runtime"] != string(function.Runtime) {
 		t.Fatalf("function attributes = %#v", got.Resource.Attributes)
 	}
-	if _, ok := got.Resource.Attributes["environment"]; ok {
-		t.Fatal("unredacted environment values cannot enter the typed fact")
+	environment := got.Resource.Attributes["environment"].(map[string]any)
+	value := environment["API_KEY"].(map[string]any)
+	if value["reason"] != "known_sensitive_key" || value["source"] != "lambda.function.environment.API_KEY" || !strings.HasPrefix(value["marker"].(string), "redacted:hmac-sha256:") {
+		t.Fatalf("environment marker: %#v", value)
 	}
 	if _, ok := got.Resource.Attributes["resolved_image_uri"]; ok {
 		t.Fatal("ListFunctions does not establish resolved image evidence")
@@ -63,7 +65,7 @@ func TestLambdaGetFunctionRecordRejectsMismatchedIdentityAndUnsafeReferences(t *
 		{name: "KMS malformed account", output: &awslambda.GetFunctionOutput{Code: &lambdatypes.FunctionCodeLocation{SourceKMSKeyArn: aws.String("arn:aws:kms:us-east-1:abc:key/code")}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := lambdaGetFunctionRecord(listed, test.output, "us-east-1")
+			_, err := lambdaGetFunctionRecord(listed, test.output, "us-east-1", testRedactionKey())
 			if err == nil || strings.Contains(err.Error(), "secret") {
 				t.Fatalf("unsafe GetFunction output error = %v", err)
 			}
@@ -86,7 +88,7 @@ func TestLambdaFunctionRecordCarriesVPCAndLoggingConfiguration(t *testing.T) {
 			SystemLogLevel:      lambdatypes.SystemLogLevelWarn,
 		},
 	}
-	got, err := lambdaFunctionRecord(function, "us-east-1")
+	got, err := lambdaFunctionRecord(function, "us-east-1", testRedactionKey())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +105,7 @@ func TestLambdaFunctionRecordCarriesVPCAndLoggingConfiguration(t *testing.T) {
 }
 
 func TestLambdaFunctionRecordOmitsAbsentVPCAndLoggingConfiguration(t *testing.T) {
-	got, err := lambdaFunctionRecord(lambdatypes.FunctionConfiguration{FunctionName: aws.String("worker")}, "us-east-1")
+	got, err := lambdaFunctionRecord(lambdatypes.FunctionConfiguration{FunctionName: aws.String("worker")}, "us-east-1", testRedactionKey())
 	if err != nil {
 		t.Fatal(err)
 	}

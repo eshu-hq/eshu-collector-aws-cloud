@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
+	"github.com/eshu-hq/eshu-sdk/collector/marker"
 )
 
 // SupportedServices is the live-read inventory this package implements: the
@@ -45,10 +46,14 @@ var (
 // Config is the parsed live-source activation: everything parseSDKStdio
 // learns from a host request that carries no source.input file.
 type Config struct {
-	AccountID string
-	Regions   []string
-	Services  []string
-	SourceURI string
+	// RedactionKeyEnv names the fixed process variable, never its material.
+	RedactionKeyEnv string
+	// RedactionKey is the copied, validated key passed to sensitive loaders.
+	RedactionKey marker.Key
+	AccountID    string
+	Regions      []string
+	Services     []string
+	SourceURI    string
 	// PreviousDigest is the host hint; live collection currently ignores it
 	// until typed resources and failed service pairs enter the digest.
 	PreviousDigest string
@@ -111,6 +116,14 @@ func ParseConfig(config map[string]any) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	keyEnv, _, err := optionalString(config, "source", "redactionKeyEnv")
+	if err != nil {
+		return Config{}, err
+	}
+	if keyEnv != "" && keyEnv != "ESHU_AWS_REDACTION_KEY" {
+		return Config{}, fmt.Errorf("config source.redactionKeyEnv must reference ESHU_AWS_REDACTION_KEY")
+	}
+	parsed.RedactionKeyEnv = keyEnv
 	parsed.AccountID = account
 	parsed.Regions = regions
 	parsed.Services = services

@@ -53,7 +53,7 @@ func TestLambdaMappingDenialKeepsFunctionsAliasesAndOtherMappings(t *testing.T) 
 					return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
 				}),
 			}
-			records, err := listLambda(context.Background(), cfg)
+			records, err := listLambda(context.Background(), cfg, testRedactionKey())
 			if code == "ThrottlingException" {
 				if err == nil || len(records) != 0 || calls["/2015-03-31/functions/arn:aws:lambda:us-east-1:123456789012:function:second/aliases"] != 0 {
 					t.Fatalf("required failure: records=%d err=%v calls=%v", len(records), err, calls)
@@ -79,11 +79,11 @@ func TestLambdaMappingDenialKeepsFunctionsAliasesAndOtherMappings(t *testing.T) 
 					return VerifiedIdentity{AccountID: "123456789012", Partition: "aws"}, nil
 				},
 				Loaders: map[string]Loader{"lambda": func(ctx context.Context, config aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
-					return listLambda(ctx, config)
+					return listLambda(ctx, config, testRedactionKey())
 				}},
 			}
 			outcome, err := reader.CollectReport(context.Background(), Config{
-				AccountID: "123456789012", Regions: []string{"us-east-1"}, Services: []string{"lambda"},
+				AccountID: "123456789012", Regions: []string{"us-east-1"}, Services: []string{"lambda"}, RedactionKey: testRedactionKey(),
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -136,7 +136,7 @@ func TestLambdaGetFunctionEnrichesSafeMetadataWithoutSecrets(t *testing.T) {
 		case "/2015-03-31/functions":
 			fmt.Fprintf(w, `{"Functions":[{"FunctionName":"worker","FunctionArn":%q,"Runtime":"python3.12"}]}`, arn)
 		case "/2015-03-31/functions/" + arn:
-			fmt.Fprintf(w, `{"Configuration":{"FunctionName":"worker","FunctionArn":%q,"Runtime":"python3.13","Environment":{"Variables":{"API_KEY":"raw-secret"}}},"Code":{"ImageUri":%q,"ResolvedImageUri":%q,"SourceKMSKeyArn":"arn:aws:kms:us-east-1:123456789012:key/code","Location":"https://download.example/?token=raw-secret"},"Tags":{"team":"platform"}}`, arn, image, resolved)
+			fmt.Fprintf(w, `{"Configuration":{"FunctionName":"worker","FunctionArn":%q,"Runtime":"python3.13"},"Code":{"ImageUri":%q,"ResolvedImageUri":%q,"SourceKMSKeyArn":"arn:aws:kms:us-east-1:123456789012:key/code","Location":"https://download.example/?token=raw-secret"},"Tags":{"team":"platform"}}`, arn, image, resolved)
 		case "/2015-03-31/functions/" + arn + "/aliases":
 			fmt.Fprint(w, `{}`)
 		case "/2015-03-31/event-source-mappings":
@@ -152,7 +152,7 @@ func TestLambdaGetFunctionEnrichesSafeMetadataWithoutSecrets(t *testing.T) {
 			return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
 		}),
 	}
-	records, err := listLambda(context.Background(), cfg)
+	records, err := listLambda(context.Background(), cfg, testRedactionKey())
 	if err != nil || len(records) != 1 || records[0].Resource == nil {
 		t.Fatalf("Lambda records=%+v err=%v", records, err)
 	}
@@ -163,8 +163,8 @@ func TestLambdaGetFunctionEnrichesSafeMetadataWithoutSecrets(t *testing.T) {
 	if edge := records[0].Relationship; edge == nil || edge.RelationshipType != "lambda_function_uses_image" || edge.SourceResourceID != arn || edge.SourceARN != arn || edge.TargetResourceID != image || edge.TargetType != "container_image" || edge.SourceRecordID != arn+"#container-image#"+image || edge.Attributes["resolved_image_uri"] != resolved {
 		t.Fatalf("Lambda image relationship=%#v", edge)
 	}
-	if _, ok := attributes["environment"]; ok {
-		t.Fatal("raw environment must not be emitted")
+	if environment, ok := attributes["environment"].(map[string]any); !ok || len(environment) != 0 {
+		t.Fatalf("unexpected environment: %#v", attributes["environment"])
 	}
 	if _, ok := attributes["location"]; ok {
 		t.Fatal("presigned download URL must not be emitted")
@@ -173,7 +173,7 @@ func TestLambdaGetFunctionEnrichesSafeMetadataWithoutSecrets(t *testing.T) {
 		t.Fatal("unvalidated tags must not be emitted")
 	}
 	if serialized := fmt.Sprintf("%+v", records); strings.Contains(serialized, "raw-secret") || strings.Contains(serialized, "download.example") {
-		t.Fatal("Lambda records contain environment values or package URL")
+		t.Fatal("Lambda records contain raw environment values or package URL")
 	}
 	outcome, err := (Collector{
 		LoadConfig: func(context.Context, string) (aws.Config, error) { return cfg, nil },
@@ -183,7 +183,7 @@ func TestLambdaGetFunctionEnrichesSafeMetadataWithoutSecrets(t *testing.T) {
 		Loaders: map[string]Loader{"lambda": func(context.Context, aws.Config, VerifiedIdentity) ([]collector.Record, error) {
 			return records, nil
 		}},
-	}).CollectReport(context.Background(), Config{AccountID: "123456789012", Regions: []string{"us-east-1"}, Services: []string{"lambda"}})
+	}).CollectReport(context.Background(), Config{AccountID: "123456789012", Regions: []string{"us-east-1"}, Services: []string{"lambda"}, RedactionKey: testRedactionKey()})
 	if err != nil || len(outcome.Relationships) != 1 {
 		t.Fatalf("Lambda outcome relationships=%#v err=%v", outcome.Relationships, err)
 	}

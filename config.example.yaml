@@ -27,6 +27,8 @@ config:
 #    account_id: "055929692761"
 #  allowed_regions:
 #    - us-east-1
+#  source:
+#    redactionKeyEnv: ESHU_AWS_REDACTION_KEY # required when lambda or ecs is selected
 #  allowed_services:
 #    - iam
 #    - ec2

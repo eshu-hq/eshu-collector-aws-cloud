@@ -68,7 +68,7 @@ func TestListECSIncludesInactiveServiceDefinitionOnce(t *testing.T) {
 		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/x-amz-json-1.1"}}, Body: io.NopCloser(strings.NewReader(string(body))), Request: request}, nil
 	})
 	cfg := aws.Config{Region: "us-east-1", Credentials: aws.AnonymousCredentials{}, HTTPClient: &http.Client{Transport: transport}, RetryMaxAttempts: 1}
-	records, err := listECS(context.Background(), cfg)
+	records, err := listECS(context.Background(), cfg, testRedactionKey())
 	if err != nil {
 		t.Fatal(err)
 	}
