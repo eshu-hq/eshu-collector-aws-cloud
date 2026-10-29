@@ -46,11 +46,12 @@ const (
 	// type uses (go/internal/reducer/aws_resource_materialization.go,
 	// aws_relationship_join.go). The live EC2 reader enriches the identity
 	// with one bounded DescribeImages call per scan (internal/live/ec2_ami.go):
-	// the admitted typed fields only (platform_details, platform,
+	// the admitted typed fields (platform_details, platform,
 	// architecture, creation_date, deprecation_time, owner_alias,
-	// root_device_type). Name stays the bare resource id (the EC2-wide
-	// convention); creator-controlled image name/description text is never
-	// emitted (eshu-hq/eshu#9525).
+	// root_device_type) plus the structurally validated image name. Name stays
+	// the bare resource id (the EC2-wide convention); the admitted name value
+	// is untrusted creator-controlled text, and the image description is never
+	// read or emitted (eshu-hq/eshu#9525).
 	ResourceTypeEC2AMI = awsv1.ResourceTypeEC2AMI
 )
 

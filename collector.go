@@ -411,7 +411,7 @@ func CollectPartial(claim sdk.Claim, report Report, opts CollectOptions, failure
 	// ValidateShareSafeKeys guards key shape; the reason travels as a value,
 	// so credential-marker text is scanned separately. Either trip withholds
 	// the cause and records the redaction instead of leaking it.
-	if err := sdk.ValidateShareSafeKeys(map[string]any{"reason": reason}); err != nil || containsCredentialText(reason) {
+	if err := sdk.ValidateShareSafeKeys(map[string]any{"reason": reason}); err != nil || ContainsCredentialText(reason) {
 		warningPayload = map[string]any{"reason": "withheld-unshareable-cause"}
 		warningRedactions = append(warningRedactions, sdk.Redaction{Field: "reason", Reason: "unshareable-cause-redacted"})
 	}
@@ -468,23 +468,4 @@ func CollectRetryable(claim sdk.Claim, observedAt time.Time, retryAfterSeconds i
 			Class: sdk.StatusFailure, FailureClass: "transient", RetryAfterSeconds: retryAfterSeconds,
 		}},
 	}
-}
-
-// credentialValueMarkers are substrings that mark free text as unsafe to
-// emit. Matching is deliberately broad: a withheld reason stays diagnosable
-// through its redaction record, while a leaked credential does not.
-var credentialValueMarkers = []string{
-	"password", "passwd", "secret", "token", "bearer",
-	"api_key", "apikey", "private_key", "client_secret", "credentials",
-}
-
-// containsCredentialText reports whether free text may carry a credential.
-func containsCredentialText(text string) bool {
-	lower := strings.ToLower(text)
-	for _, marker := range credentialValueMarkers {
-		if strings.Contains(lower, marker) {
-			return true
-		}
-	}
-	return false
 }
