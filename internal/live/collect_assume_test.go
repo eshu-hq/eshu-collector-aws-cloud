@@ -6,6 +6,7 @@ package live
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -101,24 +102,82 @@ func TestCollectReportFailsClosedOnAssumeError(t *testing.T) {
 
 // TestCollectReportFailsClosedWithoutAssumer proves a scope role with no
 // assume-role implementation fails closed instead of silently reading with
-// ambient credentials from the wrong account.
+// ambient credentials from the wrong account. The working loader and matching
+// identity mean only the nil-assumer guard can produce the asserted error:
+// deleting the guard lets the claim succeed and fails this test.
 func TestCollectReportFailsClosedWithoutAssumer(t *testing.T) {
 	t.Parallel()
 
 	c := Collector{
 		LoadConfig:     fakeConfig(&[]string{}),
 		VerifyIdentity: verifiedAccount("111122223333"),
-		Loaders:        map[string]Loader{},
+		Loaders: map[string]Loader{
+			"ecs": func(_ context.Context, _ aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
+				return []collector.Record{{ID: "arn:cluster", Name: "cluster", Detail: "d"}}, nil
+			},
+		},
 	}
 	config := Config{
-		AccountID: "111122223333", Regions: []string{"us-east-1"}, Services: []string{"ecs"},
+		AccountID:  "111122223333",
+		Regions:    []string{"us-east-1"},
+		Services:   []string{"ecs"},
 		RoleARN:    "arn:aws:iam::111122223333:role/irsa-eshu-aws-collector-cross-account-role",
 		ExternalID: "eshu-ops-qa-collector",
 	}
-	if _, err := c.CollectReport(context.Background(), config); err == nil {
-		t.Fatal("CollectReport error = nil, want fail-closed without an assumer")
+	_, err := c.CollectReport(context.Background(), config)
+	if err == nil || !strings.Contains(err.Error(), "no assume-role implementation") {
+		t.Fatalf("CollectReport error = %v, want the nil-assumer guard error", err)
 	}
 }
 
-// TestCollectReportListsOnlyAllowlistedServices proves the orchestrator calls
-// exactly the configured service-region pairs: nothing outside the host
+// TestCollectReportAttributesAssumedVerifyFailure proves an identity-check
+// failure on assumed credentials names the assume step with the role, while
+// an ambient failure keeps the historical message with no attribution.
+func TestCollectReportAttributesAssumedVerifyFailure(t *testing.T) {
+	t.Parallel()
+
+	const role = "arn:aws:iam::111122223333:role/irsa-eshu-aws-collector-cross-account-role"
+	failingVerify := func(_ context.Context, _ aws.Config) (VerifiedIdentity, error) {
+		return VerifiedIdentity{}, errors.New("sts down")
+	}
+	workingLoader := map[string]Loader{
+		"ecs": func(_ context.Context, _ aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
+			return []collector.Record{{ID: "arn:cluster", Name: "cluster", Detail: "d"}}, nil
+		},
+	}
+	assumed := Config{
+		AccountID:  "111122223333",
+		Regions:    []string{"us-east-1"},
+		Services:   []string{"ecs"},
+		RoleARN:    role,
+		ExternalID: "eshu-ops-qa-collector",
+	}
+	c := Collector{
+		LoadConfig:     fakeConfig(&[]string{}),
+		VerifyIdentity: failingVerify,
+		AssumeRole: func(_ context.Context, base aws.Config, _, _ string) (aws.Config, error) {
+			return base, nil
+		},
+		Loaders: workingLoader,
+	}
+	_, err := c.CollectReport(context.Background(), assumed)
+	if err == nil || !strings.Contains(err.Error(), "after assuming "+role) {
+		t.Fatalf("CollectReport error = %v, want attribution to %s", err, role)
+	}
+
+	ambient := Config{
+		AccountID: "111122223333",
+		Regions:   []string{"us-east-1"},
+		Services:  []string{"ecs"},
+	}
+	cAmbient := Collector{
+		LoadConfig:     fakeConfig(&[]string{}),
+		VerifyIdentity: failingVerify,
+		Loaders:        workingLoader,
+	}
+	_, err = cAmbient.CollectReport(context.Background(), ambient)
+	if err == nil || strings.Contains(err.Error(), "after assuming") ||
+		!strings.Contains(err.Error(), "live AWS account verification failed for region us-east-1") {
+		t.Fatalf("CollectReport error = %v, want the historical ambient message", err)
+	}
+}

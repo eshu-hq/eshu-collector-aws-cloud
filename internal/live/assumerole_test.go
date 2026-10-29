@@ -88,6 +88,51 @@ func TestAssumeScopeRoleSendsExternalID(t *testing.T) {
 	}
 }
 
+// TestAssumeScopeRoleWrapperUsesStubEndpoint proves the production entry
+// point — not just the injectable helper — carries the scope role ARN,
+// external ID, and session name to STS and returns usable credentials.
+func TestAssumeScopeRoleWrapperUsesStubEndpoint(t *testing.T) {
+	t.Parallel()
+
+	const role = "arn:aws:iam::111122223333:role/irsa-eshu-aws-collector-cross-account-role"
+	var gotRole, gotExternal, gotSession string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("reading stub request: %v", err)
+			return
+		}
+		query, err := url.ParseQuery(string(body))
+		if err != nil {
+			t.Errorf("parsing stub request: %v", err)
+			return
+		}
+		gotRole, gotExternal, gotSession = query.Get("RoleArn"), query.Get("ExternalId"), query.Get("RoleSessionName")
+		w.Header().Set("Content-Type", "text/xml")
+		if _, err := io.WriteString(w, stubAssumeRoleResponse); err != nil {
+			t.Errorf("writing stub response: %v", err)
+		}
+	}))
+	t.Cleanup(server.Close)
+	base := stubBaseConfig()
+	base.BaseEndpoint = aws.String(server.URL)
+	assumed, err := AssumeScopeRole(context.Background(), base, role, "eshu-ops-qa-collector")
+	if err != nil {
+		t.Fatalf("AssumeScopeRole error = %v", err)
+	}
+	if gotRole != role || gotExternal != "eshu-ops-qa-collector" || gotSession != scopeSessionName {
+		t.Fatalf("STS request = %q %q %q, want scope role, external ID, session name",
+			gotRole, gotExternal, gotSession)
+	}
+	creds, err := assumed.Credentials.Retrieve(context.Background())
+	if err != nil {
+		t.Fatalf("Retrieve error = %v", err)
+	}
+	if creds.AccessKeyID != "ASSUMEDKEY" {
+		t.Fatalf("AccessKeyID = %q, want the stubbed assumed key", creds.AccessKeyID)
+	}
+}
+
 // TestAssumeScopeRoleFailsFast proves an STS denial fails the exchange here
 // with the role named, instead of surfacing later as generic verification
 // noise.

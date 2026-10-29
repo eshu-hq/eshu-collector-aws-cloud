@@ -260,14 +260,23 @@ func credentialScope(config map[string]any) (map[string]any, error) {
 	case map[string]any:
 		return value, nil
 	case []any:
-		// Multi-scope lists already fail closed in parseAccount before this
-		// runs; only the singleton element can carry credentials.
 		if len(value) == 1 {
 			scope, ok := value[0].(map[string]any)
 			if !ok {
 				return nil, nil
 			}
 			return scope, nil
+		}
+		// A multi-scope list carrying credentials anywhere fails closed
+		// here too, so the check does not depend on ParseConfig calling
+		// parseAccount first. (Via ParseConfig the account check fires
+		// first; this guards direct callers and reorderings.)
+		for _, entry := range value {
+			if scope, ok := entry.(map[string]any); ok {
+				if _, has := scope["credentials"]; has {
+					return nil, fmt.Errorf("config target_scopes lists %d scopes with credentials: one account per claim", len(value))
+				}
+			}
 		}
 		return nil, nil
 	default:

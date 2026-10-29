@@ -152,6 +152,15 @@ func TestParseConfigReadsMapShapeCredentials(t *testing.T) {
 	if _, err := ParseConfig(multi); err == nil {
 		t.Fatal("ParseConfig(multi-scope credentials) error = nil, want fail-closed")
 	}
+	// The multi-scope credentials check lives in credentialScope itself so
+	// it does not depend on ParseConfig's account-first ordering.
+	multiScopes := map[string]any{"target_scopes": []any{
+		map[string]any{"account_id": "111122223333", "credentials": creds},
+		map[string]any{"account_id": "444455556666"},
+	}}
+	if _, err := credentialScope(multiScopes); err == nil {
+		t.Fatal("credentialScope(multi-scope credentials) error = nil, want fail-closed")
+	}
 }
 
 // TestParseConfigAcceptsScopeVariants proves liberal scope shapes: a bare

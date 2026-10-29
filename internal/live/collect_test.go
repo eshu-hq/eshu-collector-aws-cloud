@@ -25,6 +25,8 @@ func verifiedIdentity(_ context.Context, _ aws.Config) (VerifiedIdentity, error)
 	return VerifiedIdentity{AccountID: "111122223333", Partition: "aws"}, nil
 }
 
+// TestCollectReportListsOnlyAllowlistedServices proves the orchestrator calls
+// exactly the configured service-region pairs: nothing outside the host
 // allowlists is ever read.
 func TestCollectReportListsOnlyAllowlistedServices(t *testing.T) {
 	t.Parallel()
