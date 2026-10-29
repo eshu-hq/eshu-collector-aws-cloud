@@ -181,19 +181,21 @@ directory is a repository root).
 
 Copy `config.example.yaml`. The collector reads one source document
 (`source.input`), emits against one credential-free `sourceURI`, and tracks
-freshness with `freshness.previousDigest`. Payload emission applies
-`ValidateShareSafeKeys`; anything sensitive must be redacted before emission
-(see `collector.go` and the redaction test).
+freshness with `freshness.previousDigest`. Generic payload paths apply
+`ValidateShareSafeKeys`. Typed `aws_resource` construction applies the SDK's
+fact-scoped payload validator so marked Lambda and ECS environment values can
+pass while raw values and unrelated sensitive keys remain denied.
 
 For live activations selecting Lambda or ECS, set
 `source.redactionKeyEnv: ESHU_AWS_REDACTION_KEY` and deliver that environment
 variable to the collector process through the host workload secret mechanism.
 The activation document holds only the fixed variable name. Missing, blank, or
 zero key material fails before AWS configuration or source reads; accepted
-bytes are used unchanged. The SDK rc.4 host validator still rejects redacted
-AWS environment maps keyed by sensitive names. This payload cannot be deployed
-until the validator exception is released, this collector pins that release,
-and the host is upgraded. Host key delivery and rollout remain unverified.
+bytes are used unchanged. The published SDK rc.4 pin lacks the fact-scoped
+validator and its host validator still rejects redacted AWS environment maps
+keyed by sensitive names. This bridge needs a released SDK version, an updated
+collector pin, and an upgraded host before it can be built or deployed. Host
+key delivery and rollout remain unverified.
 GetFunction and DescribeTaskDefinition errors retain the operation and a known
 AWS error class, without forwarding response messages into health logs.
 

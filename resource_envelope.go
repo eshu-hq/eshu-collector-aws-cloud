@@ -19,7 +19,8 @@ import (
 
 // NewResourceFact builds one typed aws_resource fact from a service observation.
 // Service scanners must redact sensitive values before constructing the
-// observation; this seam rejects sensitive-shaped payload keys and unsafe URIs.
+// observation; this seam applies the SDK's fact-scoped payload safety policy
+// and rejects unsafe URIs before returning the fact.
 func NewResourceFact(observation ResourceObservation) (sdk.Fact, error) {
 	if err := validateResourceBoundary(observation.Boundary); err != nil {
 		return sdk.Fact{}, err
@@ -73,19 +74,6 @@ func NewResourceFact(observation ResourceObservation) (sdk.Fact, error) {
 	if err != nil {
 		return sdk.Fact{}, fmt.Errorf("encode aws_resource payload: %w", err)
 	}
-	// Validate the JSON shape the host will receive. The SDK key walker only
-	// traverses map[string]any; tags and service fields may contain typed maps.
-	encodedPayload, err := json.Marshal(payload)
-	if err != nil {
-		return sdk.Fact{}, fmt.Errorf("encode aws_resource payload: %w", err)
-	}
-	var sharedPayload any
-	if err := json.Unmarshal(encodedPayload, &sharedPayload); err != nil {
-		return sdk.Fact{}, fmt.Errorf("decode aws_resource validation payload: %w", err)
-	}
-	if err := sdk.ValidateShareSafeKeys(sharedPayload); err != nil {
-		return sdk.Fact{}, fmt.Errorf("aws_resource payload contains unredacted sensitive key: %w", err)
-	}
 	observedAt := boundary.ObservedAt.UTC()
 	if observedAt.IsZero() {
 		observedAt = time.Now().UTC()
@@ -94,7 +82,7 @@ func NewResourceFact(observation ResourceObservation) (sdk.Fact, error) {
 	if recordID == "" {
 		recordID = resourceID
 	}
-	return sdk.Fact{
+	fact := sdk.Fact{
 		Kind:             AWSKindResource,
 		SchemaVersion:    "1.0.0",
 		StableKey:        stableKey,
@@ -109,7 +97,14 @@ func NewResourceFact(observation ResourceObservation) (sdk.Fact, error) {
 			RecordID:     recordID,
 		},
 		Payload: payload,
-	}, nil
+	}
+	// The SDK validates the emitted payload in its fact context. Its AWS
+	// exception admits only exact Lambda/ECS marker shapes; other sensitive
+	// fields retain the ordinary recursive denial rule.
+	if err := sdk.ValidateFactPayload(fact); err != nil {
+		return sdk.Fact{}, fmt.Errorf("aws_resource payload is not share-safe: %w", err)
+	}
+	return fact, nil
 }
 
 func validateResourceBoundary(boundary Boundary) error {
