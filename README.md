@@ -24,7 +24,8 @@ review). Keep internal helpers private.
 ## Emission contract
 
 `manifest.yaml` `spec.emittedFacts` declares `aws_resource`,
-`aws_relationship`, `aws_image_reference`, and `aws_warning` alongside three
+`aws_relationship`, `aws_image_reference`, `aws_warning`, and
+`ec2_instance_posture` alongside three
 transitional placeholder kinds (`collector-aws-cloud.snapshot/record/warning`).
 The live EC2 reader emits typed resource identity for VPCs, subnets, security
 groups and rules, network interfaces, instances, AMI identities, and volumes,
@@ -280,7 +281,8 @@ Core-owned fact kinds require a live #6709 producer grant naming this
 producer, version, kind, schema, and scope; namespaced kinds need none.
 The AWS issuance request set contains thirteen grants, one per core kind at
 schema `1.0.0`. The current manifest declares `aws_resource`,
-`aws_relationship`, `aws_image_reference`, and `aws_warning` alongside three transitional
+`aws_relationship`, `aws_image_reference`, `aws_warning`, and
+`ec2_instance_posture` alongside three transitional
 namespaced kinds.
 `TestManifestEmissionsAreAuthorized` fails when a declared kind is
 outside the collector's namespace and has no live grant scoped to a

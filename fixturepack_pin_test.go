@@ -107,7 +107,7 @@ func TestTrustedCoreKindConformance(t *testing.T) {
 	request := pinnedRequest(t, payload, map[string]json.RawMessage{"aws_resource": schema})
 	request.Manifest.Spec.EmittedFacts = request.Manifest.Spec.EmittedFacts[:len(request.Manifest.Spec.EmittedFacts)-1]
 	// This test isolates aws_resource; the shared conformance fixture covers
-	// all three declared core kinds.
+	// all declared core kinds.
 	families := request.Manifest.Spec.EmittedFacts[:0:0]
 	for _, family := range request.Manifest.Spec.EmittedFacts {
 		if family.Kind != AWSKindRelationship && family.Kind != AWSKindImageReference && family.Kind != AWSKindWarning && family.Kind != AWSKindEC2InstancePosture {

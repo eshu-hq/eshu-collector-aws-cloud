@@ -60,7 +60,8 @@ Source of truth for paths: `go/internal/collector/awscloud/` in
 ## Emission contract (planned AWS kinds)
 
 `Contract()` and `manifest.yaml` declare `aws_resource`,
-`aws_relationship`, `aws_image_reference`, and 3 transitional placeholder kinds
+`aws_relationship`, `aws_image_reference`, `aws_warning`,
+`ec2_instance_posture`, and 3 transitional placeholder kinds
 (`collector-aws-cloud.snapshot/record/warning`). The port will declare the
 remaining AWS kinds at `1.0.0` `reported` and:
 

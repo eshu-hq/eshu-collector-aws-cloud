@@ -47,8 +47,9 @@ const (
 // (go/internal/facts/cloud): nine base kinds plus the EC2, S3, RDS posture
 // and external-principal-grant families. Confidence is reported: the
 // in-tree AWS envelopes record facts returned by the AWS APIs as
-// facts.SourceConfidenceReported. Resource, relationship, and image reference
-// are declared in Contract() and manifest.yaml; the other ten follow their
+// facts.SourceConfidenceReported. Resource, relationship, image reference,
+// warning, and EC2 instance posture are declared in Contract() and
+// manifest.yaml; the other eight follow their
 // typed emitter ports and trusted host grant context (#8909).
 const (
 	AWSKindResource                 = "aws_resource"
@@ -66,8 +67,7 @@ const (
 	AWSKindS3ExternalPrincipalGrant = "s3_external_principal_grant"
 )
 
-// AWSKinds lists the core-owned AWS fact kinds for the logic port. Resource,
-// relationship, and image reference are declared alongside transitional kinds.
+// AWSKinds lists the core-owned AWS fact kinds for the logic port.
 var AWSKinds = []string{
 	AWSKindResource,
 	AWSKindRelationship,
@@ -170,7 +170,8 @@ type CollectOptions struct {
 	Limits ResourceUse
 }
 
-// Contract returns typed AWS resource, relationship, image-reference, and warning kinds
+// Contract returns typed AWS resource, relationship, image-reference, warning,
+// and EC2 instance posture kinds
 // alongside transitional families still emitted by the scaffold. The host must
 // authorize each core-owned kind with a live grant; synthetic fixture context
 // does not authorize production.

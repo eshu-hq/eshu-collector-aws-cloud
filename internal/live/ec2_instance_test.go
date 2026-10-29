@@ -60,6 +60,64 @@ func TestInstanceRecordRetainsLegacyIdentityObservation(t *testing.T) {
 	}
 }
 
+func TestInstancePosturePreservesReportedAndUnknownMetadata(t *testing.T) {
+	instance := ec2types.Instance{
+		InstanceId: aws.String("i-123"), PublicIpAddress: aws.String("198.51.100.7"),
+		EbsOptimized: aws.Bool(true),
+		MetadataOptions: &ec2types.InstanceMetadataOptionsResponse{
+			HttpTokens:              ec2types.HttpTokensStateRequired,
+			HttpEndpoint:            ec2types.InstanceMetadataEndpointStateEnabled,
+			HttpPutResponseHopLimit: aws.Int32(2),
+		},
+		Monitoring:         &ec2types.Monitoring{State: ec2types.MonitoringStatePending},
+		IamInstanceProfile: &ec2types.IamInstanceProfile{Arn: aws.String("arn:aws:iam::123456789012:instance-profile/example")},
+		Placement:          &ec2types.Placement{Tenancy: ec2types.TenancyDefault},
+		EnclaveOptions:     &ec2types.EnclaveOptions{Enabled: aws.Bool(true)},
+		BlockDeviceMappings: []ec2types.InstanceBlockDeviceMapping{{
+			DeviceName: aws.String("/dev/xvda"),
+			Ebs:        &ec2types.EbsInstanceBlockDevice{VolumeId: aws.String("vol-123"), DeleteOnTermination: aws.Bool(false), Status: ec2types.AttachmentStatusAttached},
+		}},
+	}
+	row := instanceRecord(instance, "us-east-1", VerifiedIdentity{AccountID: "123456789012", Partition: "aws"})
+	posture := row.EC2Posture
+	if posture == nil || posture.InstanceID != "i-123" || posture.ARN != row.Resource.ARN {
+		t.Fatalf("instance posture identity = %#v", posture)
+	}
+	if posture.IMDSv2Required == nil || !*posture.IMDSv2Required || posture.HTTPEndpoint != "enabled" || posture.HTTPPutResponseHopLimit == nil || *posture.HTTPPutResponseHopLimit != 2 {
+		t.Fatalf("IMDS posture = %#v", posture)
+	}
+	if !posture.DetailedMonitoring || !posture.EBSOptimized || !posture.PublicIPAssociated || posture.PublicIPAddress != "198.51.100.7" || posture.InstanceProfileARN != "arn:aws:iam::123456789012:instance-profile/example" || posture.Tenancy != "default" || !posture.NitroEnclaveEnabled {
+		t.Fatalf("derived posture = %#v", posture)
+	}
+	if posture.UserDataPresent != nil || len(posture.BlockDevices) != 1 || posture.BlockDevices[0].Encrypted != nil || posture.BlockDevices[0].VolumeID != "vol-123" || posture.BlockDevices[0].DeleteOnTermination || posture.BlockDevices[0].Status != "attached" {
+		t.Fatalf("unknown or block device posture = %#v", posture)
+	}
+	posture.Boundary = collector.Boundary{
+		AccountID: "123456789012", Region: "us-east-1", ServiceKind: "ec2",
+		ScopeID: "scope-1", GenerationID: "generation-1", CollectorInstanceID: "instance-1", ClaimToken: "fence-1",
+	}
+	posture.SourceURI = "aws://123456789012"
+	fact, err := collector.NewEC2InstancePostureFact(*posture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fact.Kind != collector.AWSKindEC2InstancePosture || fact.Payload["imds_v2_required"] != true || fact.Payload["detailed_monitoring_enabled"] != true || fact.Payload["imds_http_put_hop_limit"] != int32(2) {
+		t.Fatalf("typed posture payload = %#v", fact.Payload)
+	}
+	if _, present := fact.Payload["user_data_present"]; present {
+		t.Fatalf("unobserved user-data presence emitted = %#v", fact.Payload)
+	}
+	if devices, ok := fact.Payload["block_devices"].([]map[string]any); !ok || len(devices) != 1 || devices[0]["volume_id"] != "vol-123" || devices[0]["encrypted"] != nil {
+		t.Fatalf("typed block device payload = %#v", fact.Payload["block_devices"])
+	}
+	instance.MetadataOptions = nil
+	instance.BlockDeviceMappings = nil
+	unknown := instanceRecord(instance, "us-east-1", VerifiedIdentity{AccountID: "123456789012", Partition: "aws"}).EC2Posture
+	if unknown == nil || unknown.IMDSv2Required != nil || unknown.HTTPPutResponseHopLimit != nil || unknown.UserDataPresent != nil || len(unknown.BlockDevices) != 0 {
+		t.Fatalf("missing source metadata became observed posture = %#v", unknown)
+	}
+}
+
 func TestAppendInstanceRecordsDeduplicatesAMIIdentity(t *testing.T) {
 	identity := VerifiedIdentity{AccountID: "123456789012", Partition: "aws"}
 	seen := make(map[string]struct{})

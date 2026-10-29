@@ -49,7 +49,7 @@ spec:
         - reported
     # TRANSITIONAL placeholder families: emitted by the scaffold pipeline
     # until the AWS logic port lands (PORT_PLAN.md). The port removes these
-    # and declares the thirteen bare AWS kinds (schema 1.0.0, reported)
+    # and declares remaining bare AWS kinds (schema 1.0.0, reported)
     # after typed emission and trusted host grant context are ready (#8909).
     # The standalone SDK accepts these kinds through trusted CoreFacts;
     # fixture-only synthetic context does not grant production authority.

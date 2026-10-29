@@ -83,6 +83,9 @@ func NewEC2InstancePostureFact(observation EC2InstancePostureObservation) (sdk.F
 	if instanceID == "" && arn == "" {
 		return sdk.Fact{}, fmt.Errorf("EC2 posture requires instance_id or arn")
 	}
+	if strings.TrimSpace(observation.SourceURI) == "" {
+		return sdk.Fact{}, fmt.Errorf("EC2 posture requires source_uri")
+	}
 	if err := checkSourceURI(observation.SourceURI); err != nil {
 		return sdk.Fact{}, err
 	}
