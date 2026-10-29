@@ -52,9 +52,12 @@ Other errors fail the S3 read; a multi-service claim may return partial evidence
 when another service succeeds. Encryption and posture remain unknown pending
 detail reads. ECS DescribeClusters emits cluster identity, tags, status, and
 reported counts. DescribeServices emits service identity, tags, status, counts,
-task-definition binding, and load-balancer metadata. Tasks and task
-definitions remain placeholder records. ECR lifecycle policies and other AWS
-service readers still lack typed output. The full port removes
+task-definition binding, and load-balancer metadata. ECS tasks and task
+definitions remain placeholder records. EKS DescribeCluster emits typed cluster
+identity, status, tags, version, and reported control-plane metadata, including
+the OIDC issuer URL. IAM provider enrichment, nodegroups, add-ons, and EKS
+relationships remain deferred. ECR lifecycle policies and other AWS service
+readers still lack typed output. The full port removes
 those placeholders and declares the other core-owned AWS fact kinds at schema
 `1.0.0`, all with
 `reported` confidence (the in-tree AWS envelopes record facts returned by
