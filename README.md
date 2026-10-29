@@ -42,8 +42,8 @@ repository observations from DescribeRepositories and ListTagsForResource while
 retaining its repository placeholder record. ECR images and the other AWS
 service readers still produce placeholder records. Lambda function rows now
 also emit typed `aws_resource` identity and safe configuration metadata from
-ListFunctions. Function environment values, tags, and resolved image metadata
-are not emitted by this slice; the legacy GetFunction and keyed redaction path
+ListFunctions, including VPC and logging configuration. Function environment
+values, tags, and resolved image metadata are not emitted by this slice; the legacy GetFunction and keyed redaction path
 remain to be ported. The full port removes
 those placeholders and declares the other core-owned AWS fact kinds at schema
 `1.0.0`, all with
