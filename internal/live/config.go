@@ -265,11 +265,14 @@ func parseCredentials(config map[string]any, account string) (string, string, er
 	if !ok {
 		return "", "", fmt.Errorf("config target_scopes credentials must be an object")
 	}
-	mode, _ := creds["mode"].(string)
-	if mode != "central_assume_role" {
+	mode, ok := creds["mode"].(string)
+	if !ok || mode != "central_assume_role" {
 		return "", "", fmt.Errorf("config target_scopes credentials mode %q is not supported (want central_assume_role)", mode)
 	}
-	roleARN, _ := creds["role_arn"].(string)
+	roleARN, ok := creds["role_arn"].(string)
+	if !ok {
+		return "", "", fmt.Errorf("config target_scopes credentials role_arn must be a string")
+	}
 	roleARN = strings.TrimSpace(roleARN)
 	match := roleARNPattern.FindStringSubmatch(roleARN)
 	if match == nil || strings.TrimSpace(match[3]) == "" {
@@ -278,8 +281,8 @@ func parseCredentials(config map[string]any, account string) (string, string, er
 	if match[2] != account {
 		return "", "", fmt.Errorf("config target_scopes credentials role_arn account %q does not match scope account %q", match[2], account)
 	}
-	externalID, _ := creds["external_id"].(string)
-	if strings.TrimSpace(externalID) == "" {
+	externalID, ok := creds["external_id"].(string)
+	if !ok || strings.TrimSpace(externalID) == "" {
 		return "", "", fmt.Errorf("config target_scopes credentials external_id is required")
 	}
 	return roleARN, strings.TrimSpace(externalID), nil
