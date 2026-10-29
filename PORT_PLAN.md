@@ -12,8 +12,9 @@ GetBucketTagging reads. ECS DescribeClusters and DescribeServices emit typed
 cluster and service identity, tags, status, counts, task-definition binding,
 and load-balancer metadata. DescribeTasks emits typed task identity, status,
 containers, network-interface attachments, and reported runtime metadata.
-DescribeTaskDefinition emits safe scalar metadata and tags, with one additional
-read per listed ARN and a required `ecs:DescribeTaskDefinition` permission.
+DescribeTaskDefinition emits safe scalar metadata and tags, with one read
+per distinct listed or service-referenced ARN, including inactive revisions
+referenced by services. It requires `ecs:DescribeTaskDefinition` permission.
 Container definitions, environment values, secret references, image
 relationships, and ECS service/task relationships remain deferred. EKS
 DescribeCluster and DescribeNodegroup emit

@@ -13,7 +13,6 @@ import (
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	awsecr "github.com/aws/aws-sdk-go-v2/service/ecr"
 	ecrtypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
-	awsecs "github.com/aws/aws-sdk-go-v2/service/ecs"
 	awseks "github.com/aws/aws-sdk-go-v2/service/eks"
 	awselbv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	awslambda "github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -178,96 +177,6 @@ func listECR(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 					records = appendUniqueECRImageRecords(records, seenImages, aws.ToString(repository.RepositoryArn), aws.ToString(repository.RepositoryName), image, region)
 				}
 			}
-		}
-	}
-	return records, nil
-}
-
-// listECS mirrors the in-tree ecs scanner: clusters, services, tasks, and
-// task-definition ARNs. Task-definition bodies stay undescribed.
-func listECS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
-	client := awsecs.NewFromConfig(cfg)
-	region := cfg.Region
-	records := []collector.Record{}
-	clusters := awsecs.NewListClustersPaginator(client, &awsecs.ListClustersInput{})
-	for clusters.HasMorePages() {
-		page, err := clusters.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("ecs list clusters: %w", err)
-		}
-		for _, arn := range page.ClusterArns {
-			described, err := client.DescribeClusters(ctx, ecsClusterDescribeInput(arn))
-			if err != nil {
-				return nil, fmt.Errorf("ecs describe clusters: %w", err)
-			}
-			for _, cluster := range described.Clusters {
-				row := ecsClusterRecord(cluster, region)
-				if row.Resource == nil {
-					return nil, fmt.Errorf("ecs described cluster has no ARN")
-				}
-				records = append(records, row)
-			}
-			services := awsecs.NewListServicesPaginator(client, &awsecs.ListServicesInput{Cluster: aws.String(arn)})
-			for services.HasMorePages() {
-				servicePage, err := services.NextPage(ctx)
-				if err != nil {
-					return nil, fmt.Errorf("ecs list services: %w", err)
-				}
-				for _, chunk := range chunks(servicePage.ServiceArns, 10) {
-					described, err := client.DescribeServices(ctx, ecsServiceDescribeInput(arn, chunk))
-					if err != nil {
-						return nil, fmt.Errorf("ecs describe services: %w", err)
-					}
-					for _, service := range described.Services {
-						row := ecsServiceRecord(service, region)
-						if row.Resource == nil {
-							return nil, fmt.Errorf("ecs described service has no ARN")
-						}
-						records = append(records, row)
-					}
-				}
-			}
-			tasks := awsecs.NewListTasksPaginator(client, &awsecs.ListTasksInput{Cluster: aws.String(arn)})
-			for tasks.HasMorePages() {
-				taskPage, err := tasks.NextPage(ctx)
-				if err != nil {
-					return nil, fmt.Errorf("ecs list tasks: %w", err)
-				}
-				for _, chunk := range chunks(taskPage.TaskArns, 100) {
-					described, err := client.DescribeTasks(ctx, &awsecs.DescribeTasksInput{Cluster: aws.String(arn), Tasks: chunk})
-					if err != nil {
-						return nil, fmt.Errorf("ecs describe tasks: %w", err)
-					}
-					for _, task := range described.Tasks {
-						row := ecsTaskRecord(task, region)
-						if row.Resource == nil {
-							return nil, fmt.Errorf("ecs described task has no ARN")
-						}
-						records = append(records, row)
-					}
-				}
-			}
-		}
-	}
-	definitions := awsecs.NewListTaskDefinitionsPaginator(client, &awsecs.ListTaskDefinitionsInput{})
-	for definitions.HasMorePages() {
-		page, err := definitions.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("ecs list task definitions: %w", err)
-		}
-		for _, arn := range page.TaskDefinitionArns {
-			described, err := client.DescribeTaskDefinition(ctx, ecsTaskDefinitionDescribeInput(arn))
-			if err != nil {
-				return nil, fmt.Errorf("ecs describe task definition: %w", err)
-			}
-			if described == nil || described.TaskDefinition == nil {
-				return nil, fmt.Errorf("ecs described task definition has no body")
-			}
-			row := ecsTaskDefinitionRecord(arn, *described.TaskDefinition, described.Tags, region)
-			if row.Resource == nil {
-				return nil, fmt.Errorf("ecs described task definition has no matching ARN")
-			}
-			records = append(records, row)
 		}
 	}
 	return records, nil
