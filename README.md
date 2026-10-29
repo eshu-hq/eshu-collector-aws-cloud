@@ -194,6 +194,8 @@ bytes are used unchanged. The SDK rc.4 host validator still rejects redacted
 AWS environment maps keyed by sensitive names. This payload cannot be deployed
 until the validator exception is released, this collector pins that release,
 and the host is upgraded. Host key delivery and rollout remain unverified.
+GetFunction and DescribeTaskDefinition errors retain the operation and a known
+AWS error class, without forwarding response messages into health logs.
 
 ## Least-privilege credentials
 

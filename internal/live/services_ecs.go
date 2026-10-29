@@ -115,7 +115,7 @@ func collectECSTaskDefinition(ctx context.Context, client *awsecs.Client, record
 	}
 	described, err := client.DescribeTaskDefinition(ctx, ecsTaskDefinitionDescribeInput(arn))
 	if err != nil {
-		return nil, fmt.Errorf("ecs describe task definition: %w", err)
+		return nil, sensitiveReadError("ecs describe task definition", err)
 	}
 	if described == nil || described.TaskDefinition == nil {
 		return nil, fmt.Errorf("ecs described task definition has no body")

@@ -389,7 +389,7 @@ func listLambda(ctx context.Context, cfg aws.Config, key marker.Key) ([]collecto
 			}
 			getOutput, err := client.GetFunction(ctx, &awslambda.GetFunctionInput{FunctionName: aws.String(functionID)})
 			if err != nil {
-				return nil, fmt.Errorf("lambda get function: %w", err)
+				return nil, sensitiveReadError("lambda get function", err)
 			}
 			functionRecord, err := lambdaGetFunctionRecord(function, getOutput, region, key)
 			if err != nil {
