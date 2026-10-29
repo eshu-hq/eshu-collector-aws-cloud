@@ -54,3 +54,19 @@ func TestECSTaskRecordOmitsUnknownsAndRejectsMissingARN(t *testing.T) {
 		t.Fatal("missing ARN got typed identity")
 	}
 }
+
+func TestECSTaskNetworkInterfaceKeepsFirstReportedDetail(t *testing.T) {
+	attachments := []awsecstypes.Attachment{{
+		Type: aws.String("ElasticNetworkInterface"),
+		Details: []awsecstypes.KeyValuePair{
+			{Name: aws.String("networkInterfaceId"), Value: aws.String("eni-first")},
+			{Name: aws.String("networkInterfaceId"), Value: aws.String("eni-last")},
+			{Name: aws.String("subnetId"), Value: aws.String("subnet-first")},
+			{Name: aws.String("subnetId"), Value: aws.String("subnet-last")},
+		},
+	}}
+	interfaces, ids := ecsTaskNetworkInterfaces(attachments)
+	if len(interfaces) != 1 || interfaces[0]["network_interface_id"] != "eni-first" || interfaces[0]["subnet_id"] != "subnet-first" || len(ids) != 1 || ids[0] != "eni-first" {
+		t.Fatalf("duplicate attachment details changed first reported value: interfaces=%+v ids=%+v", interfaces, ids)
+	}
+}
