@@ -42,15 +42,14 @@ const (
 	FactKindWarning = "collector-aws-cloud.warning"
 )
 
-// AWS fact kinds this collector will emit at schema 1.0.0 once the logic
-// port lands. They mirror the in-tree AWS family declarations
+// AWS fact kinds this collector emits or plans to emit at schema 1.0.0.
+// They mirror the in-tree AWS family declarations
 // (go/internal/facts/cloud): nine base kinds plus the EC2, S3, RDS posture
 // and external-principal-grant families. Confidence is reported: the
 // in-tree AWS envelopes record facts returned by the AWS APIs as
-// facts.SourceConfidenceReported. These kinds are not in Contract() or
-// manifest.yaml yet: the placeholder pipeline emits only namespaced kinds.
-// Declaration follows the typed emitter port and a trusted host grant
-// snapshot supplied to SDK conformance (#8909).
+// facts.SourceConfidenceReported. Resource and relationship are already
+// declared in Contract() and manifest.yaml; the other eleven follow their
+// typed emitter ports and trusted host grant context (#8909).
 const (
 	AWSKindResource                 = "aws_resource"
 	AWSKindRelationship             = "aws_relationship"
@@ -67,9 +66,9 @@ const (
 	AWSKindS3ExternalPrincipalGrant = "s3_external_principal_grant"
 )
 
-// AWSKinds lists the core-owned AWS fact kinds planned for the logic port.
-// The placeholder pipeline does not emit them, and manifest.yaml still
-// declares only its transitional namespaced kinds.
+// AWSKinds lists the core-owned AWS fact kinds for the logic port. Resource
+// and relationship are declared alongside transitional namespaced kinds;
+// the other eleven remain planned.
 var AWSKinds = []string{
 	AWSKindResource,
 	AWSKindRelationship,

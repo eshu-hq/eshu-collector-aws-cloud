@@ -25,9 +25,10 @@ Source of truth for paths: `go/internal/collector/awscloud/` in
 
 ## Emission contract (planned AWS kinds)
 
-`Contract()` and `manifest.yaml` declare `aws_resource` and 3 transitional
-placeholder kinds (`collector-aws-cloud.snapshot/record/warning`). The port
-will declare the remaining AWS kinds at `1.0.0` `reported` and:
+`Contract()` and `manifest.yaml` declare `aws_resource`,
+`aws_relationship`, and 3 transitional placeholder kinds
+(`collector-aws-cloud.snapshot/record/warning`). The port will declare the
+remaining AWS kinds at `1.0.0` `reported` and:
 
 1. Ports the envelopes below so `Collect` emits the 13 AWS kinds.
 2. Deletes the 3 transitional kinds from `Contract()`, `manifest.yaml`,
@@ -75,28 +76,32 @@ importable only inside this module, satisfying `boundary_test.go`).
 - Every ported envelope keeps: stable keys, scope+generation binding,
   credential-free URIs, secret redaction with recorded reason, terminal
   (not unbounded) budget breaches, idempotent re-emission.
-- Grants: 13 live core-issued grants must exist before hosted emission;
-  `TestManifestEmissionsAreAuthorized` + `TestGrantExamplesCoverAWSKinds`
-  fail closed until they do. Issuance is a coordinator step, not a repo step.
+- Grants: the two currently declared core kinds need live core-issued grants
+  before hosted emission. All 13 need grants when their kinds are declared.
+  The grant tests check the example requests and manifest coverage; they do
+  not prove host issuance. Issuance is a coordinator step, not a repo step.
 
 ## Ordering
 
 1. Helpers (`types`, `partition`, `redaction`, `scan_status`) + boundary green.
-2. Grant issuance (13, grant-first-then-install: core `install`/`verify`
-   accept granted core kinds before the manifest declares them).
+2. Grant issuance (grant-first-then-install: core `install`/`verify`
+   accept granted core kinds). The current manifest already declares two
+   core kinds, so both need grants before hosted installation.
 3. Complete trusted `CoreFacts` host integration (#8909), grant the exact
-   producer/kind/schema/collector-kind tuples, then declare the 13 bare AWS
-   kinds in `Contract()` + `manifest.yaml`. The standalone SDK supports this
-   mechanism; its fixture-only synthetic context is not a live grant.
+   producer/kind/schema/collector-kind tuples, then declare the remaining
+   eleven bare AWS kinds in `Contract()` + `manifest.yaml` as their emitters
+   land. The standalone SDK supports this mechanism; its fixture-only
+   synthetic context is not a live grant.
 4. Complete the typed base envelope (`aws_resource`) in claim-bound collection:
    the first EC2 identity slice is wired with fail-closed missing-ID handling
-   and the legacy rule-ID fallback; VPC, subnet, and volume observations carry
-   state, tags, and their describe-response attributes. Instance identity
+   and the legacy rule-ID fallback; VPC, subnet, security-group, and volume
+   observations carry state, tags, and their describe-response attributes.
+   Security groups retain group-ID/name correlation anchors. Instance identity
    observations carry state, launch AMI ID, and an ARN from the verified STS
-   account and partition. Volume ARNs and KMS links use that same identity.
-   Other EC2 attributes and relationships, other services, real host grant
-   proof, and replacement of placeholder
-   conformance fixtures remain.
+   account and partition. Volume ARNs and KMS links use that same identity;
+   subnet-to-VPC relationships are also emitted. Remaining EC2 attributes and
+   relationships, other services, real host grant proof, and replacement of
+   placeholder conformance fixtures remain.
 5. Remaining envelopes kind by kind; delete transitional kinds last.
 6. `awsruntime` + `service/` scanners service by service.
 7. `recordpolicy` / `freshness` / `catalog` / `checkpoint` integration.

@@ -155,8 +155,8 @@ func TestGrantExampleScopeIsCollectorKind(t *testing.T) {
 }
 
 // TestGrantExamplesCoverAWSKinds proves the checked-in examples cover every
-// planned core-owned AWS kind. It also checks that the current manifest's
-// transitional emissions need no grant.
+// planned core-owned AWS kind. It also checks that declared core kinds have
+// example grants and transitional emissions need none.
 func TestGrantExamplesCoverAWSKinds(t *testing.T) {
 	t.Parallel()
 
