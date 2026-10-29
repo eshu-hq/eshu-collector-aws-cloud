@@ -138,10 +138,13 @@ legacy `alias_count`, `grant_count`, `policy_revision_names`, and
 read requires `kms:ListKeys` and `kms:DescribeKey`, with one DescribeKey
 call per nonblank listed key ID; live IAM access and call cost remain unverified.
 The IAM reader emits typed `aws_iam_role` resources from ListRoles, GetRole,
-ListAttachedRolePolicies, and ListRolePolicies. It binds each ARN to the
-STS-verified account and partition, and retains role path, policy references,
-permissions boundary, and trust-policy presence. Raw trust documents and
-normalized permission statements are excluded. A missing GetRole detail uses
+ListAttachedRolePolicies, and ListRolePolicies. It binds each regionless
+role ARN to the STS-verified account and partition, and its suffix to the
+reported role name. The typed role fact uses the legacy `aws-global` boundary
+while the configured region still selects the AWS endpoint and STS verification.
+It retains role path, policy references, permissions boundary, and trust-policy
+presence. Raw trust documents and normalized permission statements are excluded.
+A missing GetRole detail uses
 the listed role; read errors fail the IAM service. Enrichment adds at least
 three reads per listed role, with pagination possibly adding more. Live IAM
 access and request cost remain unverified. Other service readers remain partial

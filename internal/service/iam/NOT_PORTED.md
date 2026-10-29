@@ -1,6 +1,13 @@
 # NOT_PORTED.md — `internal/service/iam`
 
-Ported: `doc.go`, `types.go`. The live loader also emits a typed `aws_iam_role` resource from `ListRoles`, `GetRole`, `ListAttachedRolePolicies`, and `ListRolePolicies`. It retains role ARN/name/path, policy names/ARNs, permissions-boundary metadata, and trust-policy presence. The ARN must match the STS-verified account and partition. The raw trust document is never emitted.
+Ported: `doc.go`, `types.go`. The live loader also emits a typed
+`aws_iam_role` resource from `ListRoles`, `GetRole`,
+`ListAttachedRolePolicies`, and `ListRolePolicies`. It retains role ARN,
+name, path, policy references, permissions-boundary metadata, and trust-policy
+presence. The regionless ARN must match the STS-verified account and partition;
+its role suffix must match the reported name. The typed resource uses the legacy
+`aws-global` boundary even when endpoint and STS reads use a configured region.
+The raw trust document is never emitted.
 
 ## Remaining role gaps
 

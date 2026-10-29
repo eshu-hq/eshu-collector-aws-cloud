@@ -9,10 +9,12 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsiam "github.com/aws/aws-sdk-go-v2/service/iam"
 	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
+	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 )
 
 func TestIAMRoleRecordUsesVerifiedIdentityAndSafeMetadata(t *testing.T) {
@@ -24,7 +26,7 @@ func TestIAMRoleRecordUsesVerifiedIdentityAndSafeMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Resource == nil || got.Resource.ResourceType != "aws_iam_role" || got.Resource.ResourceID != arn || got.Resource.ARN != arn || got.Resource.Name != "demo" {
+	if got.Resource == nil || got.Resource.ResourceType != "aws_iam_role" || got.Resource.ResourceID != arn || got.Resource.ARN != arn || got.Resource.Name != "demo" || got.Resource.Region != "aws-global" {
 		t.Fatalf("role identity = %+v", got.Resource)
 	}
 	if got.Resource.Attributes["path"] != "/team/" || got.Resource.Attributes["trust_policy_present"] != true || got.Resource.Attributes["attached_policy_arns"] == nil || got.Resource.Attributes["inline_policy_names"] == nil {
@@ -57,6 +59,7 @@ func (f *fakeIAMRoleAPI) ListRoles(_ context.Context, _ *awsiam.ListRolesInput, 
 	f.calls = append(f.calls, "ListRoles")
 	return &awsiam.ListRolesOutput{Roles: []iamtypes.Role{f.listed}}, nil
 }
+
 func (f *fakeIAMRoleAPI) GetRole(_ context.Context, _ *awsiam.GetRoleInput, _ ...func(*awsiam.Options)) (*awsiam.GetRoleOutput, error) {
 	f.calls = append(f.calls, "GetRole")
 	if f.getErr != nil {
@@ -64,6 +67,7 @@ func (f *fakeIAMRoleAPI) GetRole(_ context.Context, _ *awsiam.GetRoleInput, _ ..
 	}
 	return &awsiam.GetRoleOutput{Role: f.detail}, nil
 }
+
 func (f *fakeIAMRoleAPI) ListAttachedRolePolicies(_ context.Context, _ *awsiam.ListAttachedRolePoliciesInput, _ ...func(*awsiam.Options)) (*awsiam.ListAttachedRolePoliciesOutput, error) {
 	f.calls = append(f.calls, "ListAttachedRolePolicies")
 	if f.attachedErr != nil {
@@ -71,6 +75,7 @@ func (f *fakeIAMRoleAPI) ListAttachedRolePolicies(_ context.Context, _ *awsiam.L
 	}
 	return &awsiam.ListAttachedRolePoliciesOutput{AttachedPolicies: []iamtypes.AttachedPolicy{{PolicyArn: aws.String("arn:aws:iam::123456789012:policy/read")}}}, nil
 }
+
 func (f *fakeIAMRoleAPI) ListRolePolicies(_ context.Context, _ *awsiam.ListRolePoliciesInput, _ ...func(*awsiam.Options)) (*awsiam.ListRolePoliciesOutput, error) {
 	f.calls = append(f.calls, "ListRolePolicies")
 	return &awsiam.ListRolePoliciesOutput{PolicyNames: []string{"inline-read"}}, nil
@@ -122,5 +127,74 @@ func TestIAMRoleTrustPolicyShapeMatchesLegacy(t *testing.T) {
 	detail.AssumeRolePolicyDocument = aws.String("secret-invalid-{json")
 	if _, err := iamRoleRecord(listed, &detail, nil, nil, "us-east-1", identity); err == nil || strings.Contains(err.Error(), "secret-invalid") {
 		t.Fatalf("malformed trust must fail without raw value: %v", err)
+	}
+}
+
+func TestIAMRoleRecordRejectsRegionalARNAndMismatchedName(t *testing.T) {
+	identity := VerifiedIdentity{AccountID: "123456789012", Partition: "aws"}
+	listed := iamtypes.Role{Arn: aws.String("arn:aws:iam::123456789012:role/team/demo"), RoleName: aws.String("demo")}
+	for _, test := range []struct {
+		name   string
+		listed iamtypes.Role
+		detail *iamtypes.Role
+	}{
+		{name: "regional ARN", listed: iamtypes.Role{Arn: aws.String("arn:aws:iam:us-east-1:123456789012:role/team/demo"), RoleName: aws.String("demo")}},
+		{name: "wrong ARN suffix", listed: iamtypes.Role{Arn: aws.String("arn:aws:iam::123456789012:role/team/other"), RoleName: aws.String("demo")}},
+		{name: "wrong detail name", listed: listed, detail: &iamtypes.Role{Arn: listed.Arn, RoleName: aws.String("other")}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := iamRoleRecord(test.listed, test.detail, nil, nil, "us-east-1", identity); err == nil {
+				t.Fatal("unbound IAM role identity accepted")
+			}
+		})
+	}
+}
+
+func TestCollectReportKeepsIAMRoleGlobalAndS3Regional(t *testing.T) {
+	const account = "123456789012"
+	const roleARN = "arn:aws:iam::123456789012:role/team/demo"
+	const bucketARN = "arn:aws:s3:::assets"
+	reader := Collector{
+		LoadConfig: func(_ context.Context, region string) (aws.Config, error) { return aws.Config{Region: region}, nil },
+		VerifyIdentity: func(context.Context, aws.Config) (VerifiedIdentity, error) {
+			return VerifiedIdentity{AccountID: account, Partition: "aws"}, nil
+		},
+		Loaders: map[string]Loader{
+			"iam": func(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]collector.Record, error) {
+				api := &fakeIAMRoleAPI{listed: iamtypes.Role{Arn: aws.String(roleARN), RoleName: aws.String("demo")}}
+				return listIAMRoleRecords(ctx, api, cfg.Region, identity)
+			},
+			"s3": func(_ context.Context, cfg aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
+				row := record(bucketARN, "s3", cfg.Region, "assets", "bucket")
+				row.Resource = &collector.LiveResource{Region: cfg.Region, ServiceKind: "s3", ResourceType: "aws_s3_bucket", ResourceID: bucketARN, ARN: bucketARN}
+				return []collector.Record{row}, nil
+			},
+		},
+	}
+	outcome, err := reader.CollectReport(context.Background(), Config{AccountID: account, Regions: []string{"us-east-1"}, Services: []string{"iam", "s3"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outcome.Resources) != 2 || outcome.Resources[0].Boundary.Region != "aws-global" || outcome.Resources[0].Boundary.ServiceKind != "iam" || outcome.Resources[1].Boundary.Region != "us-east-1" || outcome.Resources[1].Boundary.ServiceKind != "s3" {
+		t.Fatalf("resource boundaries: %+v", outcome.Resources)
+	}
+	role := outcome.Resources[0]
+	role.Boundary.ScopeID = "scope-1"
+	role.Boundary.GenerationID = "generation-1"
+	role.Boundary.CollectorInstanceID = "aws-cloud-primary"
+	role.Boundary.ClaimToken = "fence-1"
+	role.Boundary.ObservedAt = time.Now().UTC()
+	role.SourceURI = "aws://123456789012"
+	globalFact, err := collector.NewResourceFact(role)
+	if err != nil {
+		t.Fatal(err)
+	}
+	role.Boundary.Region = "us-east-1"
+	regionalFact, err := collector.NewResourceFact(role)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if globalFact.Payload["region"] != "aws-global" || globalFact.StableKey == regionalFact.StableKey {
+		t.Fatalf("IAM stable key lost global boundary: global=%+v regional=%+v", globalFact, regionalFact)
 	}
 }

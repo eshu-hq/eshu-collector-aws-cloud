@@ -106,16 +106,23 @@ func iamRoleRecord(listed iamtypes.Role, detail *iamtypes.Role, attached, inline
 	if arn == "" {
 		arn = strings.TrimSpace(aws.ToString(listed.Arn))
 	}
+	name := strings.TrimSpace(aws.ToString(listed.RoleName))
+	if name == "" {
+		return collector.Record{}, fmt.Errorf("iam role has no name")
+	}
 	parsed, err := awsarn.Parse(arn)
-	if err != nil || parsed.Service != "iam" || !strings.HasPrefix(parsed.Resource, "role/") || parsed.AccountID != identity.AccountID || parsed.Partition != identity.Partition {
-		return collector.Record{}, fmt.Errorf("iam role ARN does not match verified account and partition")
+	if err != nil || parsed.Service != "iam" || parsed.Region != "" || !strings.HasPrefix(parsed.Resource, "role/") ||
+		parsed.AccountID != identity.AccountID || parsed.Partition != identity.Partition ||
+		parsed.Resource[strings.LastIndex(parsed.Resource, "/")+1:] != name {
+		return collector.Record{}, fmt.Errorf("iam role ARN does not match verified account, partition, or role name")
 	}
 	if listedARN := strings.TrimSpace(aws.ToString(listed.Arn)); listedARN != "" && listedARN != arn {
 		return collector.Record{}, fmt.Errorf("iam role detail ARN differs from listed ARN")
 	}
-	name := strings.TrimSpace(aws.ToString(listed.RoleName))
-	if name == "" {
-		return collector.Record{}, fmt.Errorf("iam role has no name")
+	if detail != nil {
+		if detailName := strings.TrimSpace(aws.ToString(detail.RoleName)); detailName != "" && detailName != name {
+			return collector.Record{}, fmt.Errorf("iam role detail name differs from listed name")
+		}
 	}
 	path := strings.TrimSpace(aws.ToString(role.Path))
 	if path == "" {
@@ -138,8 +145,12 @@ func iamRoleRecord(listed iamtypes.Role, detail *iamtypes.Role, attached, inline
 		attrs["permission_boundary_type"] = strings.TrimSpace(string(role.PermissionsBoundary.PermissionsBoundaryType))
 	}
 	row := record(arn, "iam", region, name, "role")
-	row.Resource = &collector.LiveResource{Region: region, ServiceKind: "iam", ResourceType: "aws_iam_role", ResourceID: arn, ARN: arn, Name: name,
-		Attributes: attrs, CorrelationAnchors: []string{arn, name}, SourceRecordID: arn}
+	// IAM uses the configured region for its endpoint and STS verification,
+	// but the role fact keeps the legacy account-global boundary and stable key.
+	row.Resource = &collector.LiveResource{
+		Region: "aws-global", ServiceKind: "iam", ResourceType: "aws_iam_role", ResourceID: arn, ARN: arn, Name: name,
+		Attributes: attrs, CorrelationAnchors: []string{arn, name}, SourceRecordID: arn,
+	}
 	return row, nil
 }
 
