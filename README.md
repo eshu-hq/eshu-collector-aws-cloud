@@ -49,6 +49,10 @@ The S3 reader emits typed bucket identity, region, and creation time from
 regional ListBuckets. It verifies the expected owner with HeadBucket and
 reads tags through GetBucketTagging. Only NoSuchTagSet means an empty tag set.
 GetBucketEncryption adds reported algorithms, KMS key IDs, and bucket-key state.
+GetBucketVersioning and GetPublicAccessBlock add the reported bucket-level
+versioning and public-access settings. An absent public-access-block
+configuration leaves its four flags unknown. These reads require the
+corresponding S3 permissions; their live cost and access are not yet verified.
 The explicit missing-configuration response means a known empty configuration.
 AccessDenied leaves those attributes absent, retains the bucket, emits a typed
 warning for that bucket, and makes the SDK result partial. Other S3 errors

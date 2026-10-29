@@ -118,6 +118,13 @@ func listS3WithAPI(ctx context.Context, client s3BucketAPI, region string, ident
 				return nil, err
 			}
 			row.Resource.Tags = tags
+			posture, err := readS3BucketPosture(ctx, client, aws.ToString(bucket.Name), identity.AccountID)
+			if err != nil {
+				return nil, err
+			}
+			for key, value := range posture {
+				row.Resource.Attributes[key] = value
+			}
 			encryption, denied, err := readS3BucketEncryption(ctx, client, aws.ToString(bucket.Name), identity.AccountID)
 			if err != nil {
 				return nil, err
