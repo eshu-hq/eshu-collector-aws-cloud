@@ -146,17 +146,19 @@ importable only inside this module, satisfying `boundary_test.go`).
    from the legacy policy_text attribute. Missing policies emit no resource;
    denied reads fail the ECR service. The added call is one per repository
    and requires `ecr:GetLifecyclePolicy`; its live IAM grant and call cost
-   remain unverified. Lambda ListFunctions
-   rows emit typed function identity and safe configuration metadata, including VPC and logging
-   configuration. GetFunction tags, resolved image metadata, environment
-   redaction, aliases, event-source mappings, and Lambda relationships remain
-   deferred. S3 buckets emit typed identity, listed region, and creation time
-   from region-filtered ListBuckets. HeadBucket verifies the expected owner,
-   and GetBucketTagging supplies tags. Only NoSuchTagSet means an empty tag set.
-   Other errors fail the S3 read; a multi-service claim may be partial when
-   another service succeeds. Encryption, access controls, posture, and
-   policy facts await separate detail reads. Missing encryption is not
-   treated as disabled.
+   remain unverified. Lambda ListFunctions rows use one GetFunction read per
+   function for safe configuration and source KMS key metadata. Validated ECR
+   image URIs emit a function-to-image relationship; aliases and event-source
+   mappings also emit, with reviewed mapping denials marked partial. Environment
+   values, tags, and presigned package URLs stay excluded. The added read
+   requires `lambda:GetFunction`; live IAM access and cost remain unverified.
+   S3 buckets emit typed identity, listed region, creation time, and tags after
+   HeadBucket owner verification and GetBucketTagging. GetBucketEncryption,
+   GetBucketVersioning, and GetPublicAccessBlock add bounded bucket metadata.
+   Encryption denial retains the bucket with unknown encryption and a partial
+   result. Versioning and public-access-block errors fail the S3 read; a
+   multi-service claim may still be partial when another service succeeds.
+   The separate typed posture and policy facts remain deferred.
 5. Remaining envelopes kind by kind; delete transitional kinds last.
 6. `awsruntime` + `service/` scanners service by service.
 7. `recordpolicy` / `freshness` / `catalog` / `checkpoint` integration.
