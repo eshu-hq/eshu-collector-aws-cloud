@@ -185,6 +185,12 @@ resource and reported ACM certificate and WAF web ACL relationships from
 Origin metadata retains custom header names without values. Tags are not
 observed because `ListTagsForResource` is a separate read.
 
+The SNS reader emits `sns_topic_delivers_to_resource` relationships for
+subscriptions whose reported endpoint is an ARN. SQS and Lambda endpoints
+retain typed targets; other ARN endpoints use a generic AWS target. Email,
+phone, and HTTP(S) endpoint values are excluded. Topic attributes and tags
+remain unobserved because those require separate API reads.
+
 The remaining bare AWS kinds stay out of the manifest until their typed
 emitters are ported and the host supplies a trusted grant snapshot to
 conformance (#8909).

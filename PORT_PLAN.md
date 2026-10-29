@@ -59,6 +59,10 @@ and reported ACM/WAF relationships at `aws-global` without additional API
 reads. Origin metadata keeps custom header names without values; tags remain
 unobserved. Other service port and deployment proof remain in progress.
 
+The SNS `ListSubscriptionsByTopic` slice emits typed topic-to-resource edges
+only for ARN endpoints returned by that call. Email, phone, and HTTP(S)
+endpoints are omitted; topic attributes and tags remain outside this slice.
+
 ## Identity (done in scaffold)
 
 | In-tree | Standalone |
