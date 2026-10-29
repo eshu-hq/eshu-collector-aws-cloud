@@ -54,8 +54,10 @@ detail reads. ECS DescribeClusters emits cluster identity, tags, status, and
 reported counts; services, tasks, and task definitions remain placeholder
 records. EKS DescribeCluster now emits typed cluster identity, status, tags,
 version and control-plane metadata from that response, including the reported
-OIDC issuer URL. IAM provider enrichment, nodegroups, add-ons, and EKS
-relationships remain unported. ECR lifecycle policies and other AWS service
+OIDC issuer URL. EKS DescribeNodegroup emits managed nodegroup identity,
+status, tags, version, AMI and capacity type, node role, network placement,
+and scaling counts. IAM provider enrichment, add-ons, and EKS relationships
+remain unported. ECR lifecycle policies and other AWS service
 readers still lack typed output. The full port removes
 those placeholders and declares the other core-owned AWS fact kinds at schema
 `1.0.0`, all with

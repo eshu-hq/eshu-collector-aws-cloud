@@ -10,8 +10,10 @@ DescribeImages; the regional S3 ListBuckets reader emits bucket identity,
 reported region and creation time, and tags after HeadBucket and
 GetBucketTagging reads. ECS DescribeClusters emits typed cluster identity,
 tags, status, and reported counts. EKS DescribeCluster emits typed cluster
-identity, status, tags, version, and reported control-plane metadata. IAM OIDC
-provider enrichment, nodegroups, add-ons and EKS relationships remain unported.
+identity, status, tags, version, and reported control-plane metadata. EKS
+DescribeNodegroup emits typed managed nodegroup identity, status, tags, version,
+AMI and capacity type, node role, network placement, and scaling counts. IAM
+OIDC provider enrichment, add-ons, and EKS relationships remain unported.
 ECS services, tasks, and task definitions, remaining bucket detail and posture
 reads, lifecycle policy facts, and the full scanner port remain unfinished. This plan
 maps the remaining in-tree implementation to standalone locations. No live AWS

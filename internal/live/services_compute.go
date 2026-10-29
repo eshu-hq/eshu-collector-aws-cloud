@@ -291,7 +291,11 @@ func listEKS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 						return nil, fmt.Errorf("eks describe nodegroup: %w", err)
 					}
 					if described.Nodegroup != nil {
-						records = append(records, record(aws.ToString(described.Nodegroup.NodegroupArn), "eks", region, aws.ToString(described.Nodegroup.NodegroupName), "nodegroup"))
+						row, mapErr := eksNodegroupRecord(*described.Nodegroup, region)
+						if mapErr != nil {
+							return nil, mapErr
+						}
+						records = append(records, row)
 					}
 				}
 			}
