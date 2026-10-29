@@ -109,7 +109,7 @@ func TestTrustedCoreKindConformance(t *testing.T) {
 	// This test isolates aws_resource; the shared conformance fixture covers both core kinds.
 	families := request.Manifest.Spec.EmittedFacts[:0:0]
 	for _, family := range request.Manifest.Spec.EmittedFacts {
-		if family.Kind != AWSKindRelationship {
+		if family.Kind != AWSKindRelationship && family.Kind != AWSKindImageReference {
 			families = append(families, family)
 		}
 	}

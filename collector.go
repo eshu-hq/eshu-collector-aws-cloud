@@ -48,7 +48,7 @@ const (
 // and external-principal-grant families. Confidence is reported: the
 // in-tree AWS envelopes record facts returned by the AWS APIs as
 // facts.SourceConfidenceReported. Resource and relationship are already
-// declared in Contract() and manifest.yaml; the other eleven follow their
+// declared in Contract() and manifest.yaml; the other ten follow their
 // typed emitter ports and trusted host grant context (#8909).
 const (
 	AWSKindResource                 = "aws_resource"
@@ -66,9 +66,8 @@ const (
 	AWSKindS3ExternalPrincipalGrant = "s3_external_principal_grant"
 )
 
-// AWSKinds lists the core-owned AWS fact kinds for the logic port. Resource
-// and relationship are declared alongside transitional namespaced kinds;
-// the other eleven remain planned.
+// AWSKinds lists the core-owned AWS fact kinds for the logic port. Resource,
+// relationship, and image reference are declared alongside transitional kinds.
 var AWSKinds = []string{
 	AWSKindResource,
 	AWSKindRelationship,
@@ -102,6 +101,8 @@ type Record struct {
 	// Resource carries typed metadata from a live AWS read. The placeholder
 	// report format does not accept it from a file.
 	Resource *LiveResource `json:"-"`
+	// ImageReference carries a typed image digest and tag from DescribeImages.
+	ImageReference *LiveImageReference `json:"-"`
 	// Relationship carries one typed edge from a live AWS read.
 	Relationship *LiveRelationship `json:"-"`
 	// Relationships carries multiple typed edges from one live AWS read.
@@ -129,6 +130,15 @@ type LiveResource struct {
 	CorrelationAnchors []string
 	// SourceRecordID preserves a source-specific record key when it differs from the resource ID.
 	SourceRecordID string
+}
+
+// LiveImageReference is one ECR image digest and tag reported by DescribeImages.
+type LiveImageReference struct {
+	Region, ServiceKind, RepositoryARN, RepositoryName, RegistryID string
+	ImageDigest, ManifestDigest, Tag                               string
+	PushedAt                                                       time.Time
+	ImageSizeInBytes                                               int64
+	ManifestMediaType, ArtifactMediaType                           string
 }
 
 // LiveRelationship is one relationship returned by a live AWS read.
@@ -187,6 +197,11 @@ func Contract() sdk.Contract {
 			},
 			{
 				Kind:             AWSKindRelationship,
+				SchemaVersions:   []string{"1.0.0"},
+				SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceReported},
+			},
+			{
+				Kind:             AWSKindImageReference,
 				SchemaVersions:   []string{"1.0.0"},
 				SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceReported},
 			},

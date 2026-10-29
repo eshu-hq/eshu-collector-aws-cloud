@@ -50,8 +50,9 @@ type Outcome struct {
 	Report   collector.Report
 	Warnings []string
 	// Resources are typed observations retained from successful AWS reads.
-	Resources     []collector.ResourceObservation
-	Relationships []collector.RelationshipObservation
+	Resources       []collector.ResourceObservation
+	Relationships   []collector.RelationshipObservation
+	ImageReferences []collector.ImageReferenceObservation
 }
 
 func (c Collector) now() time.Time {
@@ -86,6 +87,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 	warnings := []string{}
 	resources := []collector.ResourceObservation{}
 	relationships := []collector.RelationshipObservation{}
+	imageReferences := []collector.ImageReferenceObservation{}
 	for i, region := range config.Regions {
 		cfg, err := c.loadConfig(ctx, region)
 		if err != nil {
@@ -129,6 +131,15 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 				for _, edge := range item.Relationships {
 					relationships = append(relationships, relationshipObservation(config.AccountID, edge))
 				}
+				if image := item.ImageReference; image != nil {
+					imageReferences = append(imageReferences, collector.ImageReferenceObservation{
+						Boundary:      collector.Boundary{AccountID: config.AccountID, Region: image.Region, ServiceKind: image.ServiceKind},
+						RepositoryARN: image.RepositoryARN, RepositoryName: image.RepositoryName, RegistryID: image.RegistryID,
+						ImageDigest: image.ImageDigest, ManifestDigest: image.ManifestDigest, Tag: image.Tag,
+						PushedAt: image.PushedAt, ImageSizeInBytes: image.ImageSizeInBytes,
+						ManifestMediaType: image.ManifestMediaType, ArtifactMediaType: image.ArtifactMediaType,
+					})
+				}
 				if item.Resource == nil {
 					continue
 				}
@@ -156,9 +167,10 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 			Source:      "aws-live:" + config.AccountID + "/" + strings.Join(config.Regions, ","),
 			Records:     records,
 		},
-		Warnings:      warnings,
-		Resources:     resources,
-		Relationships: relationships,
+		Warnings:        warnings,
+		Resources:       resources,
+		Relationships:   relationships,
+		ImageReferences: imageReferences,
 	}, nil
 }
 

@@ -174,13 +174,7 @@ func listECR(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 					return nil, fmt.Errorf("ecr describe images: %w", err)
 				}
 				for _, image := range imagePage.ImageDetails {
-					digest := aws.ToString(image.ImageDigest)
-					tag := digest
-					if len(image.ImageTags) > 0 {
-						tag = image.ImageTags[0]
-					}
-					name := aws.ToString(repository.RepositoryName) + ":" + tag
-					records = append(records, record(aws.ToString(repository.RepositoryArn)+"@"+digest, "ecr", region, name, "image"))
+					records = append(records, ecrImageRecords(aws.ToString(repository.RepositoryArn), aws.ToString(repository.RepositoryName), image, region)...)
 				}
 			}
 		}
