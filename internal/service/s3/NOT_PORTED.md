@@ -2,8 +2,9 @@
 
 Ported: `doc.go`, `types.go`.
 
-The live reader has a bounded `GetBucketEncryption` metadata read in
-`internal/live/s3_bucket.go`. The legacy S3 scanner, full SDK adapter, and
+The live reader has bounded `GetBucketEncryption`, `GetBucketVersioning`,
+and `GetPublicAccessBlock` metadata reads in `internal/live/s3_bucket.go`.
+The legacy S3 scanner, full SDK adapter, and separate typed
 `s3_bucket_posture` fact remain unported.
 
 ## Not ported (class-c)
