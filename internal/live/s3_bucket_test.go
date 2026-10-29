@@ -18,38 +18,41 @@ import (
 )
 
 type fakeS3BucketDetails struct {
-	buckets          *awss3.ListBucketsOutput
-	listErr          error
-	head             *awss3.HeadBucketOutput
-	tags             *awss3.GetBucketTaggingOutput
-	encryption       *awss3.GetBucketEncryptionOutput
-	versioning       *awss3.GetBucketVersioningOutput
-	publicAccess     *awss3.GetPublicAccessBlockOutput
-	policyStatus     *awss3.GetBucketPolicyStatusOutput
-	ownership        *awss3.GetBucketOwnershipControlsOutput
-	website          *awss3.GetBucketWebsiteOutput
-	logging          *awss3.GetBucketLoggingOutput
-	replication      *awss3.GetBucketReplicationOutput
-	headErr          error
-	tagsErr          error
-	encryptionErr    error
-	versioningErr    error
-	publicAccessErr  error
-	policyErr        error
-	ownershipErr     error
-	websiteErr       error
-	loggingErr       error
-	replicationErr   error
-	headOwner        string
-	tagOwner         string
-	encryptionOwner  string
-	versioningOwner  string
-	publicOwner      string
-	policyOwner      string
-	ownershipOwner   string
-	websiteOwner     string
-	loggingOwner     string
-	replicationOwner string
+	buckets           *awss3.ListBucketsOutput
+	listErr           error
+	head              *awss3.HeadBucketOutput
+	tags              *awss3.GetBucketTaggingOutput
+	encryption        *awss3.GetBucketEncryptionOutput
+	versioning        *awss3.GetBucketVersioningOutput
+	publicAccess      *awss3.GetPublicAccessBlockOutput
+	policyStatus      *awss3.GetBucketPolicyStatusOutput
+	bucketPolicy      *awss3.GetBucketPolicyOutput
+	ownership         *awss3.GetBucketOwnershipControlsOutput
+	website           *awss3.GetBucketWebsiteOutput
+	logging           *awss3.GetBucketLoggingOutput
+	replication       *awss3.GetBucketReplicationOutput
+	headErr           error
+	tagsErr           error
+	encryptionErr     error
+	versioningErr     error
+	publicAccessErr   error
+	policyErr         error
+	bucketPolicyErr   error
+	ownershipErr      error
+	websiteErr        error
+	loggingErr        error
+	replicationErr    error
+	headOwner         string
+	tagOwner          string
+	encryptionOwner   string
+	versioningOwner   string
+	publicOwner       string
+	policyOwner       string
+	bucketPolicyOwner string
+	ownershipOwner    string
+	websiteOwner      string
+	loggingOwner      string
+	replicationOwner  string
 }
 
 func (f *fakeS3BucketDetails) ListBuckets(_ context.Context, _ *awss3.ListBucketsInput, _ ...func(*awss3.Options)) (*awss3.ListBucketsOutput, error) {
@@ -84,6 +87,11 @@ func (f *fakeS3BucketDetails) GetPublicAccessBlock(_ context.Context, input *aws
 func (f *fakeS3BucketDetails) GetBucketPolicyStatus(_ context.Context, input *awss3.GetBucketPolicyStatusInput, _ ...func(*awss3.Options)) (*awss3.GetBucketPolicyStatusOutput, error) {
 	f.policyOwner = aws.ToString(input.ExpectedBucketOwner)
 	return f.policyStatus, f.policyErr
+}
+
+func (f *fakeS3BucketDetails) GetBucketPolicy(_ context.Context, input *awss3.GetBucketPolicyInput, _ ...func(*awss3.Options)) (*awss3.GetBucketPolicyOutput, error) {
+	f.bucketPolicyOwner = aws.ToString(input.ExpectedBucketOwner)
+	return f.bucketPolicy, f.bucketPolicyErr
 }
 
 func (f *fakeS3BucketDetails) GetBucketOwnershipControls(_ context.Context, input *awss3.GetBucketOwnershipControlsInput, _ ...func(*awss3.Options)) (*awss3.GetBucketOwnershipControlsOutput, error) {

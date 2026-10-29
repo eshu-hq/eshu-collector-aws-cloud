@@ -39,12 +39,15 @@ type ResourceObservation struct {
 	SourceRecordID     string
 }
 
-// S3BucketPostureObservation carries only reported bucket control-plane posture.
+// S3BucketPostureObservation carries reported bucket control-plane posture.
 // Nil pointers mean the relevant read did not establish a value.
 type S3BucketPostureObservation struct {
 	Boundary                 Boundary
 	BucketARN                string
 	BucketName               string
+	PolicyPresent            *bool
+	PolicyGrantsPublic       *bool
+	PolicyGrantsCrossAccount *bool
 	ReplicationEnabled       *bool
 	LoggingEnabled           *bool
 	LoggingTargetBucket      string
