@@ -77,8 +77,9 @@ and its relationship remain unported.
 ECR GetLifecyclePolicy now emits typed policy metadata after each repository
 image read. A missing policy emits nothing; a denied read fails the ECR
 service. The policy JSON body is omitted because it can contain user-supplied
-values. This adds one API call per repository; live IAM grant and call cost
-remain unverified. Other AWS service readers still lack typed output.
+values. This adds one API call per repository and requires
+`ecr:GetLifecyclePolicy`; the live IAM grant and call cost remain unverified.
+Other AWS service readers still lack typed output.
 The full port removes those placeholders and declares the other core-owned AWS
 fact kinds at schema `1.0.0`, all with
 `reported` confidence (the in-tree AWS envelopes record facts returned by

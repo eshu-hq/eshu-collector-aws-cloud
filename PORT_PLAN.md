@@ -28,7 +28,8 @@ also emit typed relationships. Membership uses the observed parent list
 request and rejects a nonblank conflicting child cluster name. IAM OIDC provider
 enrichment and its relationship remain unported. Remaining bucket detail
 and posture reads, policy-text parity, and the full scanner port remain
-unfinished. This plan maps the remaining in-tree implementation to standalone locations. No live AWS
+unfinished. This plan maps the remaining in-tree implementation to standalone
+locations. No live AWS
 core-kind output or host grant has been proved.
 
 Source of truth for paths: `go/internal/collector/awscloud/` in
@@ -136,8 +137,9 @@ importable only inside this module, satisfying `boundary_test.go`).
    emits a typed resource after GetLifecyclePolicy; policy JSON text is omitted
    because it can contain user-supplied values. This is a documented deviation
    from the legacy policy_text attribute. Missing policies emit no resource;
-   denied reads fail the ECR service. The added call is one per repository and
-   its live IAM grant and cost remain unverified. Lambda ListFunctions
+   denied reads fail the ECR service. The added call is one per repository
+   and requires `ecr:GetLifecyclePolicy`; its live IAM grant and call cost
+   remain unverified. Lambda ListFunctions
    rows emit typed function identity and safe configuration metadata, including VPC and logging
    configuration. GetFunction tags, resolved image metadata, environment
    redaction, aliases, event-source mappings, and Lambda relationships remain
