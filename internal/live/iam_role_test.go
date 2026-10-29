@@ -98,3 +98,29 @@ func TestIAMRoleReadMissingDetailAndDenial(t *testing.T) {
 		t.Fatalf("policy-name denial must fail scan: rows=%v err=%v", rows, err)
 	}
 }
+
+func TestIAMRoleTrustPolicyShapeMatchesLegacy(t *testing.T) {
+	arn := "arn:aws:iam::123456789012:role/demo"
+	listed := iamtypes.Role{Arn: aws.String(arn), RoleName: aws.String("demo")}
+	identity := VerifiedIdentity{AccountID: "123456789012", Partition: "aws"}
+	for _, raw := range []string{"{}", "%7B%7D", "null", ""} {
+		detail := listed
+		detail.AssumeRolePolicyDocument = aws.String(raw)
+		row, err := iamRoleRecord(listed, &detail, nil, nil, "us-east-1", identity)
+		if err != nil {
+			t.Fatalf("empty trust %q: %v", raw, err)
+		}
+		if row.Resource.Attributes["trust_policy_present"] != false || row.Resource.Attributes["attached_policy_arns"].([]string) != nil || row.Resource.Attributes["inline_policy_names"].([]string) != nil {
+			t.Fatalf("empty trust/list shape %q: %#v", raw, row.Resource.Attributes)
+		}
+		encoded, err := json.Marshal(row.Resource.Attributes)
+		if err != nil || !strings.Contains(string(encoded), `"attached_policy_arns":null`) || !strings.Contains(string(encoded), `"inline_policy_names":null`) {
+			t.Fatalf("empty policy JSON shape %q: %s err=%v", raw, encoded, err)
+		}
+	}
+	detail := listed
+	detail.AssumeRolePolicyDocument = aws.String("secret-invalid-{json")
+	if _, err := iamRoleRecord(listed, &detail, nil, nil, "us-east-1", identity); err == nil || strings.Contains(err.Error(), "secret-invalid") {
+		t.Fatalf("malformed trust must fail without raw value: %v", err)
+	}
+}
