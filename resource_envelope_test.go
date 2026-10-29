@@ -422,3 +422,33 @@ func TestResourceFactPreservesHistoricalTimeAttributeWireValue(t *testing.T) {
 		t.Fatalf("created_at = %#v, want wire timestamp %q", got, want)
 	}
 }
+
+type sensitiveErrorMarshaler struct{}
+
+func (sensitiveErrorMarshaler) MarshalJSON() ([]byte, error) {
+	return nil, errors.New("private-marshaler-sentinel")
+}
+
+func TestResourceFactDoesNotExposeMarshalerError(t *testing.T) {
+	observation := resourceParityObservation(t)
+	observation.Attributes = map[string]any{"custom": sensitiveErrorMarshaler{}}
+	fact, err := NewResourceFact(observation)
+	if err == nil || fact.Kind != "" {
+		t.Fatalf("fact = %+v, error = %v; want refusal", fact, err)
+	}
+	if strings.Contains(err.Error(), "private-marshaler-sentinel") {
+		t.Fatalf("error exposed private marshaler detail: %v", err)
+	}
+}
+
+func TestResourceFactDoesNotExposeSensitivePayloadKey(t *testing.T) {
+	observation := resourceParityObservation(t)
+	observation.Attributes = map[string]any{"token-private-key-sentinel": "value"}
+	fact, err := NewResourceFact(observation)
+	if err == nil || fact.Kind != "" {
+		t.Fatalf("fact = %+v, error = %v; want refusal", fact, err)
+	}
+	if strings.Contains(err.Error(), "private-key-sentinel") {
+		t.Fatalf("error exposed private key material: %v", err)
+	}
+}

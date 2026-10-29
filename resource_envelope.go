@@ -84,7 +84,7 @@ func NewResourceFact(observation ResourceObservation) (sdk.Fact, error) {
 		return sdk.Fact{}, fmt.Errorf("decode aws_resource validation payload: %w", err)
 	}
 	if err := sdk.ValidateShareSafeKeys(sharedPayload); err != nil {
-		return sdk.Fact{}, fmt.Errorf("aws_resource payload contains unredacted sensitive key: %w", err)
+		return sdk.Fact{}, fmt.Errorf("aws_resource payload contains unredacted sensitive key")
 	}
 	observedAt := boundary.ObservedAt.UTC()
 	if observedAt.IsZero() {
@@ -175,7 +175,7 @@ func snapshotResourceAttributes(input map[string]any) (map[string]any, error) {
 	}
 	encoded, err := json.Marshal(input)
 	if err != nil {
-		return nil, fmt.Errorf("encode aws_resource attributes: %w", err)
+		return nil, fmt.Errorf("encode aws_resource attributes: invalid JSON value")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(encoded))
 	decoder.UseNumber()
