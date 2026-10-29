@@ -170,7 +170,7 @@ func readS3BucketEncryption(ctx context.Context, api s3BucketDetailsAPI, name, a
 			return nil, false, fmt.Errorf("s3 get bucket encryption %q: %w", name, err)
 		}
 	}
-	if output == nil && !knownMissing {
+	if !knownMissing && (output == nil || output.ServerSideEncryptionConfiguration == nil) {
 		return nil, false, nil
 	}
 	var algorithms []string

@@ -36,4 +36,10 @@ func TestS3TypedPostureUsesOnlyConfirmedMetadata(t *testing.T) {
 	if rows == nil || len(rows) != 1 || err == nil || rows[0].S3Posture.DefaultEncryptionEnabled != nil || rows[0].S3Posture.BucketKeyEnabled != nil {
 		t.Fatalf("denied encryption posture: rows=%v err=%v", rows, err)
 	}
+	api.encryptionErr = nil
+	api.encryption = &awss3.GetBucketEncryptionOutput{}
+	rows, err = listS3WithAPI(context.Background(), api, "us-east-1", identity)
+	if err != nil || rows[0].S3Posture.DefaultEncryptionEnabled != nil {
+		t.Fatalf("empty successful encryption response: rows=%v err=%v", rows, err)
+	}
 }
