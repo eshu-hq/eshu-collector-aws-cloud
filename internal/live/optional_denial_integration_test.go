@@ -20,6 +20,7 @@ func TestOptionalDenialsAcrossServicesKeepEvidenceAndWarnings(t *testing.T) {
 		"ec2":    {operation: "DescribeSecurityGroupRules", resource: "region:us-east-1", effect: "security-group-rules-unavailable"},
 		"s3":     {operation: "GetBucketEncryption", resource: "bucket:assets", effect: "encryption-unknown"},
 		"lambda": {operation: "ListEventSourceMappings", resource: "arn:aws:lambda:us-east-1:123456789012:function:first", effect: "event-source-mappings-unavailable"},
+		"eks":    {operation: "ListOpenIDConnectProviders", resource: "region:us-east-1", effect: "eks-oidc-provider-enrichment-unavailable"},
 	}
 	loaders := make(map[string]Loader, len(denials))
 	for service, denial := range denials {
@@ -31,11 +32,11 @@ func TestOptionalDenialsAcrossServicesKeepEvidenceAndWarnings(t *testing.T) {
 	reader := Collector{LoadConfig: fakeConfig(&[]string{}), VerifyIdentity: func(context.Context, aws.Config) (VerifiedIdentity, error) {
 		return VerifiedIdentity{AccountID: account, Partition: "aws"}, nil
 	}, Loaders: loaders}
-	outcome, err := reader.CollectReport(context.Background(), Config{AccountID: account, Regions: []string{"us-east-1"}, Services: []string{"ec2", "s3", "lambda"}})
+	outcome, err := reader.CollectReport(context.Background(), Config{AccountID: account, Regions: []string{"us-east-1"}, Services: []string{"ec2", "s3", "lambda", "eks"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(outcome.Report.Records) != 3 || len(outcome.Warnings) != 3 || len(outcome.WarningObservations) != 3 {
+	if len(outcome.Report.Records) != 4 || len(outcome.Warnings) != 4 || len(outcome.WarningObservations) != 4 {
 		t.Fatalf("combined outcome: records=%d warnings=%v observations=%v", len(outcome.Report.Records), outcome.Warnings, outcome.WarningObservations)
 	}
 	seen := map[string]bool{}
@@ -71,7 +72,7 @@ func TestOptionalDenialsAcrossServicesKeepEvidenceAndWarnings(t *testing.T) {
 			warningFacts++
 		}
 	}
-	if result.State != sdk.ResultPartial || warningFacts != 3 {
+	if result.State != sdk.ResultPartial || warningFacts != 4 {
 		t.Fatalf("SDK result: state=%s warning facts=%d", result.State, warningFacts)
 	}
 }

@@ -84,8 +84,8 @@ provider resource and cluster relationship for a match, or an issuer-only
 resource and relationship when IAM has no match. An explicit
 ListOpenIDConnectProviders permission denial retains the cluster, nodegroup,
 add-on, and issuer-only provider observations with a scoped warning and
-partial SDK result; other list failures and every GetOpenIDConnectProvider failure remain terminal to
-the EKS read. This requires iam:ListOpenIDConnectProviders and
+partial SDK result; other list failures and every
+GetOpenIDConnectProvider failure fail the EKS read. This requires iam:ListOpenIDConnectProviders and
 iam:GetOpenIDConnectProvider for complete enrichment; live IAM permission and
 request cost have not been verified.
 ECR GetLifecyclePolicy now emits typed policy metadata after each repository
