@@ -5,9 +5,11 @@ package live
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awslambda "github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 )
 
@@ -41,6 +43,26 @@ func TestLambdaFunctionRecordCarriesListFunctionsMetadata(t *testing.T) {
 	}
 	if got.Name != "worker" || got.ID != *function.FunctionArn {
 		t.Fatalf("transitional record = %+v", got)
+	}
+}
+
+func TestLambdaGetFunctionRecordRejectsMismatchedIdentityAndUnsafeReferences(t *testing.T) {
+	listed := lambdatypes.FunctionConfiguration{FunctionArn: aws.String("arn:aws:lambda:us-east-1:123456789012:function:worker")}
+	for _, test := range []struct {
+		name   string
+		output *awslambda.GetFunctionOutput
+	}{
+		{name: "missing response"},
+		{name: "different function", output: &awslambda.GetFunctionOutput{Configuration: &lambdatypes.FunctionConfiguration{FunctionArn: aws.String("arn:aws:lambda:us-east-1:123456789012:function:other")}}},
+		{name: "URL in image field", output: &awslambda.GetFunctionOutput{Code: &lambdatypes.FunctionCodeLocation{ImageUri: aws.String("https://user:secret@example.com/image")}}},
+		{name: "query in image field", output: &awslambda.GetFunctionOutput{Code: &lambdatypes.FunctionCodeLocation{ImageUri: aws.String("123456789012.dkr.ecr.us-east-1.amazonaws.com/team/worker:prod?token=secret")}}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := lambdaGetFunctionRecord(listed, test.output, "us-east-1")
+			if err == nil || strings.Contains(err.Error(), "secret") {
+				t.Fatalf("unsafe GetFunction output error = %v", err)
+			}
+		})
 	}
 }
 
