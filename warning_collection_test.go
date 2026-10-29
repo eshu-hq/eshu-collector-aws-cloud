@@ -51,13 +51,29 @@ func TestWarningFactIdentityIncludesOperationResourceEffect(t *testing.T) {
 	}
 }
 
-// TestWarningFactPayloadMatchesGolden pins the optional-denial input to the
-// emitted aws_warning payload (#9297). A drift in the encoded payload fails
-// here before it ever reaches a reducer.
+// TestWarningFactPayloadMatchesGolden pins each changed scanner's
+// optional-denial input to the emitted aws_warning payload (#9297). A drift
+// in the encoded payload fails here before it ever reaches a reducer.
 func TestWarningFactPayloadMatchesGolden(t *testing.T) {
 	t.Parallel()
 
-	raw, err := os.ReadFile("testdata/optional-denial-warning.json")
+	for _, file := range []string{
+		"testdata/optional-denial-warning.json",
+		"testdata/optional-denial-warning-eks.json",
+		"testdata/optional-denial-warning-lambda.json",
+		"testdata/optional-denial-warning-s3.json",
+	} {
+		t.Run(file, func(t *testing.T) {
+			t.Parallel()
+			checkWarningGolden(t, file)
+		})
+	}
+}
+
+func checkWarningGolden(t *testing.T, file string) {
+	t.Helper()
+
+	raw, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatal(err)
 	}

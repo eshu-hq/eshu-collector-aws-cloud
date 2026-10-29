@@ -1,0 +1,41 @@
+{
+  "expected": {
+    "kind": "aws_warning",
+    "payload": {
+      "account_id": "123456789012",
+      "attributes": {
+        "effect": "event-source-mappings-unavailable",
+        "operation": "ListEventSourceMappings",
+        "resource": "arn:aws:lambda:us-east-1:123456789012:function:first"
+      },
+      "collector_instance_id": "aws-cloud-primary",
+      "error_class": "permission_denied",
+      "message": "ListEventSourceMappings denied for arn:aws:lambda:us-east-1:123456789012:function:first; event-source-mappings-unavailable",
+      "region": "us-east-1",
+      "service_kind": "lambda",
+      "warning_kind": "permission_denied"
+    },
+    "schema_version": "1.0.0",
+    "source_record_id": "ListEventSourceMappings:arn:aws:lambda:us-east-1:123456789012:function:first",
+    "source_uri": "aws://123456789012/us-east-1",
+    "stable_key": "53d6c4ab8fbbbea92f471649a5bf8dffec9c521ddb15ac4d654aaa61578f977b"
+  },
+  "input": {
+    "account_id": "123456789012",
+    "claim_token": "fence-1",
+    "collector_instance_id": "aws-cloud-primary",
+    "effect": "event-source-mappings-unavailable",
+    "error_class": "permission_denied",
+    "generation_id": "generation-1",
+    "message": "ListEventSourceMappings denied for arn:aws:lambda:us-east-1:123456789012:function:first; event-source-mappings-unavailable",
+    "observed_at": "2026-10-29T00:00:00Z",
+    "operation": "ListEventSourceMappings",
+    "region": "us-east-1",
+    "resource": "arn:aws:lambda:us-east-1:123456789012:function:first",
+    "scope_id": "component:aws-cloud-primary",
+    "service": "lambda",
+    "source_record_id": "ListEventSourceMappings:arn:aws:lambda:us-east-1:123456789012:function:first",
+    "source_uri": "aws://123456789012/us-east-1",
+    "warning_kind": "permission_denied"
+  }
+}
