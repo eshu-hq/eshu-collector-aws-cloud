@@ -66,14 +66,20 @@ reads tags through GetBucketTagging. Only NoSuchTagSet means an empty tag set.
 GetBucketEncryption adds reported algorithms, KMS key IDs, and bucket-key state.
 GetBucketVersioning and GetPublicAccessBlock add the reported bucket-level
 versioning and public-access settings. An absent public-access-block
-configuration leaves its four flags unknown. These reads require the
-corresponding S3 permissions; their live cost and access are not yet verified.
-GetBucketPolicyStatus adds only the reported public-policy boolean, without
-reading a policy document. A missing policy leaves that boolean unknown.
-GetBucketOwnershipControls adds the reported ownership enum values; a missing
-configuration or one with no reported values yields null, matching the legacy
-wire shape. Both reads bind the verified bucket owner.
-Their denials fail the S3 read, and live access and cost remain unverified.
+configuration leaves its four flags unknown. GetBucketPolicyStatus adds
+only the reported public-policy boolean, without reading a policy document;
+a missing policy leaves that boolean unknown. GetBucketOwnershipControls adds
+reported ownership enum values; missing or empty controls yield null. Both
+reads bind the verified bucket owner. Their denials fail the S3 read; live
+access and cost remain unverified. GetBucketWebsite records whether hosting is
+configured, index/error document presence, redirect host, and routing-rule
+count; it excludes document object keys. GetBucketLogging records whether
+access logging is configured and its target bucket and prefix; it excludes
+target grants and object-key formats. Both reads pass ExpectedBucketOwner,
+require `s3:GetBucketWebsite` and `s3:GetBucketLogging`, and add two API calls
+per listed bucket. Live IAM access and request cost remain unverified. A
+missing website configuration and empty logging response mean disabled;
+other errors, including denials, fail the S3 read.
 For encryption, the explicit missing-configuration response means a known
 empty configuration. Encryption AccessDenied leaves those attributes absent,
 retains the bucket, emits a typed warning, and makes the SDK result partial.
