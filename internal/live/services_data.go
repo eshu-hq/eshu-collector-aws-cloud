@@ -103,10 +103,18 @@ func listS3(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]c
 			if aws.ToString(bucket.Name) == "" {
 				continue
 			}
+			headRegion, tags, err := readS3BucketDetails(ctx, client, aws.ToString(bucket.Name), identity.AccountID)
+			if err != nil {
+				return nil, err
+			}
+			if headRegion != "" && headRegion != region {
+				return nil, fmt.Errorf("s3 HeadBucket returned a bucket outside the claimed region")
+			}
 			row, err := s3BucketRecord(bucket, region, identity)
 			if err != nil {
 				return nil, err
 			}
+			row.Resource.Tags = tags
 			records = append(records, row)
 		}
 	}

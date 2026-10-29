@@ -45,9 +45,11 @@ the image placeholder record remains. Lambda ListFunctions rows emit typed
 `aws_resource` identity and safe configuration metadata, including VPC and
 logging configuration. Function environment values, tags, and resolved image
 metadata remain deferred with the legacy GetFunction and keyed redaction path.
-The S3 reader emits typed bucket identity, bucket region, and creation time
-from regional ListBuckets. Encryption and posture remain unknown pending
-separate detail reads. ECR lifecycle policies and other AWS service readers
+The S3 reader emits typed bucket identity, region, and creation time from
+regional ListBuckets. It verifies the expected owner with HeadBucket and
+reads tags through GetBucketTagging. Only NoSuchTagSet means an empty tag set;
+other read errors fail the claim. Encryption and posture remain unknown
+pending detail reads. ECR lifecycle policies and other AWS service readers
 still lack typed output. The full port removes
 those placeholders and declares the other core-owned AWS fact kinds at schema
 `1.0.0`, all with

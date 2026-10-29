@@ -5,14 +5,54 @@ package live
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 )
+
+type fakeS3BucketDetails struct {
+	head      *awss3.HeadBucketOutput
+	tags      *awss3.GetBucketTaggingOutput
+	headErr   error
+	tagsErr   error
+	headOwner string
+	tagOwner  string
+}
+
+func (f *fakeS3BucketDetails) HeadBucket(_ context.Context, input *awss3.HeadBucketInput, _ ...func(*awss3.Options)) (*awss3.HeadBucketOutput, error) {
+	f.headOwner = aws.ToString(input.ExpectedBucketOwner)
+	return f.head, f.headErr
+}
+
+func (f *fakeS3BucketDetails) GetBucketTagging(_ context.Context, input *awss3.GetBucketTaggingInput, _ ...func(*awss3.Options)) (*awss3.GetBucketTaggingOutput, error) {
+	f.tagOwner = aws.ToString(input.ExpectedBucketOwner)
+	return f.tags, f.tagsErr
+}
+
+func TestS3BucketDetailsPreserveTagsAndTerminalDenial(t *testing.T) {
+	api := &fakeS3BucketDetails{head: &awss3.HeadBucketOutput{BucketRegion: aws.String("us-east-1")}, tags: &awss3.GetBucketTaggingOutput{TagSet: []s3types.Tag{{Key: aws.String(" team "), Value: aws.String("platform")}, {Key: aws.String(""), Value: aws.String("ignored")}}}}
+	region, tags, err := readS3BucketDetails(context.Background(), api, "assets", "123456789012")
+	if err != nil || region != "us-east-1" || tags["team"] != "platform" || len(tags) != 1 || api.headOwner != "123456789012" || api.tagOwner != "123456789012" {
+		t.Fatalf("region=%q tags=%v owners=%q,%q err=%v", region, tags, api.headOwner, api.tagOwner, err)
+	}
+	api.tagsErr = &smithy.GenericAPIError{Code: "NoSuchTagSet"}
+	_, tags, err = readS3BucketDetails(context.Background(), api, "assets", "123456789012")
+	if err != nil || len(tags) != 0 {
+		t.Fatalf("missing tags: tags=%v err=%v", tags, err)
+	}
+	api.tagsErr = &smithy.GenericAPIError{Code: "AccessDenied"}
+	_, _, err = readS3BucketDetails(context.Background(), api, "assets", "123456789012")
+	if err == nil || !errors.Is(err, api.tagsErr) {
+		t.Fatalf("tag denial: %v", err)
+	}
+}
 
 func TestS3BucketRecordBindsReportedIdentity(t *testing.T) {
 	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
