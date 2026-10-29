@@ -13,8 +13,7 @@ import (
 )
 
 // SupportedServices is the live-read inventory this package implements: the
-// 19 services the ops-qa host allows. Names match the host's
-// allowed_services entries exactly.
+// configured AWS service names. The ops-qa host currently allows a subset.
 var SupportedServices = []string{
 	"apigateway",
 	"cloudfront",
@@ -28,6 +27,7 @@ var SupportedServices = []string{
 	"eventbridge",
 	"iam",
 	"lambda",
+	"kms",
 	"rds",
 	"route53",
 	"s3",
@@ -45,10 +45,12 @@ var (
 // Config is the parsed live-source activation: everything parseSDKStdio
 // learns from a host request that carries no source.input file.
 type Config struct {
-	AccountID      string
-	Regions        []string
-	Services       []string
-	SourceURI      string
+	AccountID string
+	Regions   []string
+	Services  []string
+	SourceURI string
+	// PreviousDigest is the host hint; live collection currently ignores it
+	// until typed resources and failed service pairs enter the digest.
 	PreviousDigest string
 	Limits         collector.ResourceUse
 }

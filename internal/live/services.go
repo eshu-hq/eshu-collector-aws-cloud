@@ -3,30 +3,46 @@
 
 package live
 
+import (
+	"context"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
+)
+
+// withoutIdentity adapts readers whose API does not need the verified caller
+// identity. EC2 consumes it to construct resource ARNs.
+func withoutIdentity(load func(context.Context, aws.Config) ([]collector.Record, error)) Loader {
+	return func(ctx context.Context, cfg aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
+		return load(ctx, cfg)
+	}
+}
+
 // loaders is the production service registry: every allowed_services name
 // resolves to the live reader that mirrors the in-tree scanner's read
 // surface for that service. Test fakes replace Collector.Loaders instead of
 // this table.
 var loaders = map[string]Loader{
-	"apigateway":     listAPIGateway,
-	"cloudfront":     listCloudFront,
-	"cloudwatchlogs": listCloudWatchLogs,
-	"dynamodb":       listDynamoDB,
+	"apigateway":     withoutIdentity(listAPIGateway),
+	"cloudfront":     withoutIdentity(listCloudFront),
+	"cloudwatchlogs": withoutIdentity(listCloudWatchLogs),
+	"dynamodb":       withoutIdentity(listDynamoDB),
 	"ec2":            listEC2,
-	"ecr":            listECR,
-	"ecs":            listECS,
+	"ecr":            withoutIdentity(listECR),
+	"ecs":            withoutIdentity(listECS),
 	"eks":            listEKS,
-	"elbv2":          listELBV2,
-	"eventbridge":    listEventBridge,
+	"elbv2":          withoutIdentity(listELBV2),
+	"eventbridge":    withoutIdentity(listEventBridge),
 	"iam":            listIAM,
-	"lambda":         listLambda,
-	"rds":            listRDS,
-	"route53":        listRoute53,
+	"lambda":         withoutIdentity(listLambda),
+	"kms":            listKMS,
+	"rds":            withoutIdentity(listRDS),
+	"route53":        withoutIdentity(listRoute53),
 	"s3":             listS3,
-	"secretsmanager": listSecretsManager,
-	"sns":            listSNS,
-	"sqs":            listSQS,
-	"ssm":            listSSM,
+	"secretsmanager": withoutIdentity(listSecretsManager),
+	"sns":            withoutIdentity(listSNS),
+	"sqs":            withoutIdentity(listSQS),
+	"ssm":            withoutIdentity(listSSM),
 }
 
 // globalServices are account-global APIs: listing them once (in the first
@@ -36,5 +52,4 @@ var globalServices = map[string]bool{
 	"cloudfront": true,
 	"iam":        true,
 	"route53":    true,
-	"s3":         true,
 }

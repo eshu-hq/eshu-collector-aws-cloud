@@ -5,6 +5,7 @@ package live
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -12,19 +13,23 @@ import (
 	awsec2 "github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	awsecr "github.com/aws/aws-sdk-go-v2/service/ecr"
-	awsecs "github.com/aws/aws-sdk-go-v2/service/ecs"
+	ecrtypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	awseks "github.com/aws/aws-sdk-go-v2/service/eks"
 	awselbv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	awslambda "github.com/aws/aws-sdk-go-v2/service/lambda"
+	"github.com/aws/smithy-go"
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 )
 
 // listEC2 mirrors the in-tree ec2 scanner's read surface (VPCs, subnets,
 // security groups and rules, network interfaces, instances, volumes) as
 // metadata-only records. Instance user data and volume contents stay unread.
-func listEC2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
+func listEC2(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]collector.Record, error) {
 	client := awsec2.NewFromConfig(cfg)
 	region := cfg.Region
+	if !accountPattern.MatchString(identity.AccountID) || identity.Partition != partitionForRegion(region) {
+		return nil, fmt.Errorf("ec2 read requires verified account and region partition")
+	}
 	records := []collector.Record{}
 
 	vpcs := awsec2.NewDescribeVpcsPaginator(client, &awsec2.DescribeVpcsInput{})
@@ -34,7 +39,10 @@ func listEC2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("ec2 describe VPCs: %w", err)
 		}
 		for _, vpc := range page.Vpcs {
-			records = append(records, record(aws.ToString(vpc.VpcId), "ec2", region, ec2Name(vpc.Tags, aws.ToString(vpc.VpcId)), "vpc"))
+			records, err = appendEC2Record(records, vpcRecord(vpc, region))
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	subnets := awsec2.NewDescribeSubnetsPaginator(client, &awsec2.DescribeSubnetsInput{})
@@ -44,7 +52,10 @@ func listEC2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("ec2 describe subnets: %w", err)
 		}
 		for _, subnet := range page.Subnets {
-			records = append(records, record(aws.ToString(subnet.SubnetId), "ec2", region, ec2Name(subnet.Tags, aws.ToString(subnet.SubnetId)), "subnet"))
+			records, err = appendEC2Record(records, subnetRecord(subnet, region))
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	groups := awsec2.NewDescribeSecurityGroupsPaginator(client, &awsec2.DescribeSecurityGroupsInput{})
@@ -54,34 +65,53 @@ func listEC2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("ec2 describe security groups: %w", err)
 		}
 		for _, group := range page.SecurityGroups {
-			name := aws.ToString(group.GroupName)
-			if name == "" {
-				name = aws.ToString(group.GroupId)
+			records, err = appendEC2Record(records, securityGroupRecord(group, region))
+			if err != nil {
+				return nil, err
 			}
-			records = append(records, record(aws.ToString(group.GroupId), "ec2", region, name, "security-group"))
 		}
 	}
 	rules := awsec2.NewDescribeSecurityGroupRulesPaginator(client, &awsec2.DescribeSecurityGroupRulesInput{})
+	ruleRecords := []collector.Record{}
+	var ruleDenial error
 	for rules.HasMorePages() {
 		page, err := rules.NextPage(ctx)
 		if err != nil {
+			if isOptionalEC2RuleDenial(err) {
+				ruleDenial = &optionalReadDenied{denials: []optionalDenial{{operation: "DescribeSecurityGroupRules", resource: "region:" + region, effect: "security-group-rules-unavailable"}}}
+				break
+			}
 			return nil, fmt.Errorf("ec2 describe security group rules: %w", err)
 		}
 		for _, rule := range page.SecurityGroupRules {
-			records = append(records, record(aws.ToString(rule.SecurityGroupRuleId), "ec2", region, aws.ToString(rule.SecurityGroupRuleId), "security-group-rule"))
+			row, err := securityGroupRuleRecord(rule, region)
+			if err != nil {
+				return nil, err
+			}
+			ruleRecords, err = appendEC2Record(ruleRecords, row)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
-	interfaces := awsec2.NewDescribeNetworkInterfacesPaginator(client, &awsec2.DescribeNetworkInterfacesInput{})
+	if ruleDenial == nil {
+		records = append(records, ruleRecords...)
+	}
+	interfaces := awsec2.NewDescribeNetworkInterfacesPaginator(client, networkInterfaceDescribeInput())
 	for interfaces.HasMorePages() {
 		page, err := interfaces.NextPage(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("ec2 describe network interfaces: %w", err)
 		}
 		for _, iface := range page.NetworkInterfaces {
-			records = append(records, record(aws.ToString(iface.NetworkInterfaceId), "ec2", region, aws.ToString(iface.NetworkInterfaceId), "network-interface"))
+			records, err = appendEC2Record(records, networkInterfaceRecord(iface, region, identity))
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	instances := awsec2.NewDescribeInstancesPaginator(client, &awsec2.DescribeInstancesInput{})
+	seenAMIIDs := make(map[string]struct{})
 	for instances.HasMorePages() {
 		page, err := instances.NextPage(ctx)
 		if err != nil {
@@ -89,7 +119,10 @@ func listEC2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 		}
 		for _, reservation := range page.Reservations {
 			for _, instance := range reservation.Instances {
-				records = append(records, record(aws.ToString(instance.InstanceId), "ec2", region, ec2Name(instance.Tags, aws.ToString(instance.InstanceId)), "instance"))
+				records, err = appendInstanceRecords(records, instance, region, identity, seenAMIIDs)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -100,10 +133,28 @@ func listEC2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("ec2 describe volumes: %w", err)
 		}
 		for _, volume := range page.Volumes {
-			records = append(records, record(aws.ToString(volume.VolumeId), "ec2", region, ec2Name(volume.Tags, aws.ToString(volume.VolumeId)), "volume"))
+			records, err = appendEC2Record(records, volumeRecord(volume, region, identity))
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
-	return records, nil
+	return records, ruleDenial
+}
+
+// isOptionalEC2RuleDenial recognizes the two EC2 authorization errors for the
+// one reviewed optional operation. Other API and transport failures stay fatal.
+func isOptionalEC2RuleDenial(err error) bool {
+	var apiErr smithy.APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	switch apiErr.ErrorCode() {
+	case "UnauthorizedOperation", "AccessDenied", "AccessDeniedException":
+		return true
+	default:
+		return false
+	}
 }
 
 func ec2Name(tags []ec2types.Tag, fallback string) string {
@@ -116,7 +167,7 @@ func ec2Name(tags []ec2types.Tag, fallback string) string {
 }
 
 // listECR mirrors the in-tree ecr scanner: repositories, image digests, and
-// lifecycle-policy presence. Image contents and policy text stay unread.
+// lifecycle-policy metadata. Image contents and policy text are never emitted.
 func listECR(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 	client := awsecr.NewFromConfig(cfg)
 	region := cfg.Region
@@ -128,7 +179,18 @@ func listECR(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("ecr describe repositories: %w", err)
 		}
 		for _, repository := range page.Repositories {
-			records = append(records, record(aws.ToString(repository.RepositoryArn), "ecr", region, aws.ToString(repository.RepositoryName), "repository"))
+			tags := []ecrtypes.Tag(nil)
+			if arn := strings.TrimSpace(aws.ToString(repository.RepositoryArn)); arn != "" {
+				tagResult, tagErr := client.ListTagsForResource(ctx, &awsecr.ListTagsForResourceInput{ResourceArn: aws.String(arn)})
+				if tagErr != nil {
+					return nil, fmt.Errorf("ecr list repository tags: %w", tagErr)
+				}
+				if tagResult != nil {
+					tags = tagResult.Tags
+				}
+			}
+			records = append(records, ecrRepositoryRecord(repository, tags, region))
+			seenImages := make(map[string]struct{})
 			images := awsecr.NewDescribeImagesPaginator(client, &awsecr.DescribeImagesInput{
 				RepositoryName: repository.RepositoryName,
 			})
@@ -138,93 +200,30 @@ func listECR(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 					return nil, fmt.Errorf("ecr describe images: %w", err)
 				}
 				for _, image := range imagePage.ImageDetails {
-					digest := aws.ToString(image.ImageDigest)
-					tag := digest
-					if len(image.ImageTags) > 0 {
-						tag = image.ImageTags[0]
-					}
-					name := aws.ToString(repository.RepositoryName) + ":" + tag
-					records = append(records, record(aws.ToString(repository.RepositoryArn)+"@"+digest, "ecr", region, name, "image"))
+					records = appendUniqueECRImageRecords(records, seenImages, aws.ToString(repository.RepositoryArn), aws.ToString(repository.RepositoryName), image, region)
 				}
 			}
-		}
-	}
-	return records, nil
-}
-
-// listECS mirrors the in-tree ecs scanner: clusters, services, tasks, and
-// task-definition ARNs. Task-definition bodies stay undescribed.
-func listECS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
-	client := awsecs.NewFromConfig(cfg)
-	region := cfg.Region
-	records := []collector.Record{}
-	clusters := awsecs.NewListClustersPaginator(client, &awsecs.ListClustersInput{})
-	for clusters.HasMorePages() {
-		page, err := clusters.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("ecs list clusters: %w", err)
-		}
-		for _, arn := range page.ClusterArns {
-			described, err := client.DescribeClusters(ctx, &awsecs.DescribeClustersInput{Clusters: []string{arn}})
+			policy, err := readECRLifecyclePolicy(ctx, client, repository, region)
 			if err != nil {
-				return nil, fmt.Errorf("ecs describe clusters: %w", err)
+				return nil, err
 			}
-			for _, cluster := range described.Clusters {
-				records = append(records, record(aws.ToString(cluster.ClusterArn), "ecs", region, aws.ToString(cluster.ClusterName), "cluster"))
+			if policy != nil {
+				records = append(records, *policy)
 			}
-			services := awsecs.NewListServicesPaginator(client, &awsecs.ListServicesInput{Cluster: aws.String(arn)})
-			for services.HasMorePages() {
-				servicePage, err := services.NextPage(ctx)
-				if err != nil {
-					return nil, fmt.Errorf("ecs list services: %w", err)
-				}
-				for _, chunk := range chunks(servicePage.ServiceArns, 10) {
-					described, err := client.DescribeServices(ctx, &awsecs.DescribeServicesInput{Cluster: aws.String(arn), Services: chunk})
-					if err != nil {
-						return nil, fmt.Errorf("ecs describe services: %w", err)
-					}
-					for _, service := range described.Services {
-						records = append(records, record(aws.ToString(service.ServiceArn), "ecs", region, aws.ToString(service.ServiceName), "service"))
-					}
-				}
-			}
-			tasks := awsecs.NewListTasksPaginator(client, &awsecs.ListTasksInput{Cluster: aws.String(arn)})
-			for tasks.HasMorePages() {
-				taskPage, err := tasks.NextPage(ctx)
-				if err != nil {
-					return nil, fmt.Errorf("ecs list tasks: %w", err)
-				}
-				for _, chunk := range chunks(taskPage.TaskArns, 100) {
-					described, err := client.DescribeTasks(ctx, &awsecs.DescribeTasksInput{Cluster: aws.String(arn), Tasks: chunk})
-					if err != nil {
-						return nil, fmt.Errorf("ecs describe tasks: %w", err)
-					}
-					for _, task := range described.Tasks {
-						arn := aws.ToString(task.TaskArn)
-						records = append(records, record(arn, "ecs", region, lastSegment(arn, "/"), "task"))
-					}
-				}
-			}
-		}
-	}
-	definitions := awsecs.NewListTaskDefinitionsPaginator(client, &awsecs.ListTaskDefinitionsInput{})
-	for definitions.HasMorePages() {
-		page, err := definitions.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("ecs list task definitions: %w", err)
-		}
-		for _, arn := range page.TaskDefinitionArns {
-			records = append(records, record(arn, "ecs", region, lastSegment(arn, "/"), "task-definition"))
 		}
 	}
 	return records, nil
 }
 
-// listEKS mirrors the in-tree eks scanner: clusters, nodegroups, and addons
-// as metadata-only records.
-func listEKS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
+// listEKS reads clusters, nodegroups, and addons for typed resource observations.
+// Reported roles and network placements, plus matched membership, produce edges.
+func listEKS(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]collector.Record, error) {
 	client := awseks.NewFromConfig(cfg)
 	region := cfg.Region
+	if !accountPattern.MatchString(identity.AccountID) || identity.Partition != partitionForRegion(region) {
+		return nil, fmt.Errorf("eks read requires verified account and region partition")
+	}
+	providers := eksOIDCReader{cfg: cfg}
 	records := []collector.Record{}
 	clusters := awseks.NewListClustersPaginator(client, &awseks.ListClustersInput{})
 	for clusters.HasMorePages() {
@@ -237,8 +236,21 @@ func listEKS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			if err != nil {
 				return nil, fmt.Errorf("eks describe cluster: %w", err)
 			}
+			var clusterResource *collector.LiveResource
 			if described.Cluster != nil {
-				records = append(records, record(aws.ToString(described.Cluster.Arn), "eks", region, aws.ToString(described.Cluster.Name), "cluster"))
+				row, mapErr := eksClusterRecord(*described.Cluster, region)
+				if mapErr != nil {
+					return nil, mapErr
+				}
+				providerRow, err := providers.enrich(ctx, &row, *described.Cluster, identity)
+				if err != nil {
+					return nil, fmt.Errorf("eks enrich cluster OIDC provider: %w", err)
+				}
+				clusterResource = row.Resource
+				records = append(records, row)
+				if providerRow != nil {
+					records = append(records, *providerRow)
+				}
 			}
 			nodegroups := awseks.NewListNodegroupsPaginator(client, &awseks.ListNodegroupsInput{ClusterName: aws.String(name)})
 			for nodegroups.HasMorePages() {
@@ -252,7 +264,14 @@ func listEKS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 						return nil, fmt.Errorf("eks describe nodegroup: %w", err)
 					}
 					if described.Nodegroup != nil {
-						records = append(records, record(aws.ToString(described.Nodegroup.NodegroupArn), "eks", region, aws.ToString(described.Nodegroup.NodegroupName), "nodegroup"))
+						row, mapErr := eksNodegroupRecord(*described.Nodegroup, region)
+						if mapErr != nil {
+							return nil, mapErr
+						}
+						if edge, ok := eksMembershipRelationship(clusterResource, row.Resource, name, aws.ToString(described.Nodegroup.ClusterName)); ok {
+							row.Relationships = append(row.Relationships, edge)
+						}
+						records = append(records, row)
 					}
 				}
 			}
@@ -268,11 +287,21 @@ func listEKS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 						return nil, fmt.Errorf("eks describe addon: %w", err)
 					}
 					if described.Addon != nil {
-						records = append(records, record(aws.ToString(described.Addon.AddonArn), "eks", region, aws.ToString(described.Addon.AddonName), "addon"))
+						row, mapErr := eksAddonRecord(*described.Addon, region)
+						if mapErr != nil {
+							return nil, mapErr
+						}
+						if edge, ok := eksMembershipRelationship(clusterResource, row.Resource, name, aws.ToString(described.Addon.ClusterName)); ok {
+							row.Relationships = append(row.Relationships, edge)
+						}
+						records = append(records, row)
 					}
 				}
 			}
 		}
+	}
+	if providers.denial != nil {
+		return records, providers.denial
 	}
 	return records, nil
 }
@@ -332,12 +361,14 @@ func listELBV2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) 
 	return records, nil
 }
 
-// listLambda mirrors the in-tree lambda scanner: functions, aliases, and
-// event-source mappings. Function code and environment values stay unread.
+// listLambda mirrors the in-tree lambda scanner: functions, GetFunction
+// metadata, aliases, and event-source mappings. Function code and raw
+// environment values stay unread.
 func listLambda(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 	client := awslambda.NewFromConfig(cfg)
 	region := cfg.Region
 	records := []collector.Record{}
+	denials := []optionalDenial{}
 	functions := awslambda.NewListFunctionsPaginator(client, &awslambda.ListFunctionsInput{})
 	for functions.HasMorePages() {
 		page, err := functions.NextPage(ctx)
@@ -345,31 +376,80 @@ func listLambda(ctx context.Context, cfg aws.Config) ([]collector.Record, error)
 			return nil, fmt.Errorf("lambda list functions: %w", err)
 		}
 		for _, function := range page.Functions {
-			name := aws.ToString(function.FunctionName)
-			records = append(records, record(aws.ToString(function.FunctionArn), "lambda", region, name, "function"))
-			aliases := awslambda.NewListAliasesPaginator(client, &awslambda.ListAliasesInput{FunctionName: function.FunctionName})
+			functionID := strings.TrimSpace(aws.ToString(function.FunctionArn))
+			if functionID == "" {
+				functionID = strings.TrimSpace(aws.ToString(function.FunctionName))
+			}
+			if functionID == "" {
+				return nil, fmt.Errorf("lambda function identity: no source identity")
+			}
+			getOutput, err := client.GetFunction(ctx, &awslambda.GetFunctionInput{FunctionName: aws.String(functionID)})
+			if err != nil {
+				return nil, fmt.Errorf("lambda get function: %w", err)
+			}
+			functionRecord, err := lambdaGetFunctionRecord(function, getOutput, region)
+			if err != nil {
+				return nil, fmt.Errorf("lambda function identity: %w", err)
+			}
+			records = append(records, functionRecord)
+			aliases := awslambda.NewListAliasesPaginator(client, &awslambda.ListAliasesInput{FunctionName: aws.String(functionRecord.Resource.ResourceID)})
 			for aliases.HasMorePages() {
 				aliasPage, err := aliases.NextPage(ctx)
 				if err != nil {
 					return nil, fmt.Errorf("lambda list aliases: %w", err)
 				}
 				for _, alias := range aliasPage.Aliases {
-					records = append(records, record(aws.ToString(alias.AliasArn), "lambda", region, aws.ToString(alias.Name), "alias"))
+					aliasRecord, err := lambdaAliasRecord(functionRecord.Resource.ARN, alias, region)
+					if err != nil {
+						return nil, fmt.Errorf("lambda alias identity: %w", err)
+					}
+					records = append(records, aliasRecord)
 				}
 			}
-			mappings := awslambda.NewListEventSourceMappingsPaginator(client, &awslambda.ListEventSourceMappingsInput{FunctionName: function.FunctionName})
+			mappings := awslambda.NewListEventSourceMappingsPaginator(client, &awslambda.ListEventSourceMappingsInput{FunctionName: aws.String(functionRecord.Resource.ResourceID)})
+			mappingRecords := []collector.Record{}
+			mappingDenied := false
 			for mappings.HasMorePages() {
 				mappingPage, err := mappings.NextPage(ctx)
 				if err != nil {
+					if isOptionalLambdaMappingDenial(err) {
+						denials = append(denials, optionalDenial{
+							operation: "ListEventSourceMappings", resource: functionRecord.Resource.ResourceID,
+							effect: "event-source-mappings-unavailable",
+						})
+						mappingDenied = true
+						break
+					}
 					return nil, fmt.Errorf("lambda list event source mappings: %w", err)
 				}
 				for _, mapping := range mappingPage.EventSourceMappings {
-					records = append(records, record(aws.ToString(mapping.EventSourceArn), "lambda", region, aws.ToString(mapping.UUID), "event-source-mapping"))
+					mappingRecords = append(mappingRecords, record(aws.ToString(mapping.EventSourceArn), "lambda", region, aws.ToString(mapping.UUID), "event-source-mapping"))
 				}
+			}
+			if !mappingDenied {
+				records = append(records, mappingRecords...)
 			}
 		}
 	}
+	if len(denials) > 0 {
+		return records, &optionalReadDenied{denials: denials}
+	}
 	return records, nil
+}
+
+// isOptionalLambdaMappingDenial recognizes authorization failures for the one
+// reviewed optional Lambda read. Other API and transport failures stay fatal.
+func isOptionalLambdaMappingDenial(err error) bool {
+	var apiErr smithy.APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	switch apiErr.ErrorCode() {
+	case "AccessDenied", "AccessDeniedException", "UnauthorizedOperation":
+		return true
+	default:
+		return false
+	}
 }
 
 // chunks splits values into batches of at most size for the Describe calls
@@ -393,4 +473,12 @@ func lastSegment(value, separator string) string {
 		return value[i+1:]
 	}
 	return value
+}
+
+// networkInterfaceDescribeInput includes AWS-managed interfaces in every EC2 page.
+func networkInterfaceDescribeInput() *awsec2.DescribeNetworkInterfacesInput {
+	return &awsec2.DescribeNetworkInterfacesInput{
+		IncludeManagedResources: aws.Bool(true),
+		MaxResults:              aws.Int32(1000),
+	}
 }

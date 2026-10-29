@@ -17,6 +17,36 @@ spec:
     - platform: linux/amd64
       image: ghcr.io/eshu-hq/eshu-collector-aws-cloud@sha256:4d5d3a979b6b3d3e5b413e85c3c57046dbcf2a0da24dcf81a4489d99db55aa9d
   emittedFacts:
+    - kind: aws_resource
+      payloadSchemaRef: aws_resource
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: aws_relationship
+      payloadSchemaRef: aws_relationship
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: aws_image_reference
+      payloadSchemaRef: aws_image_reference
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: aws_warning
+      payloadSchemaRef: aws_warning
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: s3_bucket_posture
+      payloadSchemaRef: s3_bucket_posture
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
     # TRANSITIONAL placeholder families: emitted by the scaffold pipeline
     # until the AWS logic port lands (PORT_PLAN.md). The port removes these
     # and declares the thirteen bare AWS kinds (schema 1.0.0, reported)
@@ -41,6 +71,6 @@ spec:
   consumerContracts:
     reducer:
       phases:
-        - source_evidence_only:no_graph_truth
+        - aws_cloud_runtime_drift
   telemetry:
     metricsPrefix: eshu_dp_aws_cloud_collector_

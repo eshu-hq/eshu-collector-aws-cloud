@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -43,15 +42,14 @@ const (
 	FactKindWarning = "collector-aws-cloud.warning"
 )
 
-// AWS fact kinds this collector will emit at schema 1.0.0 once the logic
-// port lands. They mirror the in-tree AWS family declarations
+// AWS fact kinds this collector emits or plans to emit at schema 1.0.0.
+// They mirror the in-tree AWS family declarations
 // (go/internal/facts/cloud): nine base kinds plus the EC2, S3, RDS posture
 // and external-principal-grant families. Confidence is reported: the
 // in-tree AWS envelopes record facts returned by the AWS APIs as
-// facts.SourceConfidenceReported. These kinds are not in Contract() or
-// manifest.yaml yet: the placeholder pipeline emits only namespaced kinds.
-// Declaration follows the typed emitter port and a trusted host grant
-// snapshot supplied to SDK conformance (#8909).
+// facts.SourceConfidenceReported. Resource, relationship, and image reference
+// are declared in Contract() and manifest.yaml; the other ten follow their
+// typed emitter ports and trusted host grant context (#8909).
 const (
 	AWSKindResource                 = "aws_resource"
 	AWSKindRelationship             = "aws_relationship"
@@ -68,9 +66,8 @@ const (
 	AWSKindS3ExternalPrincipalGrant = "s3_external_principal_grant"
 )
 
-// AWSKinds lists the core-owned AWS fact kinds planned for the logic port.
-// The placeholder pipeline does not emit them, and manifest.yaml still
-// declares only its transitional namespaced kinds.
+// AWSKinds lists the core-owned AWS fact kinds for the logic port. Resource,
+// relationship, and image reference are declared alongside transitional kinds.
 var AWSKinds = []string{
 	AWSKindResource,
 	AWSKindRelationship,
@@ -96,15 +93,68 @@ type Report struct {
 	Records     []Record  `json:"records"`
 }
 
-// Record is one placeholder source row.
+// Record is one live loader row or placeholder source row.
 type Record struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
 	Detail string `json:"detail,omitempty"`
+	// Resource carries typed metadata from a live AWS read. The placeholder
+	// report format does not accept it from a file.
+	Resource *LiveResource `json:"-"`
+	// S3Posture carries confirmed bucket settings and derived policy flags.
+	S3Posture *S3BucketPostureObservation `json:"-"`
+	// ImageReference carries a typed image digest and tag from DescribeImages.
+	ImageReference *LiveImageReference `json:"-"`
+	// Relationship carries one typed edge from a live AWS read.
+	Relationship *LiveRelationship `json:"-"`
+	// Relationships carries multiple typed edges from one live AWS read.
+	Relationships []LiveRelationship `json:"-"`
+	// TypedOnly keeps a synthetic typed target out of transitional record facts.
+	TypedOnly bool `json:"-"`
 	// Secret is intentionally never emitted: Collect redacts it and records
 	// the redaction instead. Keep a field like this so the redaction path
 	// stays exercised after the template is customized.
 	Secret string `json:"secret,omitempty"`
+}
+
+// LiveResource is the source identity retained by a live AWS loader.
+type LiveResource struct {
+	Region       string
+	ServiceKind  string
+	ResourceType string
+	ResourceID   string
+	Name         string
+	ARN          string
+	State        string
+	Tags         map[string]string
+	Attributes   map[string]any
+	// CorrelationAnchors carry source-reported join identities into the fact.
+	CorrelationAnchors []string
+	// SourceRecordID preserves a source-specific record key when it differs from the resource ID.
+	SourceRecordID string
+}
+
+// LiveImageReference is one ECR image digest and tag reported by DescribeImages.
+type LiveImageReference struct {
+	Region, ServiceKind, RepositoryARN, RepositoryName, RegistryID string
+	ImageDigest, ManifestDigest, Tag                               string
+	PushedAt                                                       time.Time
+	ImageSizeInBytes                                               int64
+	ManifestMediaType, ArtifactMediaType                           string
+}
+
+// LiveRelationship is one relationship returned by a live AWS read.
+type LiveRelationship struct {
+	Region           string
+	ServiceKind      string
+	RelationshipType string
+	SourceResourceID string
+	SourceARN        string
+	TargetResourceID string
+	TargetARN        string
+	TargetType       string
+	SourceRecordID   string
+	Attributes       map[string]any
 }
 
 // CollectOptions controls emission for one claimed scope.
@@ -120,18 +170,14 @@ type CollectOptions struct {
 	Limits ResourceUse
 }
 
-// Contract returns the SDK fact families this collector may emit: the
-// three transitional placeholder families the scaffold pipeline emits.
-// The AWS logic port (PORT_PLAN.md) retires these and declares the
-// thirteen AWS kinds here and in manifest.yaml. The bare AWS kinds stay
-// out of both declarations until typed emission and trusted host grant
-// context are ready (#8909). The standalone SDK accepts them through
-// CoreFacts; fixture-only synthetic context does not authorize production
-// emission.
+// Contract returns typed AWS resource, relationship, image-reference, and warning kinds
+// alongside transitional families still emitted by the scaffold. The host must
+// authorize each core-owned kind with a live grant; synthetic fixture context
+// does not authorize production.
 func Contract() sdk.Contract {
 	return sdk.Contract{
 		ProtocolVersion: sdk.ProtocolVersionV1Alpha1,
-		Facts: []sdk.FactDeclaration{
+		Facts: append([]sdk.FactDeclaration{
 			{
 				Kind:             FactKindSnapshot,
 				SchemaVersions:   []string{"1.0.0"},
@@ -147,7 +193,27 @@ func Contract() sdk.Contract {
 				SchemaVersions:   []string{"1.0.0"},
 				SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceReported},
 			},
-		},
+			{
+				Kind:             AWSKindResource,
+				SchemaVersions:   []string{"1.0.0"},
+				SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceReported},
+			},
+			{
+				Kind:             AWSKindRelationship,
+				SchemaVersions:   []string{"1.0.0"},
+				SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceReported},
+			},
+			{
+				Kind:             AWSKindImageReference,
+				SchemaVersions:   []string{"1.0.0"},
+				SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceReported},
+			},
+			{
+				Kind:             AWSKindWarning,
+				SchemaVersions:   []string{"1.0.0"},
+				SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceReported},
+			},
+		}, s3BucketPostureDeclaration()),
 	}
 }
 
@@ -402,29 +468,6 @@ func CollectRetryable(claim sdk.Claim, observedAt time.Time, retryAfterSeconds i
 			Class: sdk.StatusFailure, FailureClass: "transient", RetryAfterSeconds: retryAfterSeconds,
 		}},
 	}
-}
-
-func checkSourceURI(raw string) error {
-	trimmed := strings.TrimSpace(raw)
-	lower := strings.ToLower(trimmed)
-	// url.Parse only surfaces userinfo after "//", so check "@" first: a
-	// hierarchical URI with userinfo (https://user:secret@host) and an
-	// opaque credential body (svc:SECRET@host/x) are both refused. Error
-	// text never echoes the URI, which may carry the credential.
-	if strings.Contains(trimmed, "@") {
-		if u, err := url.Parse(trimmed); err != nil || u.User != nil {
-			return fmt.Errorf("source URI must not embed credentials")
-		}
-		if !strings.Contains(lower, "://") {
-			return fmt.Errorf("source URI must not embed credentials")
-		}
-	}
-	for _, key := range []string{"password", "secret", "token"} {
-		if strings.Contains(lower, key+"=") {
-			return fmt.Errorf("source URI must not embed credentials")
-		}
-	}
-	return nil
 }
 
 // credentialValueMarkers are substrings that mark free text as unsafe to

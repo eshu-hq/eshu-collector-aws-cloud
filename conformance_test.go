@@ -23,7 +23,7 @@ func TestConformancePositive(t *testing.T) {
 
 	manifest := loadManifest(t)
 	result := mustCollect(t, "complete.json", testClaim(), testObservedAt(), "")
-	report := conformance.Run(conformance.Request{Manifest: manifest, Fixtures: []sdk.Result{result}, Mode: conformance.ModeFixture})
+	report := conformance.Run(coreFixtureRequest(t, manifest, []sdk.Result{result}))
 	if !report.OK() {
 		t.Fatalf("conformance findings = %#v, want passed", report.Findings)
 	}
@@ -58,7 +58,7 @@ func TestConformanceEmpty(t *testing.T) {
 	if len(result.Facts) != 1 || result.Facts[0].Kind != FactKindSnapshot {
 		t.Fatalf("Facts = %#v, want one snapshot fact", result.Facts)
 	}
-	report := conformance.Run(conformance.Request{Manifest: manifest, Fixtures: []sdk.Result{result}, Mode: conformance.ModeFixture})
+	report := conformance.Run(coreFixtureRequest(t, manifest, []sdk.Result{result}))
 	if !report.OK() {
 		t.Fatalf("empty snapshot findings = %#v, want passed", report.Findings)
 	}
@@ -75,6 +75,8 @@ func TestSourceURIRefusal(t *testing.T) {
 		"svc:SECRET@example.invalid/x",
 		"https://example.invalid/source?token=abc",
 		"https://example.invalid/source?password=hunter2",
+		"https://bucket.s3.amazonaws.com/key?X-Amz-Credential=AKIAEXAMPLE%2F20261028%2Fus-east-1%2Fs3%2Faws4_request",
+		"https://bucket.s3.amazonaws.com/key?X-Amz-Signature=deadbeefsecret",
 		"",
 	} {
 		_, err := Collect(testClaim(), mustLoadReport(t, "complete.json"), CollectOptions{
@@ -85,11 +87,18 @@ func TestSourceURIRefusal(t *testing.T) {
 			t.Fatalf("Collect(SourceURI=%q) error = nil, want refusal", uri)
 		}
 	}
-	if _, err := Collect(testClaim(), mustLoadReport(t, "complete.json"), CollectOptions{
-		ObservedAt: testObservedAt(),
-		SourceURI:  "https://example.invalid/source/aws-cloud",
-	}); err != nil {
-		t.Fatalf("Collect(good URI) error = %v, want nil", err)
+	for _, uri := range []string{
+		"https://example.invalid/source/aws-cloud",
+		"https://example.invalid/source?region=us-east-1",
+		"aws://123456789012/us-east-1",
+		"aws:iam:role/parity-runtime",
+	} {
+		if _, err := Collect(testClaim(), mustLoadReport(t, "complete.json"), CollectOptions{
+			ObservedAt: testObservedAt(),
+			SourceURI:  uri,
+		}); err != nil {
+			t.Fatalf("Collect(good URI=%q) error = %v, want nil", uri, err)
+		}
 	}
 }
 
@@ -158,7 +167,7 @@ func TestConformanceDuplicate(t *testing.T) {
 	if len(duplicate.Facts) != len(complete.Facts) {
 		t.Fatalf("duplicate Facts = %d, want %d", len(duplicate.Facts), len(complete.Facts))
 	}
-	report := conformance.Run(conformance.Request{Manifest: manifest, Fixtures: []sdk.Result{duplicate}, Mode: conformance.ModeFixture})
+	report := conformance.Run(coreFixtureRequest(t, manifest, []sdk.Result{duplicate}))
 	if !report.OK() {
 		t.Fatalf("duplicate findings = %#v, want passed", report.Findings)
 	}

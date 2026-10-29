@@ -41,8 +41,12 @@ func TestParseConfigAcceptsHostActivation(t *testing.T) {
 	if len(parsed.Regions) != 1 || parsed.Regions[0] != "us-east-1" {
 		t.Fatalf("Regions = %v, want [us-east-1]", parsed.Regions)
 	}
-	if len(parsed.Services) != len(SupportedServices) {
-		t.Fatalf("len(Services) = %d, want %d", len(parsed.Services), len(SupportedServices))
+	allowed, ok := hostConfig()["allowed_services"].([]any)
+	if !ok {
+		t.Fatalf("host allowed_services has unexpected type %T", hostConfig()["allowed_services"])
+	}
+	if len(parsed.Services) != len(allowed) {
+		t.Fatalf("len(Services) = %d, want host allowlist length", len(parsed.Services))
 	}
 	if parsed.SourceURI != "aws://055929692761" {
 		t.Fatalf("SourceURI = %q, want aws://055929692761", parsed.SourceURI)

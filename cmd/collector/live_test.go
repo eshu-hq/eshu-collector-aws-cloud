@@ -98,3 +98,12 @@ func TestParseSDKStdioRejectsLiveConfigWithoutAccount(t *testing.T) {
 		t.Fatalf("parseSDKStdio(no account) error = %v, want target_scopes failure", err)
 	}
 }
+
+func TestLiveOptionsIgnoreLegacyPlaceholderDigest(t *testing.T) {
+	plan := stdioPlan{}
+	plan.live.PreviousDigest = "snapshot:legacy-placeholder-digest"
+	opts := liveCollectOptions(plan)
+	if opts.PreviousDigest != "" {
+		t.Fatalf("live previous digest = %q, want disabled until typed digest covers resources and failures", opts.PreviousDigest)
+	}
+}

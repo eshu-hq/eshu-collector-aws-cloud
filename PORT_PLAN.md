@@ -1,9 +1,47 @@
 # PORT_PLAN.md — AWS logic port into this standalone repo
 
-Status: SCAFFOLD ONLY. The collection pipeline (`Report`/`Collect`,
-`testdata/`, placeholder conformance fixtures) is still the template
-placeholder. This plan maps the in-tree implementation to scaffold
-locations for the later logic port. Nothing here is ported yet.
+Status: PARTIAL PORT. The resource envelope has a typed `NewResourceFact`
+seam with historical fixture/key proof. Claim-bound live EC2 reads now append
+typed resource identity to transitional placeholder records; STS verifies the
+active credentials account before service reads, and live mode ignores the old
+placeholder-only freshness digest. ECR repository reads now emit typed
+repository observations with reported tags and image-reference facts from
+DescribeImages; the regional S3 ListBuckets reader emits bucket identity,
+reported region and creation time, and tags after HeadBucket and
+GetBucketTagging reads. ECS DescribeClusters and DescribeServices emit typed
+cluster and service identity, tags, status, counts, task-definition binding,
+and load-balancer metadata. DescribeTasks emits typed task identity, status,
+containers, network-interface attachments, and reported runtime metadata.
+DescribeTaskDefinition emits safe scalar metadata and tags, with one read
+per distinct listed or service-referenced ARN, including inactive revisions
+referenced by services. It requires `ecs:DescribeTaskDefinition` permission.
+Services link to their reported task definitions and tasks to reported ENIs.
+The legacy scanner records a task-definition ARN on each task as an attribute
+and anchor, without a separate task-to-definition edge. Container definitions,
+environment values, secret references, image relationships, and service
+load-balancer relationships remain deferred. EKS
+DescribeCluster and DescribeNodegroup emit
+typed cluster and managed nodegroup identity, status, tags, version, and
+reported control-plane and nodegroup metadata. EKS DescribeAddon emits typed
+add-on identity, status, tags, version, timestamps, and service-account role
+ARN, excluding configuration values that may contain secrets. DescribeCluster
+emits reported service-role, subnet, and security-group relationships.
+Reported nodegroup and add-on roles, nodegroup subnets, and cluster membership
+also emit typed relationships. Membership uses the observed parent list
+request and rejects a nonblank conflicting child cluster name. IAM OIDC provider
+metadata and the cluster relationship are ported. An unmatched or denied
+IAM list retains an issuer-only provider and edge. An explicit
+ListOpenIDConnectProviders denial leaves EKS observations partial; a
+GetOpenIDConnectProvider failure remains terminal. The live KMS reader now
+emits verified key metadata, and the IAM reader emits verified role and
+user metadata at the legacy `aws-global` fact boundary without raw trust
+documents, policy documents, or credential material. Their live IAM and
+request-cost proof is pending.
+Remaining bucket detail
+and posture reads, policy-text parity, and the full scanner port remain
+unfinished. This plan maps the remaining in-tree implementation to standalone
+locations. No live AWS
+core-kind output or host grant has been proved.
 
 Source of truth for paths: `go/internal/collector/awscloud/` in
 `eshu-hq/eshu` at the scaffold commit, plus payload schemas in
@@ -21,9 +59,10 @@ Source of truth for paths: `go/internal/collector/awscloud/` in
 
 ## Emission contract (planned AWS kinds)
 
-`Contract()` and `manifest.yaml` currently declare only 3 transitional
-placeholder kinds (`collector-aws-cloud.snapshot/record/warning`). The port
-will declare the 13 AWS kinds at `1.0.0` `reported` and:
+`Contract()` and `manifest.yaml` declare `aws_resource`,
+`aws_relationship`, `aws_image_reference`, and 3 transitional placeholder kinds
+(`collector-aws-cloud.snapshot/record/warning`). The port will declare the
+remaining AWS kinds at `1.0.0` `reported` and:
 
 1. Ports the envelopes below so `Collect` emits the 13 AWS kinds.
 2. Deletes the 3 transitional kinds from `Contract()`, `manifest.yaml`,
@@ -71,21 +110,117 @@ importable only inside this module, satisfying `boundary_test.go`).
 - Every ported envelope keeps: stable keys, scope+generation binding,
   credential-free URIs, secret redaction with recorded reason, terminal
   (not unbounded) budget breaches, idempotent re-emission.
-- Grants: 13 live core-issued grants must exist before hosted emission;
-  `TestManifestEmissionsAreAuthorized` + `TestGrantExamplesCoverAWSKinds`
-  fail closed until they do. Issuance is a coordinator step, not a repo step.
+- Grants: the three currently declared core kinds need live core-issued grants
+  before hosted emission. All 13 need grants when their kinds are declared.
+  The grant tests check the example requests and manifest coverage; they do
+  not prove host issuance. Issuance is a coordinator step, not a repo step.
 
 ## Ordering
 
 1. Helpers (`types`, `partition`, `redaction`, `scan_status`) + boundary green.
-2. Grant issuance (13, grant-first-then-install: core `install`/`verify`
-   accept granted core kinds before the manifest declares them).
+2. Grant issuance (grant-first-then-install: core `install`/`verify`
+   accept granted core kinds). The current manifest already declares three
+   core kinds, so all three need grants before hosted installation.
 3. Complete trusted `CoreFacts` host integration (#8909), grant the exact
-   producer/kind/schema/collector-kind tuples, then declare the 13 bare AWS
-   kinds in `Contract()` + `manifest.yaml`. The standalone SDK supports this
-   mechanism; its fixture-only synthetic context is not a live grant.
-4. Base envelope (`aws_resource`) + conformance fixture rewrite.
+   producer/kind/schema/collector-kind tuples, then declare the remaining
+   ten bare AWS kinds in `Contract()` + `manifest.yaml` as their emitters
+   land. The standalone SDK supports this mechanism; its fixture-only
+   synthetic context is not a live grant.
+4. Complete the typed base envelope (`aws_resource`) in claim-bound collection:
+   the first EC2 identity slice is wired with fail-closed missing-ID handling
+   and the legacy rule-ID fallback; VPC, subnet, security-group, network
+   interface, and volume observations carry state, tags, and their reported
+   API attributes. Security groups retain group-ID/name anchors; rules carry
+   metadata, tags, and rule/group anchors. Network interfaces retain attachment,
+   address, and security-group metadata, plus subnet, VPC, security-group, and
+   attached-instance relationships from the same DescribeNetworkInterfaces row.
+   Instance identity observations carry
+   state, launch AMI ID, and an ARN from the verified STS account and partition.
+   Volume ARNs and KMS links use that same identity; subnet-to-VPC relationships
+   are also emitted. The instance-to-AMI link uses the DescribeInstances row,
+   with one typed AMI identity per distinct ID in each regional EC2 scan.
+   AMI targets do not add transitional record facts; typed facts still count
+   toward the claim's record limit. Remaining EC2 attributes and relationships,
+   other services, real host grant proof, and replacement of placeholder
+   conformance fixtures remain. ECR repository observations use the existing
+   DescribeRepositories pages plus ListTagsForResource per ARN. ECR image
+   references emit from existing DescribeImages pages. Lifecycle policy metadata
+   emits a typed resource after GetLifecyclePolicy; policy JSON text is omitted
+   because it can contain user-supplied values. This is a documented deviation
+   from the legacy policy_text attribute. Missing policies emit no resource;
+   denied reads fail the ECR service. The added call is one per repository
+   and requires `ecr:GetLifecyclePolicy`; its live IAM grant and call cost
+   remain unverified. Lambda ListFunctions rows use one GetFunction read per
+   function for safe configuration and source KMS key metadata. Validated ECR
+   image URIs emit a function-to-image relationship; ListAliases pages emit typed
+   alias resources and alias-to-function relationships with version and routing
+   weights. Alias descriptions are excluded as user-authored text. Event-source
+   mappings remain transitional, with reviewed mapping denials marked partial. Environment
+   values, tags, and presigned package URLs stay excluded. The added read
+   requires `lambda:GetFunction`; live IAM access and cost remain unverified.
+   S3 buckets emit typed identity, listed region, creation time, and tags after
+   HeadBucket owner verification and GetBucketTagging. GetBucketEncryption,
+   GetBucketVersioning, GetPublicAccessBlock, GetBucketPolicyStatus,
+   GetBucketOwnershipControls, GetBucketWebsite, and GetBucketLogging add
+   bounded bucket metadata. Policy status is a nullable public-policy boolean;
+   ownership controls are reported enum values. A separate GetBucketPolicy
+   read parses the document transiently to derive only presence, public-grant,
+   and cross-account-grant flags; policy text is never emitted. Website emits
+   enabled state, document-presence flags, redirect host, and
+   routing-rule count; logging emits enabled state, target bucket, and prefix.
+   Document object keys, logging grants, and object-key formats are excluded.
+   Website and logging use ExpectedBucketOwner, require `s3:GetBucketWebsite`
+   and `s3:GetBucketLogging`, and add two API calls per listed bucket. Live IAM
+   access and request cost remain unverified. Missing website configuration
+   and empty logging output mean disabled; other errors, including denials,
+   fail the S3 read. Missing policy or ownership controls stay unknown.
+   Encryption denial retains the bucket with unknown encryption and a partial
+   result. Versioning and public-access-block errors fail the S3 read; a
+   multi-service claim may still be partial when another service succeeds.
+   A typed `s3_bucket_posture` fact reports replication rule presence
+   through one ExpectedBucketOwner-bound GetBucketReplication call per bucket.
+   The explicit missing-config error means false; a nil response remains
+   unknown. Rule detail and replication roles are excluded. It requires
+   `s3:GetReplicationConfiguration`; live access and request cost are unverified.
+   Existing successful reads also supply logging enabled/target, versioning,
+   MFA-delete, ownership/ACL-disabled, and confirmed encryption fields. Nil
+   responses and denied encryption do not become false posture. Missing policy
+   is known absent, while an empty successful policy response leaves all three
+   policy flags unknown. Typed public-access-block flags and separate policy
+   facts remain deferred pending reducer graph proof; no raw policy is emitted.
 5. Remaining envelopes kind by kind; delete transitional kinds last.
 6. `awsruntime` + `service/` scanners service by service.
 7. `recordpolicy` / `freshness` / `catalog` / `checkpoint` integration.
 8. Image push + `pin-digest.sh`, deployment proof per README.
+
+## Resource envelope seam status
+
+`NewResourceFact` encodes the shared `aws_resource` identity with the pinned
+`factschema/aws/v1.Resource` type. The committed `8852-parity-awscloud.json`
+fixture pins the historical key and payload; separate tests cover whitespace
+trimming, anchor deduplication, ARN/resource-ID fallback, and required identity
+rejection. The SDK decoder classifies an absent `resource_id` as
+`input_invalid`. The constructor carries source scope, generation, URI, record
+ID, and observation time in the SDK fact. The SDK fact has no fencing-token
+field: the host owns the claim and its token.
+
+This seam rejects a sensitive-shaped JSON key such as
+`attributes.DatabasePassword` containing a raw value or a redaction marker,
+and refuses a credential-bearing source URI. The legacy CloudFormation scanner
+uses a different, accepted shape: each output is an entry with fixed `key` and
+`redacted` fields, so the string `DatabasePassword` remains as evidence while
+its raw value is replaced by a marker. The SDK rc.4 key walker accepts that
+shape. It cannot tell whether a raw secret was placed under a fixed `value`
+field; the service scanner must redact it first. The envelope test proves
+transport of the redacted shape, not the scanner's redaction policy. Scanner
+redaction and the host's core-kind authorization must be proved before live
+collection uses this seam.
+
+`NewResourceFact` snapshots `Attributes` through their emitted JSON form before
+validating or returning the fact. Nested caller maps, slices, pointer-backed
+values, and custom marshalers cannot change it afterward. Numeric values use
+`json.Number` in the in-memory payload, retaining exact JSON digits above
+float64's integer precision; historical `time.Time` attributes become their
+RFC3339 JSON strings. Fields hidden by `json:"-"` remain absent, as they are
+on the wire. Values that JSON cannot encode, including exposed cycles, fail
+closed with no fact.

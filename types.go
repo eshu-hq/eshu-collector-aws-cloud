@@ -18,7 +18,10 @@ type Boundary struct {
 	GenerationID        string
 	CollectorInstanceID string
 	FencingToken        int64
-	ObservedAt          time.Time
+	// ClaimToken is the host's opaque SDK claim token. It is checked for
+	// presence when an observation comes from an SDK claim and never emitted.
+	ClaimToken string
+	ObservedAt time.Time
 }
 
 // ResourceObservation describes one AWS resource reported by a service API.
@@ -34,6 +37,31 @@ type ResourceObservation struct {
 	CorrelationAnchors []string
 	SourceURI          string
 	SourceRecordID     string
+}
+
+// S3BucketPostureObservation carries reported bucket control-plane posture.
+// Nil pointers mean the relevant read did not establish a value.
+type S3BucketPostureObservation struct {
+	Boundary                 Boundary
+	BucketARN                string
+	BucketName               string
+	PolicyPresent            *bool
+	PolicyGrantsPublic       *bool
+	PolicyGrantsCrossAccount *bool
+	ReplicationEnabled       *bool
+	LoggingEnabled           *bool
+	LoggingTargetBucket      string
+	VersioningStatus         *string
+	VersioningEnabled        *bool
+	MFADeleteEnabled         *bool
+	ObjectOwnership          []string
+	ACLDisabled              *bool
+	DefaultEncryptionEnabled *bool
+	EncryptionAlgorithms     []string
+	SSEKMSKeyARN             string
+	BucketKeyEnabled         *bool
+	SourceURI                string
+	SourceRecordID           string
 }
 
 // RelationshipObservation describes one relationship reported by AWS APIs.

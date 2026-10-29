@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 )
 
@@ -18,6 +19,10 @@ func fakeConfig(regions *[]string) func(context.Context, string) (aws.Config, er
 		*regions = append(*regions, region)
 		return aws.Config{Region: region}, nil
 	}
+}
+
+func verifiedIdentity(_ context.Context, _ aws.Config) (VerifiedIdentity, error) {
+	return VerifiedIdentity{AccountID: "055929692761", Partition: "aws"}, nil
 }
 
 // TestCollectReportListsOnlyAllowlistedServices proves the orchestrator calls
@@ -29,13 +34,14 @@ func TestCollectReportListsOnlyAllowlistedServices(t *testing.T) {
 	var regions []string
 	calls := map[string]int{}
 	collector := Collector{
-		LoadConfig: fakeConfig(&regions),
+		LoadConfig:     fakeConfig(&regions),
+		VerifyIdentity: verifiedIdentity,
 		Loaders: map[string]Loader{
-			"iam": func(_ context.Context, cfg aws.Config) ([]collector.Record, error) {
+			"iam": func(_ context.Context, cfg aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
 				calls["iam/"+cfg.Region]++
 				return []collector.Record{{ID: "arn:role", Name: "role", Detail: "d"}}, nil
 			},
-			"sqs": func(_ context.Context, cfg aws.Config) ([]collector.Record, error) {
+			"sqs": func(_ context.Context, cfg aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
 				calls["sqs/"+cfg.Region]++
 				return []collector.Record{{ID: "url", Name: "queue", Detail: "d"}}, nil
 			},
@@ -64,9 +70,10 @@ func TestCollectReportSkipsGlobalServicesAfterFirstRegion(t *testing.T) {
 
 	calls := 0
 	collector := Collector{
-		LoadConfig: fakeConfig(&[]string{}),
+		LoadConfig:     fakeConfig(&[]string{}),
+		VerifyIdentity: verifiedIdentity,
 		Loaders: map[string]Loader{
-			"iam": func(_ context.Context, _ aws.Config) ([]collector.Record, error) {
+			"iam": func(_ context.Context, _ aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
 				calls++
 				return []collector.Record{{ID: "arn:role", Name: "role"}}, nil
 			},
@@ -88,12 +95,13 @@ func TestCollectReportDegradesPartialServiceFailure(t *testing.T) {
 	t.Parallel()
 
 	collector := Collector{
-		LoadConfig: fakeConfig(&[]string{}),
+		LoadConfig:     fakeConfig(&[]string{}),
+		VerifyIdentity: verifiedIdentity,
 		Loaders: map[string]Loader{
-			"iam": func(_ context.Context, _ aws.Config) ([]collector.Record, error) {
+			"iam": func(_ context.Context, _ aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
 				return []collector.Record{{ID: "arn:role", Name: "role"}}, nil
 			},
-			"sqs": func(_ context.Context, _ aws.Config) ([]collector.Record, error) {
+			"sqs": func(_ context.Context, _ aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
 				return nil, errors.New("AccessDenied: GetAttribution is denied")
 			},
 		},
@@ -111,6 +119,45 @@ func TestCollectReportDegradesPartialServiceFailure(t *testing.T) {
 	}
 }
 
+func TestCollectReportRetainsOptionalEC2Denial(t *testing.T) {
+	reader := Collector{
+		LoadConfig: fakeConfig(&[]string{}), VerifyIdentity: verifiedIdentity,
+		Loaders: map[string]Loader{"ec2": func(_ context.Context, cfg aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
+			return []collector.Record{record("vpc-123", "ec2", cfg.Region, "network", "vpc")},
+				&optionalReadDenied{denials: []optionalDenial{{operation: "DescribeSecurityGroupRules", resource: "region:us-east-1", effect: "security-group-rules-unavailable"}}}
+		}},
+	}
+	outcome, err := reader.CollectReport(context.Background(), Config{AccountID: "055929692761", Regions: []string{"us-east-1"}, Services: []string{"ec2"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outcome.Resources) != 1 || len(outcome.Warnings) != 1 || len(outcome.WarningObservations) != 1 {
+		t.Fatalf("partial EC2 outcome: resources=%d warnings=%v observations=%v", len(outcome.Resources), outcome.Warnings, outcome.WarningObservations)
+	}
+	got := outcome.WarningObservations[0]
+	if got.WarningKind != "permission_denied" || got.Attributes["operation"] != "DescribeSecurityGroupRules" || got.Attributes["resource"] != "region:us-east-1" || got.Attributes["effect"] != "security-group-rules-unavailable" {
+		t.Fatalf("warning identity: %+v", got)
+	}
+}
+
+// TestCollectReportKeepsEmptyOptionalDenial proves a reviewed optional read
+// remains a partial scan even when every required read returns an empty set.
+func TestCollectReportKeepsEmptyOptionalDenial(t *testing.T) {
+	reader := Collector{
+		LoadConfig: fakeConfig(&[]string{}), VerifyIdentity: verifiedIdentity,
+		Loaders: map[string]Loader{"ec2": func(_ context.Context, _ aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
+			return nil, &optionalReadDenied{denials: []optionalDenial{{operation: "DescribeSecurityGroupRules", resource: "region:us-east-1", effect: "security-group-rules-unavailable"}}}
+		}},
+	}
+	outcome, err := reader.CollectReport(context.Background(), Config{AccountID: "055929692761", Regions: []string{"us-east-1"}, Services: []string{"ec2"}})
+	if err != nil {
+		t.Fatalf("empty optional denial: %v", err)
+	}
+	if len(outcome.Report.Records) != 0 || len(outcome.Resources) != 0 || len(outcome.Warnings) != 1 || len(outcome.WarningObservations) != 1 {
+		t.Fatalf("empty partial outcome: %+v", outcome)
+	}
+}
+
 // TestCollectReportFailsWhenNothingIsReadable proves a total read failure
 // errors instead of emitting an empty report that would retire good
 // evidence as current.
@@ -118,9 +165,10 @@ func TestCollectReportFailsWhenNothingIsReadable(t *testing.T) {
 	t.Parallel()
 
 	collector := Collector{
-		LoadConfig: fakeConfig(&[]string{}),
+		LoadConfig:     fakeConfig(&[]string{}),
+		VerifyIdentity: verifiedIdentity,
 		Loaders: map[string]Loader{
-			"sqs": func(_ context.Context, _ aws.Config) ([]collector.Record, error) {
+			"sqs": func(_ context.Context, _ aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
 				return nil, errors.New("AccessDenied")
 			},
 		},
@@ -137,6 +185,7 @@ func TestCollectReportFailsConfigLoad(t *testing.T) {
 	t.Parallel()
 
 	collector := Collector{
+		VerifyIdentity: verifiedIdentity,
 		LoadConfig: func(_ context.Context, _ string) (aws.Config, error) {
 			return aws.Config{}, errors.New("no credentials")
 		},
@@ -145,5 +194,205 @@ func TestCollectReportFailsConfigLoad(t *testing.T) {
 	config := Config{AccountID: "055929692761", Regions: []string{"us-east-1"}, Services: []string{"iam"}}
 	if _, err := collector.CollectReport(context.Background(), config); err == nil {
 		t.Fatal("CollectReport error = nil, want config failure")
+	}
+}
+
+func TestCollectReportRetainsTypedEC2SourceIdentity(t *testing.T) {
+	collector := Collector{
+		LoadConfig: fakeConfig(&[]string{}),
+		VerifyIdentity: func(context.Context, aws.Config) (VerifiedIdentity, error) {
+			return VerifiedIdentity{AccountID: "123456789012", Partition: "aws"}, nil
+		},
+		Loaders: map[string]Loader{
+			"ec2": func(_ context.Context, cfg aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
+				return []collector.Record{
+					record("vpc-123", "ec2", cfg.Region, "test", "vpc"),
+					record("", "ec2", cfg.Region, "missing", "vpc"),
+				}, nil
+			},
+		},
+	}
+	outcome, err := collector.CollectReport(context.Background(), Config{
+		AccountID: "123456789012", Regions: []string{"us-east-1"}, Services: []string{"ec2"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outcome.Resources) != 1 {
+		t.Fatalf("typed resources = %d, want one sourced ID", len(outcome.Resources))
+	}
+	resource := outcome.Resources[0]
+	if resource.ResourceID != "vpc-123" || resource.ResourceType != "aws_ec2_vpc" ||
+		resource.Boundary.AccountID != "123456789012" || resource.Boundary.Region != "us-east-1" {
+		t.Fatalf("wrong typed source identity: %#v", resource)
+	}
+}
+
+func TestCollectReportRejectsWrongAccountBeforeServiceRead(t *testing.T) {
+	calls := 0
+	c := Collector{
+		LoadConfig: fakeConfig(&[]string{}),
+		VerifyIdentity: func(context.Context, aws.Config) (VerifiedIdentity, error) {
+			return VerifiedIdentity{AccountID: "999999999999", Partition: "aws"}, nil
+		},
+		Loaders: map[string]Loader{"ec2": func(context.Context, aws.Config, VerifiedIdentity) ([]collector.Record, error) {
+			calls++
+			return []collector.Record{record("vpc-123", "ec2", "us-east-1", "tag", "vpc")}, nil
+		}},
+	}
+	_, err := c.CollectReport(context.Background(), Config{AccountID: "055929692761", Regions: []string{"us-east-1"}, Services: []string{"ec2"}})
+	if err == nil || calls != 0 {
+		t.Fatalf("wrong account err=%v reads=%d, want error before read", err, calls)
+	}
+}
+
+func TestCollectReportRejectsUnverifiedAccountBeforeServiceRead(t *testing.T) {
+	calls := 0
+	c := Collector{
+		LoadConfig: fakeConfig(&[]string{}),
+		VerifyIdentity: func(context.Context, aws.Config) (VerifiedIdentity, error) {
+			return VerifiedIdentity{}, errors.New("denied")
+		},
+		Loaders: map[string]Loader{"ec2": func(context.Context, aws.Config, VerifiedIdentity) ([]collector.Record, error) {
+			calls++
+			return nil, nil
+		}},
+	}
+	_, err := c.CollectReport(context.Background(), Config{AccountID: "055929692761", Regions: []string{"us-east-1"}, Services: []string{"ec2"}})
+	if err == nil || calls != 0 {
+		t.Fatalf("unverified account err=%v reads=%d, want error before read", err, calls)
+	}
+}
+
+func TestCollectReportRejectsWrongPartitionBeforeServiceRead(t *testing.T) {
+	calls := 0
+	c := Collector{
+		LoadConfig: fakeConfig(&[]string{}),
+		VerifyIdentity: func(context.Context, aws.Config) (VerifiedIdentity, error) {
+			return VerifiedIdentity{AccountID: "055929692761", Partition: "aws"}, nil
+		},
+		Loaders: map[string]Loader{"ec2": func(context.Context, aws.Config, VerifiedIdentity) ([]collector.Record, error) {
+			calls++
+			return nil, nil
+		}},
+	}
+	_, err := c.CollectReport(context.Background(), Config{AccountID: "055929692761", Regions: []string{"us-gov-west-1"}, Services: []string{"ec2"}})
+	if err == nil || calls != 0 {
+		t.Fatalf("wrong partition err=%v reads=%d, want error before read", err, calls)
+	}
+}
+
+func TestIdentityFromCallerValidatesAccountAndARN(t *testing.T) {
+	identity, err := identityFromCaller("123456789012", "arn:aws-us-gov:sts::123456789012:assumed-role/read/session")
+	if err != nil || identity != (VerifiedIdentity{AccountID: "123456789012", Partition: "aws-us-gov"}) {
+		t.Fatalf("caller identity = %+v, %v", identity, err)
+	}
+	if _, err := identityFromCaller("123456789012", "arn:aws:sts::999999999999:assumed-role/read/session"); err == nil {
+		t.Fatal("mismatched STS ARN account accepted")
+	}
+}
+
+func TestTypedEC2NameMatchesLegacyIdentity(t *testing.T) {
+	for _, tt := range []struct{ kind, id, placeholder, want string }{
+		{"vpc", "vpc-1", "tag-vpc", "vpc-1"},
+		{"subnet", "subnet-1", "tag-subnet", "subnet-1"},
+		{"instance", "i-1", "tag-instance", "i-1"},
+		{"volume", "vol-1", "tag-volume", "vol-1"},
+		{"security-group", "sg-1", "group-name", "group-name"},
+		{"security-group-rule", "sgr-1", "sgr-1", "sgr-1"},
+		{"network-interface", "eni-1", "eni-1", "eni-1"},
+	} {
+		got := record(tt.id, "ec2", "us-east-1", tt.placeholder, tt.kind)
+		if got.Resource == nil || got.Resource.Name != tt.want {
+			t.Errorf("%s typed name = %v, want %q", tt.kind, got.Resource, tt.want)
+		}
+	}
+}
+
+func TestCollectReportCarriesSubnetVPCRelationship(t *testing.T) {
+	c := Collector{
+		LoadConfig: fakeConfig(&[]string{}), VerifyIdentity: func(context.Context, aws.Config) (VerifiedIdentity, error) {
+			return VerifiedIdentity{AccountID: "123456789012", Partition: "aws"}, nil
+		},
+		Loaders: map[string]Loader{"ec2": func(_ context.Context, _ aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
+			return []collector.Record{subnetRecord(ec2types.Subnet{
+				SubnetId: aws.String("subnet-123"), VpcId: aws.String("vpc-123"),
+				SubnetArn: aws.String("arn:aws:ec2:us-east-1:123456789012:subnet/subnet-123"),
+			}, "us-east-1")}, nil
+		}},
+	}
+	outcome, err := c.CollectReport(context.Background(), Config{
+		AccountID: "123456789012", Regions: []string{"us-east-1"}, Services: []string{"ec2"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outcome.Relationships) != 1 {
+		t.Fatalf("relationships = %#v", outcome.Relationships)
+	}
+	edge := outcome.Relationships[0]
+	if edge.Boundary.AccountID != "123456789012" || edge.Boundary.Region != "us-east-1" || edge.RelationshipType != "ec2_subnet_in_vpc" || edge.SourceResourceID != "subnet-123" || edge.TargetResourceID != "vpc-123" {
+		t.Fatalf("edge = %#v", edge)
+	}
+}
+
+func TestCollectReportCarriesNetworkInterfaceRelationships(t *testing.T) {
+	c := Collector{
+		LoadConfig: fakeConfig(&[]string{}), VerifyIdentity: func(context.Context, aws.Config) (VerifiedIdentity, error) {
+			return VerifiedIdentity{AccountID: "123456789012", Partition: "aws"}, nil
+		},
+		Loaders: map[string]Loader{"ec2": func(_ context.Context, _ aws.Config, identity VerifiedIdentity) ([]collector.Record, error) {
+			return []collector.Record{networkInterfaceRecord(ec2types.NetworkInterface{
+				NetworkInterfaceId: aws.String("eni-123"), SubnetId: aws.String("subnet-123"),
+				VpcId: aws.String("vpc-123"), Groups: []ec2types.GroupIdentifier{{GroupId: aws.String("sg-123")}},
+				Attachment: &ec2types.NetworkInterfaceAttachment{InstanceId: aws.String("i-123")},
+			}, "us-east-1", identity)}, nil
+		}},
+	}
+	outcome, err := c.CollectReport(context.Background(), Config{
+		AccountID: "123456789012", Regions: []string{"us-east-1"}, Services: []string{"ec2"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outcome.Relationships) != 4 || len(outcome.Resources) != 1 {
+		t.Fatalf("network interface typed observations = %#v / %#v", outcome.Relationships, outcome.Resources)
+	}
+	for _, edge := range outcome.Relationships {
+		if edge.Boundary.AccountID != "123456789012" || edge.Boundary.Region != "us-east-1" || edge.Boundary.ServiceKind != "ec2" || edge.SourceResourceID != "eni-123" {
+			t.Fatalf("unbound network interface edge = %#v", edge)
+		}
+		edge.Boundary.ScopeID = "scope-123"
+		edge.Boundary.GenerationID = "generation-123"
+		edge.Boundary.CollectorInstanceID = "collector-123"
+		edge.Boundary.ClaimToken = "opaque-claim-token"
+		edge.SourceURI = "aws://123456789012"
+		fact, err := collector.NewRelationshipFact(edge)
+		if err != nil || fact.Kind != collector.AWSKindRelationship {
+			t.Fatalf("network interface edge rejected by typed boundary: %#v, %v", fact, err)
+		}
+	}
+}
+
+// TestPartitionForRegionMapsISOPartitions locks the claim-verification
+// partition for every AWS partition: an ISO-region claim with identical
+// credentials must verify instead of failing closed on the default.
+func TestPartitionForRegionMapsISOPartitions(t *testing.T) {
+	cases := map[string]string{
+		"us-east-1":       "aws",
+		"us-gov-west-1":   "aws-us-gov",
+		"cn-north-1":      "aws-cn",
+		"us-iso-east-1":   "aws-iso",
+		"us-iso-west-1":   "aws-iso",
+		"us-isob-east-1":  "aws-iso-b",
+		"eu-isoe-west-1":  "aws-iso-e",
+		"us-isof-east-1":  "aws-iso-f",
+		"us-isof-south-1": "aws-iso-f",
+		"":                "aws",
+	}
+	for region, want := range cases {
+		if got := partitionForRegion(region); got != want {
+			t.Errorf("partitionForRegion(%q) = %q, want %q", region, got, want)
+		}
 	}
 }

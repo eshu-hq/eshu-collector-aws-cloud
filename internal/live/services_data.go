@@ -85,20 +85,93 @@ func listRDS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 // listS3 mirrors the in-tree s3 scanner's bucket inventory: control-plane
 // metadata only. Object contents, policy documents, ACL grants, and
 // notification payloads stay unread.
-func listS3(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
-	client := awss3.NewFromConfig(cfg)
-	region := cfg.Region
+func listS3(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]collector.Record, error) {
+	return listS3WithAPI(ctx, awss3.NewFromConfig(cfg), cfg.Region, identity)
+}
+
+func listS3WithAPI(ctx context.Context, client s3BucketAPI, region string, identity VerifiedIdentity) ([]collector.Record, error) {
+	input, err := s3ListInput(region)
+	if err != nil {
+		return nil, err
+	}
 	records := []collector.Record{}
-	buckets := awss3.NewListBucketsPaginator(client, &awss3.ListBucketsInput{})
+	denials := []optionalDenial{}
+	buckets := awss3.NewListBucketsPaginator(client, input)
 	for buckets.HasMorePages() {
 		page, err := buckets.NextPage(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("s3 list buckets: %w", err)
 		}
 		for _, bucket := range page.Buckets {
-			name := aws.ToString(bucket.Name)
-			records = append(records, record("arn:aws:s3:::"+name, "s3", region, name, "bucket"))
+			if aws.ToString(bucket.Name) == "" {
+				continue
+			}
+			headRegion, tags, err := readS3BucketDetails(ctx, client, aws.ToString(bucket.Name), identity.AccountID)
+			if err != nil {
+				return nil, err
+			}
+			if headRegion != "" && headRegion != region {
+				return nil, fmt.Errorf("s3 HeadBucket returned a bucket outside the claimed region")
+			}
+			row, err := s3BucketRecord(bucket, region, identity)
+			if err != nil {
+				return nil, err
+			}
+			row.Resource.Tags = tags
+			posture, err := readS3BucketPosture(ctx, client, aws.ToString(bucket.Name), identity.AccountID)
+			if err != nil {
+				return nil, err
+			}
+			for key, value := range posture {
+				row.Resource.Attributes[key] = value
+			}
+			policyAndOwnership, err := readS3PolicyAndOwnership(ctx, client, aws.ToString(bucket.Name), identity.AccountID)
+			if err != nil {
+				return nil, err
+			}
+			for key, value := range policyAndOwnership {
+				row.Resource.Attributes[key] = value
+			}
+			websiteLogging, loggingObserved, err := readS3WebsiteLogging(ctx, client, aws.ToString(bucket.Name), identity.AccountID)
+			if err != nil {
+				return nil, err
+			}
+			for key, value := range websiteLogging {
+				row.Resource.Attributes[key] = value
+			}
+			replication, err := readS3Replication(ctx, client, aws.ToString(bucket.Name), identity.AccountID)
+			if err != nil {
+				return nil, err
+			}
+			policyFlags, err := readS3BucketPolicyFlags(ctx, client, aws.ToString(bucket.Name), identity.AccountID)
+			if err != nil {
+				return nil, err
+			}
+			row.S3Posture = &collector.S3BucketPostureObservation{
+				Boundary:  collector.Boundary{Region: region, ServiceKind: "s3"},
+				BucketARN: row.Resource.ARN, BucketName: aws.ToString(bucket.Name),
+				ReplicationEnabled: replication, SourceRecordID: row.Resource.ARN + "#posture",
+				PolicyPresent: policyFlags.present, PolicyGrantsPublic: policyFlags.public,
+				PolicyGrantsCrossAccount: policyFlags.crossAccount,
+			}
+			applyS3KnownPosture(row.S3Posture, posture, policyAndOwnership, websiteLogging, loggingObserved)
+			encryption, denied, err := readS3BucketEncryption(ctx, client, aws.ToString(bucket.Name), identity.AccountID)
+			if err != nil {
+				return nil, err
+			}
+			if denied {
+				denials = append(denials, optionalDenial{operation: "GetBucketEncryption", resource: "bucket:" + aws.ToString(bucket.Name), effect: "encryption-unknown"})
+			} else {
+				applyS3EncryptionPosture(row.S3Posture, encryption)
+				for key, value := range encryption {
+					row.Resource.Attributes[key] = value
+				}
+			}
+			records = append(records, row)
 		}
+	}
+	if len(denials) > 0 {
+		return records, &optionalReadDenied{denials: denials}
 	}
 	return records, nil
 }

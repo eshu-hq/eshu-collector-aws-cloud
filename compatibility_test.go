@@ -30,7 +30,7 @@ func TestCompatibilityMatrixSupportedPair(t *testing.T) {
 		t.Fatalf("pinned range %q must cover supported core 0.1.0", manifest.Spec.CompatibleCore)
 	}
 	result := mustCollect(t, "complete.json", testClaim(), testObservedAt(), "")
-	report := conformance.Run(conformance.Request{Manifest: manifest, Fixtures: []sdk.Result{result}, Mode: conformance.ModeFixture})
+	report := conformance.Run(coreFixtureRequest(t, manifest, []sdk.Result{result}))
 	if !report.OK() {
 		t.Fatalf("supported pair findings = %#v, want passed", report.Findings)
 	}
@@ -47,13 +47,13 @@ func TestCompatibilityMatrixRejectsUnsupportedVersions(t *testing.T) {
 
 	unsupportedProtocol := complete
 	unsupportedProtocol.ProtocolVersion = "collector-sdk/v9alpha9"
-	if report := conformance.Run(conformance.Request{Manifest: manifest, Fixtures: []sdk.Result{unsupportedProtocol}, Mode: conformance.ModeFixture}); report.OK() {
+	if report := conformance.Run(coreFixtureRequest(t, manifest, []sdk.Result{unsupportedProtocol})); report.OK() {
 		t.Fatal("unsupported protocol: report OK = true, want failed")
 	}
 
 	unversioned := loadManifestForMatrix(t)
 	unversioned.Spec.EmittedFacts[0].SchemaVersions = nil
-	if report := conformance.Run(conformance.Request{Manifest: unversioned, Fixtures: []sdk.Result{complete}, Mode: conformance.ModeFixture}); report.OK() {
+	if report := conformance.Run(coreFixtureRequest(t, unversioned, []sdk.Result{complete})); report.OK() {
 		t.Fatal("unversioned fact kind: report OK = true, want failed")
 	} else if !hasFinding(report, conformance.FindingManifestInvalid) {
 		t.Fatalf("unversioned findings = %#v, want manifest_invalid", report.Findings)
