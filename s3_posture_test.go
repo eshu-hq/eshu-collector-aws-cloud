@@ -95,7 +95,7 @@ func TestS3PostureFactEncodesDerivedPolicyFlags(t *testing.T) {
 	if err != nil || fact.Payload["policy_present"] != true || fact.Payload["policy_grants_public"] != false || fact.Payload["policy_grants_cross_account"] != true {
 		t.Fatalf("derived policy fields not encoded: err=%v payload=%v", err, fact.Payload)
 	}
-	for _, field := range []string{"block_public_access_all", "ignore_public_acls", "restrict_public_buckets", "policy_is_public"} {
+	for _, field := range []string{"block_public_access_all", "block_public_acls", "block_public_policy", "ignore_public_acls", "restrict_public_buckets", "policy_is_public"} {
 		if _, present := fact.Payload[field]; present {
 			t.Fatalf("unproven posture field %q emitted", field)
 		}

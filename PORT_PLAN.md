@@ -163,8 +163,10 @@ importable only inside this module, satisfying `boundary_test.go`).
    GetBucketVersioning, GetPublicAccessBlock, GetBucketPolicyStatus,
    GetBucketOwnershipControls, GetBucketWebsite, and GetBucketLogging add
    bounded bucket metadata. Policy status is a nullable public-policy boolean;
-   ownership controls are reported enum values. No policy document is read.
-   Website emits enabled state, document-presence flags, redirect host, and
+   ownership controls are reported enum values. A separate GetBucketPolicy
+   read parses the document transiently to derive only presence, public-grant,
+   and cross-account-grant flags; policy text is never emitted. Website emits
+   enabled state, document-presence flags, redirect host, and
    routing-rule count; logging emits enabled state, target bucket, and prefix.
    Document object keys, logging grants, and object-key formats are excluded.
    Website and logging use ExpectedBucketOwner, require `s3:GetBucketWebsite`
@@ -182,9 +184,10 @@ importable only inside this module, satisfying `boundary_test.go`).
    `s3:GetReplicationConfiguration`; live access and request cost are unverified.
    Existing successful reads also supply logging enabled/target, versioning,
    MFA-delete, ownership/ACL-disabled, and confirmed encryption fields. Nil
-   responses and denied encryption do not become false posture. Public-access
-   and policy-derived posture and policy facts remain deferred pending the
-   bucket-policy presence/grant parser.
+   responses and denied encryption do not become false posture. Missing policy
+   is known absent, while an empty successful policy response leaves all three
+   policy flags unknown. Typed public-access-block flags and separate policy
+   facts remain deferred pending reducer graph proof; no raw policy is emitted.
 5. Remaining envelopes kind by kind; delete transitional kinds last.
 6. `awsruntime` + `service/` scanners service by service.
 7. `recordpolicy` / `freshness` / `catalog` / `checkpoint` integration.

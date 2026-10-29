@@ -104,9 +104,9 @@ default encryption summary from the existing bucket reads. Missing or empty
 versioning and ownership responses leave their derived fields unknown.
 Encryption fields are populated only after a confirmed response or S3's
 explicit missing-configuration error; a denied or nil successful response
-leaves them unknown. Public-access and policy-derived posture remain unset
-until bucket policy presence and grant derivation are ported. No logging edge
-is synthesized by this collector.
+leaves them unknown. Public-access-block flags remain unset in the typed posture fact; the
+policy-presence and conservatively derived grant flags come from the separate
+GetBucketPolicy read. No logging edge is synthesized by this collector.
 For encryption, the explicit missing-configuration response means a known
 empty configuration. Encryption AccessDenied leaves those attributes absent,
 retains the bucket, emits a typed warning, and makes the SDK result partial.

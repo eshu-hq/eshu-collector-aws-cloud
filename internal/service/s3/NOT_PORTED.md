@@ -6,8 +6,14 @@ The live reader has bounded `GetBucketEncryption`, `GetBucketVersioning`,
 `GetPublicAccessBlock`, `GetBucketWebsite`, and `GetBucketLogging` metadata
 reads in `internal/live/s3_bucket.go`, plus `GetBucketPolicyStatus` and
 `GetBucketOwnershipControls` in `internal/live/s3_policy_ownership.go`.
-The legacy S3 scanner, full SDK adapter, and separate typed
-`s3_bucket_posture` fact remain unported.
+The live path also emits a bounded typed `s3_bucket_posture` fact with
+replication presence, confirmed logging/versioning/ownership/encryption
+settings, and policy presence plus conservatively derived public and
+cross-account grant flags. `GetBucketPolicy` is parsed transiently; no policy
+text or principal is emitted. An empty successful policy response leaves its
+flags unknown. Typed public-access-block flags remain unset pending reducer
+graph proof. The legacy S3 scanner, full SDK adapter, and separate policy facts
+remain unported.
 
 ## Not ported (class-c)
 
