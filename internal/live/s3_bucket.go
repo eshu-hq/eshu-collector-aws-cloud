@@ -77,8 +77,8 @@ func readS3BucketEncryption(ctx context.Context, api s3BucketDetailsAPI, name, a
 }
 
 // readS3BucketDetails follows the legacy required HeadBucket read and tag
-// read. Only NoSuchTagSet means that tagging was not configured; denials remain
-// terminal for the claim.
+// read. Only NoSuchTagSet means that tagging was not configured; denials fail
+// the S3 read.
 func readS3BucketDetails(ctx context.Context, api s3BucketDetailsAPI, name, accountID string) (string, map[string]string, error) {
 	head, err := api.HeadBucket(ctx, &awss3.HeadBucketInput{
 		Bucket: aws.String(name), ExpectedBucketOwner: aws.String(accountID),
