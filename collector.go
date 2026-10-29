@@ -94,7 +94,7 @@ type Report struct {
 	Records     []Record  `json:"records"`
 }
 
-// Record is one placeholder source row.
+// Record is one live loader row or placeholder source row.
 type Record struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
@@ -104,6 +104,8 @@ type Record struct {
 	Resource *LiveResource `json:"-"`
 	// Relationship carries one typed edge from a live AWS read.
 	Relationship *LiveRelationship `json:"-"`
+	// TypedOnly keeps a synthetic typed target out of transitional record facts.
+	TypedOnly bool `json:"-"`
 	// Secret is intentionally never emitted: Collect redacts it and records
 	// the redaction instead. Keep a field like this so the redaction path
 	// stays exercised after the template is customized.

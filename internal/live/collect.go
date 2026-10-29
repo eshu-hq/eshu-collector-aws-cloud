@@ -119,8 +119,10 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 				warnings = append(warnings, fmt.Sprintf("%s/%s: %s", service, region, firstLine(err.Error())))
 				continue
 			}
-			records = append(records, listed...)
 			for _, item := range listed {
+				if !item.TypedOnly {
+					records = append(records, item)
+				}
 				if edge := item.Relationship; edge != nil {
 					relationships = append(relationships, collector.RelationshipObservation{
 						Boundary:         collector.Boundary{AccountID: config.AccountID, Region: edge.Region, ServiceKind: edge.ServiceKind},
@@ -146,7 +148,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 			}
 		}
 	}
-	if len(records) == 0 && len(warnings) > 0 {
+	if len(records) == 0 && len(resources) == 0 && len(warnings) > 0 {
 		return Outcome{}, fmt.Errorf("live collection read nothing: %s", strings.Join(warnings, "; "))
 	}
 	return Outcome{
@@ -168,6 +170,7 @@ var ec2ResourceTypes = map[string]string{
 	"security-group-rule": awsv1.ResourceTypeEC2SecurityGroupRule,
 	"network-interface":   awsv1.ResourceTypeEC2NetworkInterface,
 	"instance":            awsv1.ResourceTypeEC2Instance,
+	"ami":                 awsv1.ResourceTypeEC2AMI,
 	"volume":              awsv1.ResourceTypeEC2Volume,
 }
 

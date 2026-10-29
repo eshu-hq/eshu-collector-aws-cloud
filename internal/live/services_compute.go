@@ -100,6 +100,7 @@ func listEC2(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]
 		}
 	}
 	instances := awsec2.NewDescribeInstancesPaginator(client, &awsec2.DescribeInstancesInput{})
+	seenAMIIDs := make(map[string]struct{})
 	for instances.HasMorePages() {
 		page, err := instances.NextPage(ctx)
 		if err != nil {
@@ -107,7 +108,7 @@ func listEC2(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]
 		}
 		for _, reservation := range page.Reservations {
 			for _, instance := range reservation.Instances {
-				records, err = appendEC2Record(records, instanceRecord(instance, region, identity))
+				records, err = appendInstanceRecords(records, instance, region, identity, seenAMIIDs)
 				if err != nil {
 					return nil, err
 				}

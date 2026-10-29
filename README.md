@@ -27,12 +27,13 @@ review). Keep internal helpers private.
 `aws_relationship` alongside three
 transitional placeholder kinds (`collector-aws-cloud.snapshot/record/warning`).
 The live EC2 reader emits typed resource identity for VPCs, subnets, security
-groups and rules, network interfaces, instances, and volumes, plus a
-subnet-to-VPC relationship when both IDs are reported. Before any live
-service read, it verifies the active credentials account with STS in each
-configured region and fails the claim if it differs from the target account.
+groups and rules, network interfaces, instances, AMI identities, and volumes,
+plus subnet-to-VPC, volume-to-KMS, and instance-to-AMI relationships when
+their IDs are reported. Before any live service read, it verifies the active
+credentials account with STS in each configured region and fails the claim
+if it differs from the target account.
 Typed EC2 names follow legacy scanner identity rules: stable IDs for VPCs,
-subnets, instances, and volumes; group names for security groups. Missing
+subnets, instances, AMIs, and volumes; group names for security groups. Missing
 required source IDs fail the EC2 read, while subnet ARN and security-group-rule
 content use the legacy deterministic identity fallbacks. The live
 path currently re-emits on every read because the old placeholder digest does
@@ -64,8 +65,12 @@ and legacy group-ID/name correlation anchors. Security group rule observations
 carry rule metadata, tags, and rule/group correlation anchors. Network
 interface observations carry status, tags, attachment, address, and security
 group metadata. Instance identity observations carry state and launch AMI ID
-from the same `DescribeInstances` response. Subnet-to-VPC and volume-to-KMS
-are the two typed relationships currently emitted.
+from the same `DescribeInstances` response. Subnet-to-VPC, volume-to-KMS, and
+instance-to-AMI are the typed relationships currently emitted. AMI identities
+are deduplicated by ID within each regional EC2 scan. AMI targets add typed
+facts without adding transitional record facts; all emitted facts count toward
+the claim's record limit.
+
 This is staged implementation, not a full parity or live host admission claim.
 Instance and volume ARNs use the account and partition verified by STS before
 EC2 reads; a partition mismatch fails before a service read.
