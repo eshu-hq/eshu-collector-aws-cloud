@@ -101,6 +101,8 @@ type Record struct {
 	// Resource carries typed metadata from a live AWS read. The placeholder
 	// report format does not accept it from a file.
 	Resource *LiveResource `json:"-"`
+	// EC2Posture carries metadata from the same DescribeInstances item.
+	EC2Posture *EC2InstancePostureObservation `json:"-"`
 	// ImageReference carries a typed image digest and tag from DescribeImages.
 	ImageReference *LiveImageReference `json:"-"`
 	// Relationship carries one typed edge from a live AWS read.
@@ -208,6 +210,11 @@ func Contract() sdk.Contract {
 			},
 			{
 				Kind:             AWSKindWarning,
+				SchemaVersions:   []string{"1.0.0"},
+				SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceReported},
+			},
+			{
+				Kind:             AWSKindEC2InstancePosture,
 				SchemaVersions:   []string{"1.0.0"},
 				SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceReported},
 			},

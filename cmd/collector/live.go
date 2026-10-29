@@ -42,6 +42,10 @@ func collectLivePlan(plan stdioPlan) (sdk.Result, error) {
 	if err != nil {
 		return sdk.Result{}, err
 	}
+	result, err = collector.AppendLiveEC2InstancePostures(result, outcome.EC2Postures, plan.live.SourceURI, plan.live.Limits)
+	if err != nil {
+		return sdk.Result{}, err
+	}
 	return collector.AppendLiveWarnings(result, outcome.WarningObservations, plan.live.SourceURI, plan.live.Limits)
 }
 

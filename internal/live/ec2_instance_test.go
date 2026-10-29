@@ -106,8 +106,8 @@ func TestAMIOnlyResourcePreservesPlaceholderCount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(outcome.Report.Records) != 2 || len(outcome.Resources) != 3 || len(outcome.Relationships) != 2 {
-		t.Fatalf("placeholder records=%d typed resources=%d relationships=%d, want 2/3/2", len(outcome.Report.Records), len(outcome.Resources), len(outcome.Relationships))
+	if len(outcome.Report.Records) != 2 || len(outcome.Resources) != 3 || len(outcome.Relationships) != 2 || len(outcome.EC2Postures) != 2 {
+		t.Fatalf("placeholder records=%d typed resources=%d relationships=%d postures=%d, want 2/3/2/2", len(outcome.Report.Records), len(outcome.Resources), len(outcome.Relationships), len(outcome.EC2Postures))
 	}
 	claim := sdk.Claim{
 		ComponentID: collector.ComponentID, InstanceID: "synthetic-instance",
@@ -116,7 +116,7 @@ func TestAMIOnlyResourcePreservesPlaceholderCount(t *testing.T) {
 		GenerationID: "generation-1", FencingToken: "fence-1",
 	}
 	uri := "aws://123456789012"
-	limits := collector.ResourceUse{MaxRecordsPerClaim: 8, MaxPayloadBytes: 65536}
+	limits := collector.ResourceUse{MaxRecordsPerClaim: 10, MaxPayloadBytes: 65536}
 	base, err := collector.Collect(claim, outcome.Report, collector.CollectOptions{SourceURI: uri, ObservedAt: time.Now().UTC(), Limits: limits})
 	if err != nil || len(base.Facts) != 3 || base.Facts[2].Payload["record_count"] != 2 {
 		t.Fatalf("placeholder facts = %d, result = %#v, err = %v", len(base.Facts), base, err)
@@ -125,13 +125,20 @@ func TestAMIOnlyResourcePreservesPlaceholderCount(t *testing.T) {
 	if err != nil || len(withResources.Facts) != 6 {
 		t.Fatalf("facts after typed resources = %d, err = %v", len(withResources.Facts), err)
 	}
-	complete, err := collector.AppendLiveRelationships(withResources, outcome.Relationships, uri, limits)
-	if err != nil || complete.State != sdk.ResultComplete || len(complete.Facts) != 8 || complete.Statuses[0].FactCount != 8 {
+	withRelationships, err := collector.AppendLiveRelationships(withResources, outcome.Relationships, uri, limits)
+	if err != nil || len(withRelationships.Facts) != 8 {
+		t.Fatalf("relationship facts = %d, err = %v", len(withRelationships.Facts), err)
+	}
+	complete, err := collector.AppendLiveEC2InstancePostures(withRelationships, outcome.EC2Postures, uri, limits)
+	if err != nil || complete.State != sdk.ResultComplete || len(complete.Facts) != 10 || complete.Statuses[0].FactCount != 10 {
 		t.Fatalf("final fact budget = %#v, err = %v", complete, err)
 	}
-	limits.MaxRecordsPerClaim = 7
-	limited, err := collector.AppendLiveRelationships(withResources, outcome.Relationships, uri, limits)
+	if complete.Facts[8].Kind != collector.AWSKindEC2InstancePosture || complete.Facts[9].Kind != collector.AWSKindEC2InstancePosture {
+		t.Fatalf("posture facts = %#v", complete.Facts[8:])
+	}
+	limits.MaxRecordsPerClaim = 9
+	limited, err := collector.AppendLiveEC2InstancePostures(withRelationships, outcome.EC2Postures, uri, limits)
 	if err != nil || limited.State != sdk.ResultTerminal || len(limited.Facts) != 0 {
-		t.Fatalf("seven-fact budget did not fail terminal: %#v, err = %v", limited, err)
+		t.Fatalf("nine-fact budget did not fail terminal: %#v, err = %v", limited, err)
 	}
 }

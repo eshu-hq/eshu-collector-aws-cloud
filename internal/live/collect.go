@@ -55,6 +55,7 @@ type Outcome struct {
 	Resources       []collector.ResourceObservation
 	Relationships   []collector.RelationshipObservation
 	ImageReferences []collector.ImageReferenceObservation
+	EC2Postures     []collector.EC2InstancePostureObservation
 }
 
 func (c Collector) now() time.Time {
@@ -90,6 +91,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 	resources := []collector.ResourceObservation{}
 	relationships := []collector.RelationshipObservation{}
 	imageReferences := []collector.ImageReferenceObservation{}
+	ec2Postures := []collector.EC2InstancePostureObservation{}
 	warningObservations := []collector.WarningObservation{}
 	ordinaryFailure := false
 	for i, region := range config.Regions {
@@ -159,6 +161,11 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 						ManifestMediaType: image.ManifestMediaType, ArtifactMediaType: image.ArtifactMediaType,
 					})
 				}
+				if posture := item.EC2Posture; posture != nil {
+					observation := *posture
+					observation.Boundary = collector.Boundary{AccountID: config.AccountID, Region: region, ServiceKind: "ec2"}
+					ec2Postures = append(ec2Postures, observation)
+				}
 				if item.Resource == nil {
 					continue
 				}
@@ -191,6 +198,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 		Resources:           resources,
 		Relationships:       relationships,
 		ImageReferences:     imageReferences,
+		EC2Postures:         ec2Postures,
 	}, nil
 }
 
