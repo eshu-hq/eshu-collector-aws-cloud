@@ -1,7 +1,12 @@
 # #9301 DescribeImages plan (PREPARATION ONLY — no implementation)
 
 Status: plan only. No collector emission is implemented in this lane.
+Revalidated 2026-10-29 against collector `origin/main`: plan holds as-is,
+no rebase needed (0 behind).
 Sequencing: #9297 (R1 degrade contract) lands before #9301 implementation.
+#9297 is OPEN with parallel lanes active (`drive/9297-denial-integrated` at
+`744d49a` plus four denial worktrees) but no PR and no confirmed
+`WarningKind` (`types.go:316` still a plain string) — do not duplicate.
 Prerequisite: #8852 typed EC2 port (PORT_PLAN steps 3–5) restores typed
 `aws_resource@1.0.0` emission in this repository first. Nothing new lands in
 `eshu` `go/internal/collector/awscloud`, which has no QA activation and is
@@ -9,8 +14,11 @@ scheduled for removal.
 
 Related: #9298 (inventory allowlist/readback, owner: #9298 lane, PR #9450 head
 `e08fc00879`, open, HELD unmerged per the #9460 sixth-shard ruling — no action
-there until relief + #9471 refit land on main, then rebase + one fresh wave).
-#9301 must not duplicate that lane's files (allowlist/readback/golden only).
+there until the relief lands on main, then rebase + one fresh wave).
+Revalidated 2026-10-29: #9471 (readiness refit) is CLOSED; #9460 stays OPEN
+with relief PR #9514 (`drive/9460-sixth-shard`, CI wave running, wall evidence
+still owed) — the hold has NOT cleared. #9301 must not duplicate that lane's
+files (allowlist/readback/golden only).
 
 ## 1. What exists today
 
