@@ -338,7 +338,7 @@ func namespacedManifest(t *testing.T) conformance.Manifest {
 	manifest := loadManifest(t)
 	families := manifest.Spec.EmittedFacts[:0:0]
 	for _, family := range manifest.Spec.EmittedFacts {
-		if family.Kind != AWSKindResource && family.Kind != AWSKindRelationship {
+		if family.Kind != AWSKindResource && family.Kind != AWSKindRelationship && family.Kind != AWSKindImageReference {
 			families = append(families, family)
 		}
 	}

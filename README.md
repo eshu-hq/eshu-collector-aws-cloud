@@ -23,8 +23,8 @@ review). Keep internal helpers private.
 
 ## Emission contract
 
-`manifest.yaml` `spec.emittedFacts` declares `aws_resource` and
-`aws_relationship` alongside three
+`manifest.yaml` `spec.emittedFacts` declares `aws_resource`,
+`aws_relationship`, and `aws_image_reference` alongside three
 transitional placeholder kinds (`collector-aws-cloud.snapshot/record/warning`).
 The live EC2 reader emits typed resource identity for VPCs, subnets, security
 groups and rules, network interfaces, instances, AMI identities, and volumes,
@@ -39,8 +39,10 @@ content use the legacy deterministic identity fallbacks. The live
 path currently re-emits on every read because the old placeholder digest does
 not cover typed facts or service failures. The ECR reader emits typed
 repository observations from DescribeRepositories and ListTagsForResource while
-retaining its repository placeholder record. ECR images and the other AWS
-service readers still produce placeholder records. The full port removes
+retaining its repository placeholder record. Existing DescribeImages pages emit
+one `aws_image_reference` per tag, including an empty tag for untagged images;
+the image placeholder record remains. ECR lifecycle policies and the other AWS
+service readers still lack typed output. The full port removes
 those placeholders and declares the other core-owned AWS fact kinds at schema
 `1.0.0`, all with
 `reported` confidence (the in-tree AWS envelopes record facts returned by
@@ -138,8 +140,9 @@ with `docs/public/extend/sdk-compatibility.md` in the core repo.
 Core-owned fact kinds require a live #6709 producer grant naming this
 producer, version, kind, schema, and scope; namespaced kinds need none.
 The AWS issuance request set contains thirteen grants, one per core kind at
-schema `1.0.0`. The current manifest declares `aws_resource` and
-`aws_relationship` alongside three transitional namespaced kinds.
+schema `1.0.0`. The current manifest declares `aws_resource`,
+`aws_relationship`, and `aws_image_reference` alongside three transitional
+namespaced kinds.
 `TestManifestEmissionsAreAuthorized` fails when a declared kind is
 outside the collector's namespace and has no live grant scoped to a
 collector kind. This repo cannot see the core registry, so it treats any

@@ -34,7 +34,11 @@ func collectLivePlan(plan stdioPlan) (sdk.Result, error) {
 	if err != nil {
 		return sdk.Result{}, err
 	}
-	return collector.AppendLiveRelationships(result, outcome.Relationships, plan.live.SourceURI, plan.live.Limits)
+	result, err = collector.AppendLiveRelationships(result, outcome.Relationships, plan.live.SourceURI, plan.live.Limits)
+	if err != nil {
+		return sdk.Result{}, err
+	}
+	return collector.AppendLiveImageReferences(result, outcome.ImageReferences, plan.live.SourceURI, plan.live.Limits)
 }
 
 // liveCollectOptions disables placeholder-only freshness until the digest
