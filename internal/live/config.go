@@ -303,7 +303,7 @@ func parseCredentials(config map[string]any, account string) (string, string, er
 	}
 	mode, ok := creds["mode"].(string)
 	if !ok || mode != "central_assume_role" {
-		return "", "", fmt.Errorf("config target_scopes credentials mode %q is not supported (want central_assume_role)", mode)
+		return "", "", fmt.Errorf("config target_scopes credentials mode %#v is not supported (want central_assume_role)", creds["mode"])
 	}
 	roleARN, ok := creds["role_arn"].(string)
 	if !ok {
