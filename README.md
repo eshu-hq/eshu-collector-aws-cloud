@@ -56,8 +56,10 @@ redaction path. GetFunction requires `lambda:GetFunction`; AWS may also require
 ListAliases pages emit typed `aws_lambda_alias` resources and
 `lambda_alias_targets_function` relationships with reported version and
 additional routing weights. User-authored alias descriptions are omitted.
-An alias tied to a different function fails the Lambda read; the reviewed
-mapping-denial path still retains aliases from successful reads.
+An alias ARN must match the known parent function ARN and qualifier; without
+that parent ARN, the alias read fails rather than attributing a foreign ARN.
+A missing alias ARN can still use the known parent ARN and alias name for its
+resource ID. The reviewed mapping-denial path retains successful aliases.
 The S3 reader emits typed bucket identity, region, and creation time from
 regional ListBuckets. It verifies the expected owner with HeadBucket and
 reads tags through GetBucketTagging. Only NoSuchTagSet means an empty tag set.

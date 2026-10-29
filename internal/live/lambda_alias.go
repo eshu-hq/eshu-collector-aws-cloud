@@ -20,7 +20,10 @@ func lambdaAliasRecord(functionARN string, alias lambdatypes.AliasConfiguration,
 	functionARN = strings.TrimSpace(functionARN)
 	aliasARN := strings.TrimSpace(aws.ToString(alias.AliasArn))
 	name := strings.TrimSpace(aws.ToString(alias.Name))
-	if aliasARN != "" && (name == "" || functionARN != "" && aliasARN != functionARN+":"+name || functionARN == "" && !strings.HasSuffix(aliasARN, ":"+name)) {
+	// An alias ARN is trustworthy only when it matches a known parent ARN
+	// and the reported qualifier exactly. A suffix match cannot bind a
+	// name-only parent to the account, region, or function in that ARN.
+	if aliasARN != "" && (functionARN == "" || name == "" || aliasARN != functionARN+":"+name) {
 		return collector.Record{}, fmt.Errorf("Lambda alias identity differs from parent function or name")
 	}
 	resourceID := aliasARN

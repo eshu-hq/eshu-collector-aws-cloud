@@ -80,3 +80,27 @@ func TestLambdaAliasRecordNormalizesRoutingWeights(t *testing.T) {
 		})
 	}
 }
+
+func TestLambdaAliasRecordRejectsARNWithoutBoundParent(t *testing.T) {
+	for _, aliasARN := range []string{
+		"arn:aws:lambda:us-east-1:123456789012:function:worker:live",
+		"arn:aws:lambda:us-west-2:999999999999:function:other:live",
+	} {
+		alias := lambdatypes.AliasConfiguration{AliasArn: aws.String(aliasARN), Name: aws.String("live")}
+		if _, err := lambdaAliasRecord("", alias, "us-east-1"); err == nil {
+			t.Fatalf("unbound alias ARN accepted: %q", aliasARN)
+		}
+	}
+}
+
+func TestLambdaAliasRecordAllowsMissingAliasARNWithKnownParent(t *testing.T) {
+	const functionARN = "arn:aws:lambda:us-east-1:123456789012:function:worker"
+	alias := lambdatypes.AliasConfiguration{Name: aws.String("live")}
+	got, err := lambdaAliasRecord(functionARN, alias, "us-east-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Resource == nil || got.Resource.ResourceID != functionARN+":live" || got.Resource.ARN != "" || got.Relationship != nil {
+		t.Fatalf("name-only alias fallback: %+v", got)
+	}
+}
