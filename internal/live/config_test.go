@@ -9,7 +9,7 @@ import (
 
 func hostConfig() map[string]any {
 	return map[string]any{
-		"target_scopes":   map[string]any{"account_id": "055929692761"},
+		"target_scopes":   map[string]any{"account_id": "111122223333"},
 		"allowed_regions": []any{"us-east-1"},
 		"allowed_services": []any{
 			"iam", "ecr", "ec2", "eks", "elbv2", "route53", "sqs",
@@ -35,8 +35,8 @@ func TestParseConfigAcceptsHostActivation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseConfig(host) error = %v", err)
 	}
-	if parsed.AccountID != "055929692761" {
-		t.Fatalf("AccountID = %q, want 055929692761", parsed.AccountID)
+	if parsed.AccountID != "111122223333" {
+		t.Fatalf("AccountID = %q, want 111122223333", parsed.AccountID)
 	}
 	if len(parsed.Regions) != 1 || parsed.Regions[0] != "us-east-1" {
 		t.Fatalf("Regions = %v, want [us-east-1]", parsed.Regions)
@@ -48,11 +48,77 @@ func TestParseConfigAcceptsHostActivation(t *testing.T) {
 	if len(parsed.Services) != len(allowed) {
 		t.Fatalf("len(Services) = %d, want host allowlist length", len(parsed.Services))
 	}
-	if parsed.SourceURI != "aws://055929692761" {
-		t.Fatalf("SourceURI = %q, want aws://055929692761", parsed.SourceURI)
+	if parsed.SourceURI != "aws://111122223333" {
+		t.Fatalf("SourceURI = %q, want aws://111122223333", parsed.SourceURI)
 	}
 	if parsed.Limits.MaxRecordsPerClaim != 5000 || parsed.Limits.ClaimTimeoutSeconds != 300 {
 		t.Fatalf("Limits = %+v, want host limits", parsed.Limits)
+	}
+}
+
+// TestParseConfigReadsScopeCredentials proves the opt-in cross-account
+// shape: a scope carrying credentials resolves its role ARN and external ID,
+// while malformed credential blocks fail closed.
+func TestParseConfigReadsScopeCredentials(t *testing.T) {
+	t.Parallel()
+
+	withCreds := hostConfig()
+	withCreds["target_scopes"] = []any{map[string]any{
+		"account_id": "111122223333",
+		"credentials": map[string]any{
+			"mode":        "central_assume_role",
+			"role_arn":    "arn:aws:iam::111122223333:role/irsa-eshu-aws-collector-cross-account-role",
+			"external_id": "eshu-ops-qa-collector",
+		},
+	}}
+	parsed, err := ParseConfig(withCreds)
+	if err != nil {
+		t.Fatalf("ParseConfig(credentials) error = %v", err)
+	}
+	if parsed.AccountID != "111122223333" {
+		t.Fatalf("AccountID = %q, want 111122223333", parsed.AccountID)
+	}
+	if parsed.RoleARN != "arn:aws:iam::111122223333:role/irsa-eshu-aws-collector-cross-account-role" {
+		t.Fatalf("RoleARN = %q, want the scope role", parsed.RoleARN)
+	}
+	if parsed.ExternalID != "eshu-ops-qa-collector" {
+		t.Fatalf("ExternalID = %q, want eshu-ops-qa-collector", parsed.ExternalID)
+	}
+
+	plain, err := ParseConfig(hostConfig())
+	if err != nil {
+		t.Fatalf("ParseConfig(host) error = %v", err)
+	}
+	if plain.RoleARN != "" || plain.ExternalID != "" {
+		t.Fatalf("RoleARN/ExternalID = %q/%q, want empty without a credentials block",
+			plain.RoleARN, plain.ExternalID)
+	}
+
+	rejects := map[string]map[string]any{
+		"unknown mode": {
+			"mode": "static_keys", "role_arn": "arn:aws:iam::111122223333:role/r", "external_id": "e",
+		},
+		"missing mode": {
+			"role_arn": "arn:aws:iam::111122223333:role/r", "external_id": "e",
+		},
+		"malformed ARN": {
+			"mode": "central_assume_role", "role_arn": "not-an-arn", "external_id": "e",
+		},
+		"role in another account": {
+			"mode":        "central_assume_role",
+			"role_arn":    "arn:aws:iam::444455556666:role/foreign-collector",
+			"external_id": "e",
+		},
+		"empty external id": {
+			"mode": "central_assume_role", "role_arn": "arn:aws:iam::111122223333:role/r", "external_id": "  ",
+		},
+	}
+	for name, creds := range rejects {
+		cfg := hostConfig()
+		cfg["target_scopes"] = []any{map[string]any{"account_id": "111122223333", "credentials": creds}}
+		if _, err := ParseConfig(cfg); err == nil {
+			t.Errorf("ParseConfig(%s) error = nil, want fail-closed", name)
+		}
 	}
 }
 
@@ -63,17 +129,17 @@ func TestParseConfigAcceptsScopeVariants(t *testing.T) {
 	t.Parallel()
 
 	bare := hostConfig()
-	bare["target_scopes"] = "055929692761"
-	if parsed, err := ParseConfig(bare); err != nil || parsed.AccountID != "055929692761" {
+	bare["target_scopes"] = "111122223333"
+	if parsed, err := ParseConfig(bare); err != nil || parsed.AccountID != "111122223333" {
 		t.Fatalf("bare string scope = (%+v, %v), want account", parsed, err)
 	}
 	listed := hostConfig()
-	listed["target_scopes"] = []any{map[string]any{"account": "055929692761"}}
-	if parsed, err := ParseConfig(listed); err != nil || parsed.AccountID != "055929692761" {
+	listed["target_scopes"] = []any{map[string]any{"account": "111122223333"}}
+	if parsed, err := ParseConfig(listed); err != nil || parsed.AccountID != "111122223333" {
 		t.Fatalf("list scope = (%+v, %v), want account", parsed, err)
 	}
 	multi := hostConfig()
-	multi["target_scopes"] = []any{"055929692761", "123456789012"}
+	multi["target_scopes"] = []any{"111122223333", "123456789012"}
 	if _, err := ParseConfig(multi); err == nil {
 		t.Fatal("multi scope error = nil, want failure")
 	}
@@ -95,7 +161,7 @@ func TestParseConfigAcceptsNestedScopeAllowlists(t *testing.T) {
 	delete(nested, "allowed_regions")
 	delete(nested, "allowed_services")
 	nested["target_scopes"] = []any{map[string]any{
-		"account_id":       "055929692761",
+		"account_id":       "111122223333",
 		"allowed_regions":  []any{"us-east-1"},
 		"allowed_services": []any{"ec2", "s3"},
 	}}
@@ -103,7 +169,7 @@ func TestParseConfigAcceptsNestedScopeAllowlists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseConfig(nested scope) error = %v", err)
 	}
-	if parsed.AccountID != "055929692761" || len(parsed.Regions) != 1 || len(parsed.Services) != 2 {
+	if parsed.AccountID != "111122223333" || len(parsed.Regions) != 1 || len(parsed.Services) != 2 {
 		t.Fatalf("nested scope parsed = %+v, want account + 1 region + 2 services", parsed)
 	}
 }
@@ -134,13 +200,13 @@ func TestParseConfigHonorsOverrides(t *testing.T) {
 	t.Parallel()
 
 	config := hostConfig()
-	config["source"] = map[string]any{"sourceURI": "aws://055929692761/custom"}
+	config["source"] = map[string]any{"sourceURI": "aws://111122223333/custom"}
 	config["limits"] = map[string]any{"maxRecordsPerClaim": 7.0}
 	parsed, err := ParseConfig(config)
 	if err != nil {
 		t.Fatalf("ParseConfig(overrides) error = %v", err)
 	}
-	if parsed.SourceURI != "aws://055929692761/custom" {
+	if parsed.SourceURI != "aws://111122223333/custom" {
 		t.Fatalf("SourceURI = %q, want override", parsed.SourceURI)
 	}
 	if parsed.Limits.MaxRecordsPerClaim != 7 {

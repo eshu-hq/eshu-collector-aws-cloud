@@ -15,7 +15,7 @@ import (
 // file. The live claim path must accept this without demanding a file.
 func hostActivationConfig() map[string]any {
 	return map[string]any{
-		"target_scopes":   map[string]any{"account_id": "055929692761"},
+		"target_scopes":   map[string]any{"account_id": "111122223333"},
 		"allowed_regions": []any{"us-east-1"},
 		"allowed_services": []any{
 			"iam", "ecr", "ec2", "eks", "elbv2", "route53", "sqs",
@@ -58,8 +58,8 @@ func TestParseSDKStdioAcceptsLiveConfigWithoutInput(t *testing.T) {
 	if !plan.liveMode {
 		t.Fatal("parseSDKStdio(live config) liveMode = false, want true")
 	}
-	if plan.live.AccountID != "055929692761" {
-		t.Fatalf("live.AccountID = %q, want 055929692761", plan.live.AccountID)
+	if plan.live.AccountID != "111122223333" {
+		t.Fatalf("live.AccountID = %q, want 111122223333", plan.live.AccountID)
 	}
 	if len(plan.live.Regions) != 1 || plan.live.Regions[0] != "us-east-1" {
 		t.Fatalf("live.Regions = %v, want [us-east-1]", plan.live.Regions)

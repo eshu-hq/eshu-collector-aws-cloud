@@ -16,7 +16,7 @@ import (
 // collectLivePlan runs a bounded AWS claim and appends typed resource evidence
 // from successful service reads. Failed services leave the claim partial.
 func collectLivePlan(plan stdioPlan) (sdk.Result, error) {
-	outcome, err := live.Collector{}.CollectReport(context.Background(), plan.live)
+	outcome, err := live.Collector{AssumeRole: live.AssumeScopeRole}.CollectReport(context.Background(), plan.live)
 	if err != nil {
 		return sdk.Result{}, err
 	}

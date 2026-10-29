@@ -39,6 +39,10 @@ type Collector struct {
 	VerifyIdentity func(ctx context.Context, cfg aws.Config) (VerifiedIdentity, error)
 	// Loaders overrides the production service registry; nil selects it.
 	Loaders map[string]Loader
+	// AssumeRole exchanges ambient credentials for the scope role when
+	// Config carries one; nil fails closed on such scopes. Production wires
+	// assumeScopeRole (STS AssumeRole with the scope external ID).
+	AssumeRole func(ctx context.Context, base aws.Config, roleARN, externalID string) (aws.Config, error)
 	// Now supplies the report timestamp; nil selects time.Now.
 	Now func() time.Time
 }
@@ -98,6 +102,15 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 		cfg, err := c.loadConfig(ctx, region)
 		if err != nil {
 			return Outcome{}, fmt.Errorf("live %s: %w", region, err)
+		}
+		if config.RoleARN != "" {
+			if c.AssumeRole == nil {
+				return Outcome{}, fmt.Errorf("live %s: scope carries a role but no assume-role implementation is wired", region)
+			}
+			cfg, err = c.AssumeRole(ctx, cfg, config.RoleARN, config.ExternalID)
+			if err != nil {
+				return Outcome{}, fmt.Errorf("live %s: assume scope role: %w", region, err)
+			}
 		}
 		cfg.Region = region
 		verify := c.VerifyIdentity
