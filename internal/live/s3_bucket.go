@@ -41,7 +41,7 @@ func s3BucketRecord(bucket s3types.Bucket, region string, identity VerifiedIdent
 	}
 	arn := "arn:" + identity.Partition + ":s3:::" + name
 	result := record(arn, "s3", region, name, "bucket")
-	attrs := map[string]any{"bucket_region": reportedRegion}
+	attrs := map[string]any{"bucket_region": reportedRegion, "creation_time": nil}
 	if bucket.CreationDate != nil && !bucket.CreationDate.IsZero() {
 		attrs["creation_time"] = bucket.CreationDate.UTC()
 	}
