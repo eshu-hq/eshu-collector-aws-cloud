@@ -111,15 +111,16 @@ type Record struct {
 
 // LiveResource is the source identity retained by a live AWS loader.
 type LiveResource struct {
-	Region       string
-	ServiceKind  string
-	ResourceType string
-	ResourceID   string
-	Name         string
-	ARN          string
-	State        string
-	Tags         map[string]string
-	Attributes   map[string]any
+	Region             string
+	ServiceKind        string
+	ResourceType       string
+	ResourceID         string
+	Name               string
+	ARN                string
+	State              string
+	Tags               map[string]string
+	Attributes         map[string]any
+	CorrelationAnchors []string
 }
 
 // CollectOptions controls emission for one claimed scope.
