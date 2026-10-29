@@ -30,7 +30,9 @@ groups and rules, network interfaces, instances, and volumes. Before any live
 service read, it verifies the active credentials account with STS in each
 configured region and fails the claim if it differs from the target account.
 Typed EC2 names follow legacy scanner identity rules: stable IDs for VPCs,
-subnets, instances, and volumes; group names for security groups. The live
+subnets, instances, and volumes; group names for security groups. Missing
+required source IDs fail the EC2 read, while subnet ARN and security-group-rule
+content use the legacy deterministic identity fallbacks. The live
 path currently re-emits on every read because the old placeholder digest does
 not cover typed facts or service failures. The remaining
 AWS service readers still produce placeholder records. The full port removes

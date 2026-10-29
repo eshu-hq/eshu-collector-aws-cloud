@@ -34,7 +34,10 @@ func listEC2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("ec2 describe VPCs: %w", err)
 		}
 		for _, vpc := range page.Vpcs {
-			records = append(records, vpcRecord(vpc, region))
+			records, err = appendEC2Record(records, vpcRecord(vpc, region))
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	subnets := awsec2.NewDescribeSubnetsPaginator(client, &awsec2.DescribeSubnetsInput{})
@@ -44,7 +47,10 @@ func listEC2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("ec2 describe subnets: %w", err)
 		}
 		for _, subnet := range page.Subnets {
-			records = append(records, subnetRecord(subnet, region))
+			records, err = appendEC2Record(records, subnetRecord(subnet, region))
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	groups := awsec2.NewDescribeSecurityGroupsPaginator(client, &awsec2.DescribeSecurityGroupsInput{})
@@ -58,7 +64,10 @@ func listEC2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			if name == "" {
 				name = aws.ToString(group.GroupId)
 			}
-			records = append(records, record(aws.ToString(group.GroupId), "ec2", region, name, "security-group"))
+			records, err = appendEC2Record(records, record(aws.ToString(group.GroupId), "ec2", region, name, "security-group"))
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	rules := awsec2.NewDescribeSecurityGroupRulesPaginator(client, &awsec2.DescribeSecurityGroupRulesInput{})
@@ -68,7 +77,14 @@ func listEC2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("ec2 describe security group rules: %w", err)
 		}
 		for _, rule := range page.SecurityGroupRules {
-			records = append(records, record(aws.ToString(rule.SecurityGroupRuleId), "ec2", region, aws.ToString(rule.SecurityGroupRuleId), "security-group-rule"))
+			row, err := securityGroupRuleRecord(rule, region)
+			if err != nil {
+				return nil, err
+			}
+			records, err = appendEC2Record(records, row)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	interfaces := awsec2.NewDescribeNetworkInterfacesPaginator(client, &awsec2.DescribeNetworkInterfacesInput{})
@@ -78,7 +94,10 @@ func listEC2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("ec2 describe network interfaces: %w", err)
 		}
 		for _, iface := range page.NetworkInterfaces {
-			records = append(records, record(aws.ToString(iface.NetworkInterfaceId), "ec2", region, aws.ToString(iface.NetworkInterfaceId), "network-interface"))
+			records, err = appendEC2Record(records, record(aws.ToString(iface.NetworkInterfaceId), "ec2", region, aws.ToString(iface.NetworkInterfaceId), "network-interface"))
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	instances := awsec2.NewDescribeInstancesPaginator(client, &awsec2.DescribeInstancesInput{})
@@ -89,7 +108,10 @@ func listEC2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 		}
 		for _, reservation := range page.Reservations {
 			for _, instance := range reservation.Instances {
-				records = append(records, record(aws.ToString(instance.InstanceId), "ec2", region, ec2Name(instance.Tags, aws.ToString(instance.InstanceId)), "instance"))
+				records, err = appendEC2Record(records, record(aws.ToString(instance.InstanceId), "ec2", region, ec2Name(instance.Tags, aws.ToString(instance.InstanceId)), "instance"))
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -100,7 +122,10 @@ func listEC2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("ec2 describe volumes: %w", err)
 		}
 		for _, volume := range page.Volumes {
-			records = append(records, record(aws.ToString(volume.VolumeId), "ec2", region, ec2Name(volume.Tags, aws.ToString(volume.VolumeId)), "volume"))
+			records, err = appendEC2Record(records, record(aws.ToString(volume.VolumeId), "ec2", region, ec2Name(volume.Tags, aws.ToString(volume.VolumeId)), "volume"))
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	return records, nil
