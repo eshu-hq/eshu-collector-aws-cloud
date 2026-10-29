@@ -60,11 +60,12 @@ The typed `aws_resource` envelope is connected to claim-bound live EC2 reads.
 VPC, subnet, and volume observations carry reported state, tags, and API
 attributes, including CIDR associations and volume attachments. Instance
 identity observations carry state and launch AMI ID from the same
-`DescribeInstances` response. The subnet-to-VPC edge is the only typed
-relationship currently emitted; other EC2 resource types still carry identity
-and name only. This is staged implementation, not a full parity or live host
-admission claim. Instance ARNs use the account and partition verified by STS
-before EC2 reads; a partition mismatch fails before a service read.
+`DescribeInstances` response. Subnet-to-VPC and volume-to-KMS are the two
+typed relationships currently emitted; other EC2 resource types still carry
+identity and name only. This is staged implementation, not a full parity or
+live host admission claim. Instance and volume ARNs use the account and
+partition verified by STS before EC2 reads; a partition mismatch fails before
+a service read.
 Sensitive-shaped resource attribute keys fail closed.
 See [PORT_PLAN.md](PORT_PLAN.md#resource-envelope-seam-status) for the
 remaining redaction and host-grant boundary.

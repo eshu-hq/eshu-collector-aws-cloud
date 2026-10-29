@@ -125,7 +125,7 @@ func listEC2(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]
 			return nil, fmt.Errorf("ec2 describe volumes: %w", err)
 		}
 		for _, volume := range page.Volumes {
-			records, err = appendEC2Record(records, volumeRecord(volume, region))
+			records, err = appendEC2Record(records, volumeRecord(volume, region, identity))
 			if err != nil {
 				return nil, err
 			}

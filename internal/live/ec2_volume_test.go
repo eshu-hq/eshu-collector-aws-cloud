@@ -24,11 +24,23 @@ func TestVolumeRecordRetainsReportedEBSMetadata(t *testing.T) {
 		},
 		Attachments: []ec2types.VolumeAttachment{{InstanceId: aws.String("i-123"), Device: aws.String("/dev/xvda")}},
 	}
-	got := volumeRecord(volume, "us-east-1")
+	got := volumeRecord(volume, "us-east-1", VerifiedIdentity{AccountID: "123456789012", Partition: "aws"})
 	if got.Resource == nil {
 		t.Fatal("typed volume missing")
 	}
 	resource := got.Resource
+	if resource.ARN != "arn:aws:ec2:us-east-1:123456789012:volume/vol-123" {
+		t.Fatalf("volume ARN = %q", resource.ARN)
+	}
+	if got.Relationship == nil ||
+		got.Relationship.RelationshipType != "ec2_volume_uses_kms_key" ||
+		got.Relationship.SourceResourceID != "vol-123" ||
+		got.Relationship.SourceARN != resource.ARN ||
+		got.Relationship.TargetResourceID != "key-123" ||
+		got.Relationship.TargetType != "aws_kms_key" ||
+		got.Relationship.SourceRecordID != "vol-123#kms#key-123" {
+		t.Fatalf("KMS relationship = %#v", got.Relationship)
+	}
 	if got.Name != "database volume" {
 		t.Fatalf("placeholder name = %q", got.Name)
 	}
@@ -45,5 +57,24 @@ func TestVolumeRecordRetainsReportedEBSMetadata(t *testing.T) {
 	}
 	if attrs["create_time"] != created {
 		t.Fatalf("create time = %#v", attrs["create_time"])
+	}
+}
+
+func TestVolumeRecordUsesVerifiedPartitionAndKMSARN(t *testing.T) {
+	keyARN := "arn:aws-cn:kms:cn-north-1:123456789012:key/abcd"
+	volume := ec2types.Volume{
+		VolumeId: aws.String("vol-123"), KmsKeyId: aws.String(keyARN),
+	}
+	identity := VerifiedIdentity{AccountID: "123456789012", Partition: "aws-cn"}
+	got := volumeRecord(volume, "cn-north-1", identity)
+	if got.Resource == nil || got.Resource.ARN != "arn:aws-cn:ec2:cn-north-1:123456789012:volume/vol-123" {
+		t.Fatalf("volume identity = %#v", got.Resource)
+	}
+	if got.Relationship == nil || got.Relationship.TargetARN != keyARN {
+		t.Fatalf("KMS ARN = %#v", got.Relationship)
+	}
+	volume.KmsKeyId = nil
+	if noKey := volumeRecord(volume, "cn-north-1", identity); noKey.Relationship != nil {
+		t.Fatalf("unexpected KMS link = %#v", noKey.Relationship)
 	}
 }

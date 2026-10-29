@@ -93,8 +93,9 @@ importable only inside this module, satisfying `boundary_test.go`).
    and the legacy rule-ID fallback; VPC, subnet, and volume observations carry
    state, tags, and their describe-response attributes. Instance identity
    observations carry state, launch AMI ID, and an ARN from the verified STS
-   account and partition. Other EC2 attributes and relationships,
-   other services, real host grant proof, and replacement of placeholder
+   account and partition. Volume ARNs and KMS links use that same identity.
+   Other EC2 attributes and relationships, other services, real host grant
+   proof, and replacement of placeholder
    conformance fixtures remain.
 5. Remaining envelopes kind by kind; delete transitional kinds last.
 6. `awsruntime` + `service/` scanners service by service.

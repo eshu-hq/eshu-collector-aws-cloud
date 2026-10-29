@@ -13,14 +13,15 @@ import (
 )
 
 // volumeRecord carries the metadata returned by the boundary-wide DescribeVolumes pass.
-// The volume ARN still needs the verified account and partition from the claim boundary.
-func volumeRecord(volume ec2types.Volume, region string) collector.Record {
+// The volume ARN and KMS edge use the caller identity verified at the claim boundary.
+func volumeRecord(volume ec2types.Volume, region string, identity VerifiedIdentity) collector.Record {
 	id := strings.TrimSpace(aws.ToString(volume.VolumeId))
 	result := record(id, "ec2", region, ec2Name(volume.Tags, id), "volume")
 	if result.Resource == nil {
 		return result
 	}
 	resource := result.Resource
+	resource.ARN = "arn:" + identity.Partition + ":ec2:" + region + ":" + identity.AccountID + ":volume/" + id
 	resource.Name = id
 	resource.State = string(volume.State)
 	resource.Tags = ec2Tags(volume.Tags)
@@ -43,6 +44,18 @@ func volumeRecord(volume ec2types.Volume, region string) collector.Record {
 		"throughput_mibps":           volumeInt32(volume.Throughput),
 		"volume_initialization_rate": volumeInt32(volume.VolumeInitializationRate),
 		"volume_type":                strings.TrimSpace(string(volume.VolumeType)),
+	}
+	if keyID := strings.TrimSpace(aws.ToString(volume.KmsKeyId)); keyID != "" {
+		keyARN := ""
+		if strings.HasPrefix(keyID, "arn:") {
+			keyARN = keyID
+		}
+		result.Relationship = &collector.LiveRelationship{
+			Region: region, ServiceKind: "ec2", RelationshipType: "ec2_volume_uses_kms_key",
+			SourceResourceID: id, SourceARN: resource.ARN, TargetResourceID: keyID,
+			TargetARN: keyARN, TargetType: "aws_kms_key",
+			SourceRecordID: id + "#kms#" + keyID,
+		}
 	}
 	return result
 }

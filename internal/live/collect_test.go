@@ -272,16 +272,18 @@ func TestTypedEC2NameMatchesLegacyIdentity(t *testing.T) {
 
 func TestCollectReportCarriesSubnetVPCRelationship(t *testing.T) {
 	c := Collector{
-		LoadConfig: fakeConfig(&[]string{}), VerifyAccount: verifiedAccount,
-		Loaders: map[string]Loader{"ec2": func(_ context.Context, _ aws.Config) ([]collector.Record, error) {
+		LoadConfig: fakeConfig(&[]string{}), VerifyIdentity: func(context.Context, aws.Config) (VerifiedIdentity, error) {
+			return VerifiedIdentity{AccountID: "123456789012", Partition: "aws"}, nil
+		},
+		Loaders: map[string]Loader{"ec2": func(_ context.Context, _ aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
 			return []collector.Record{subnetRecord(ec2types.Subnet{
 				SubnetId: aws.String("subnet-123"), VpcId: aws.String("vpc-123"),
-				SubnetArn: aws.String("arn:aws:ec2:us-east-1:055929692761:subnet/subnet-123"),
+				SubnetArn: aws.String("arn:aws:ec2:us-east-1:123456789012:subnet/subnet-123"),
 			}, "us-east-1")}, nil
 		}},
 	}
 	outcome, err := c.CollectReport(context.Background(), Config{
-		AccountID: "055929692761", Regions: []string{"us-east-1"}, Services: []string{"ec2"},
+		AccountID: "123456789012", Regions: []string{"us-east-1"}, Services: []string{"ec2"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -290,7 +292,7 @@ func TestCollectReportCarriesSubnetVPCRelationship(t *testing.T) {
 		t.Fatalf("relationships = %#v", outcome.Relationships)
 	}
 	edge := outcome.Relationships[0]
-	if edge.Boundary.AccountID != "055929692761" || edge.Boundary.Region != "us-east-1" || edge.RelationshipType != "ec2_subnet_in_vpc" || edge.SourceResourceID != "subnet-123" || edge.TargetResourceID != "vpc-123" {
+	if edge.Boundary.AccountID != "123456789012" || edge.Boundary.Region != "us-east-1" || edge.RelationshipType != "ec2_subnet_in_vpc" || edge.SourceResourceID != "subnet-123" || edge.TargetResourceID != "vpc-123" {
 		t.Fatalf("edge = %#v", edge)
 	}
 }
