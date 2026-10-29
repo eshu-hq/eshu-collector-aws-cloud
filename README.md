@@ -66,8 +66,15 @@ reads tags through GetBucketTagging. Only NoSuchTagSet means an empty tag set.
 GetBucketEncryption adds reported algorithms, KMS key IDs, and bucket-key state.
 GetBucketVersioning and GetPublicAccessBlock add the reported bucket-level
 versioning and public-access settings. An absent public-access-block
-configuration leaves its four flags unknown. These reads require the
-corresponding S3 permissions; their live cost and access are not yet verified.
+configuration leaves its four flags unknown. GetBucketWebsite records whether
+website hosting is configured, index/error document presence, the redirect
+host, and routing-rule count; it excludes document object keys. GetBucketLogging
+records whether access logging is configured and its target bucket and prefix;
+it excludes target grants and object-key formats. Both reads pass
+ExpectedBucketOwner, require `s3:GetBucketWebsite` and `s3:GetBucketLogging`,
+and add two API calls per listed bucket. Live IAM access and request cost remain
+unverified. A missing website configuration and empty logging response mean
+disabled; other errors, including denials, fail the S3 read.
 For encryption, the explicit missing-configuration response means a known
 empty configuration. Encryption AccessDenied leaves those attributes absent,
 retains the bucket, emits a typed warning, and makes the SDK result partial.
