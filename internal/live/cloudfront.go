@@ -4,6 +4,7 @@
 package live
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -14,16 +15,16 @@ import (
 
 // cloudFrontDistributionRecord maps only metadata in ListDistributions.
 // Custom origin header values and certificate bodies are never observed.
-func cloudFrontDistributionRecord(raw cloudfronttypes.DistributionSummary) collector.Record {
+func cloudFrontDistributionRecord(raw cloudfronttypes.DistributionSummary) (collector.Record, error) {
 	arn := strings.TrimSpace(aws.ToString(raw.ARN))
 	id := strings.TrimSpace(aws.ToString(raw.Id))
 	domain := strings.TrimSpace(aws.ToString(raw.DomainName))
 	resourceID := cloudFrontFirst(arn, id, domain)
 	name := cloudFrontFirst(id, domain, arn)
-	row := record(arn, "cloudfront", "aws-global", name, "distribution")
 	if resourceID == "" {
-		return row
+		return collector.Record{}, fmt.Errorf("cloudfront distribution requires arn, id, or domain name")
 	}
+	row := record(arn, "cloudfront", "aws-global", name, "distribution")
 	attrs := map[string]any{
 		"id": id, "domain_name": domain, "status": strings.TrimSpace(aws.ToString(raw.Status)),
 		"enabled": aws.ToBool(raw.Enabled), "comment": strings.TrimSpace(aws.ToString(raw.Comment)),
@@ -68,7 +69,7 @@ func cloudFrontDistributionRecord(raw cloudfronttypes.DistributionSummary) colle
 			Attributes: map[string]any{"distribution_id": id},
 		})
 	}
-	return row
+	return row, nil
 }
 
 func cloudFrontFirst(values ...string) string {

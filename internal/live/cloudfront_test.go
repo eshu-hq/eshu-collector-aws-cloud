@@ -22,7 +22,7 @@ import (
 func TestCloudFrontDistributionEmitsTypedMetadataAndDependencies(t *testing.T) {
 	arn := "arn:aws:cloudfront::123456789012:distribution/EDFDVBD632BHDS5"
 	certificate := "arn:aws:acm:us-east-1:123456789012:certificate/cert-1"
-	row := cloudFrontDistributionRecord(cloudfronttypes.DistributionSummary{
+	row, err := cloudFrontDistributionRecord(cloudfronttypes.DistributionSummary{
 		ARN: aws.String(arn), Id: aws.String("EDFDVBD632BHDS5"), DomainName: aws.String("d111.cloudfront.net"),
 		Status: aws.String("Deployed"), WebACLId: aws.String("classic-web-acl"),
 		Enabled: aws.Bool(true), Comment: aws.String("orders edge"), HttpVersion: cloudfronttypes.HttpVersionHttp2and3,
@@ -32,6 +32,9 @@ func TestCloudFrontDistributionEmitsTypedMetadataAndDependencies(t *testing.T) {
 		Origins:           &cloudfronttypes.Origins{Items: []cloudfronttypes.Origin{{CustomHeaders: &cloudfronttypes.CustomHeaders{Items: []cloudfronttypes.OriginCustomHeader{{HeaderName: aws.String("X-Origin-Auth"), HeaderValue: aws.String("private-value")}}}}}},
 		ViewerCertificate: &cloudfronttypes.ViewerCertificate{ACMCertificateArn: aws.String(certificate)},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if row.Resource == nil || row.Resource.Region != "aws-global" || row.Resource.ResourceID != arn || row.Resource.Name != "EDFDVBD632BHDS5" || len(row.Relationships) != 2 {
 		t.Fatalf("typed distribution = %#v", row)
 	}
@@ -56,15 +59,21 @@ func TestCloudFrontDistributionEmitsTypedMetadataAndDependencies(t *testing.T) {
 }
 
 func TestCloudFrontTypedFactsBoundedAndShareSafe(t *testing.T) {
-	first := cloudFrontDistributionRecord(cloudfronttypes.DistributionSummary{
+	first, err := cloudFrontDistributionRecord(cloudfronttypes.DistributionSummary{
 		ARN: aws.String("arn:aws:cloudfront::123456789012:distribution/EONE"), Id: aws.String("EONE"),
 		Origins:           &cloudfronttypes.Origins{Items: []cloudfronttypes.Origin{{CustomHeaders: &cloudfronttypes.CustomHeaders{Items: []cloudfronttypes.OriginCustomHeader{{HeaderName: aws.String("X-Private"), HeaderValue: aws.String("sensitive-origin-token")}}}}}},
 		ViewerCertificate: &cloudfronttypes.ViewerCertificate{ACMCertificateArn: aws.String("arn:aws:acm:us-east-1:123456789012:certificate/cert-1")},
 		WebACLId:          aws.String("classic-web-acl"),
 	})
-	second := cloudFrontDistributionRecord(cloudfronttypes.DistributionSummary{
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := cloudFrontDistributionRecord(cloudfronttypes.DistributionSummary{
 		ARN: aws.String("arn:aws:cloudfront::123456789012:distribution/ETWO"), Id: aws.String("ETWO"),
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	loader := Collector{
 		LoadConfig: func(_ context.Context, region string) (aws.Config, error) { return aws.Config{Region: region}, nil },
 		VerifyIdentity: func(context.Context, aws.Config) (VerifiedIdentity, error) {
@@ -119,5 +128,11 @@ func TestCloudFrontTypedFactsBoundedAndShareSafe(t *testing.T) {
 	limited, err := collector.AppendLiveRelationships(resources, outcome.Relationships, "aws://123456789012", limits)
 	if err != nil || limited.State != sdk.ResultTerminal || len(limited.Facts) != 0 {
 		t.Fatalf("six-fact bound must fail terminal, got %#v, err=%v", limited, err)
+	}
+}
+
+func TestCloudFrontDistributionRejectsMissingIdentity(t *testing.T) {
+	if _, err := cloudFrontDistributionRecord(cloudfronttypes.DistributionSummary{}); err == nil {
+		t.Fatal("missing ARN, ID and domain must fail instead of publishing a placeholder")
 	}
 }

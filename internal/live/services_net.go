@@ -96,7 +96,11 @@ func listCloudFront(ctx context.Context, cfg aws.Config) ([]collector.Record, er
 			continue
 		}
 		for _, distribution := range page.DistributionList.Items {
-			records = append(records, cloudFrontDistributionRecord(distribution))
+			row, err := cloudFrontDistributionRecord(distribution)
+			if err != nil {
+				return nil, err
+			}
+			records = append(records, row)
 		}
 	}
 	return records, nil
