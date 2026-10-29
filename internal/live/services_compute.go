@@ -381,9 +381,12 @@ func listLambda(ctx context.Context, cfg aws.Config) ([]collector.Record, error)
 			return nil, fmt.Errorf("lambda list functions: %w", err)
 		}
 		for _, function := range page.Functions {
-			name := aws.ToString(function.FunctionName)
-			records = append(records, record(aws.ToString(function.FunctionArn), "lambda", region, name, "function"))
-			aliases := awslambda.NewListAliasesPaginator(client, &awslambda.ListAliasesInput{FunctionName: function.FunctionName})
+			functionRecord, err := lambdaFunctionRecord(function, region)
+			if err != nil {
+				return nil, fmt.Errorf("lambda function identity: %w", err)
+			}
+			records = append(records, functionRecord)
+			aliases := awslambda.NewListAliasesPaginator(client, &awslambda.ListAliasesInput{FunctionName: aws.String(functionRecord.Resource.ResourceID)})
 			for aliases.HasMorePages() {
 				aliasPage, err := aliases.NextPage(ctx)
 				if err != nil {
@@ -393,7 +396,7 @@ func listLambda(ctx context.Context, cfg aws.Config) ([]collector.Record, error)
 					records = append(records, record(aws.ToString(alias.AliasArn), "lambda", region, aws.ToString(alias.Name), "alias"))
 				}
 			}
-			mappings := awslambda.NewListEventSourceMappingsPaginator(client, &awslambda.ListEventSourceMappingsInput{FunctionName: function.FunctionName})
+			mappings := awslambda.NewListEventSourceMappingsPaginator(client, &awslambda.ListEventSourceMappingsInput{FunctionName: aws.String(functionRecord.Resource.ResourceID)})
 			for mappings.HasMorePages() {
 				mappingPage, err := mappings.NextPage(ctx)
 				if err != nil {
