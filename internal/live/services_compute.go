@@ -353,6 +353,7 @@ func listLambda(ctx context.Context, cfg aws.Config) ([]collector.Record, error)
 	client := awslambda.NewFromConfig(cfg)
 	region := cfg.Region
 	records := []collector.Record{}
+	denials := []optionalDenial{}
 	functions := awslambda.NewListFunctionsPaginator(client, &awslambda.ListFunctionsInput{})
 	for functions.HasMorePages() {
 		page, err := functions.NextPage(ctx)
@@ -376,18 +377,49 @@ func listLambda(ctx context.Context, cfg aws.Config) ([]collector.Record, error)
 				}
 			}
 			mappings := awslambda.NewListEventSourceMappingsPaginator(client, &awslambda.ListEventSourceMappingsInput{FunctionName: aws.String(functionRecord.Resource.ResourceID)})
+			mappingRecords := []collector.Record{}
+			mappingDenied := false
 			for mappings.HasMorePages() {
 				mappingPage, err := mappings.NextPage(ctx)
 				if err != nil {
+					if isOptionalLambdaMappingDenial(err) {
+						denials = append(denials, optionalDenial{
+							operation: "ListEventSourceMappings", resource: functionRecord.Resource.ResourceID,
+							effect: "event-source-mappings-unavailable",
+						})
+						mappingDenied = true
+						break
+					}
 					return nil, fmt.Errorf("lambda list event source mappings: %w", err)
 				}
 				for _, mapping := range mappingPage.EventSourceMappings {
-					records = append(records, record(aws.ToString(mapping.EventSourceArn), "lambda", region, aws.ToString(mapping.UUID), "event-source-mapping"))
+					mappingRecords = append(mappingRecords, record(aws.ToString(mapping.EventSourceArn), "lambda", region, aws.ToString(mapping.UUID), "event-source-mapping"))
 				}
+			}
+			if !mappingDenied {
+				records = append(records, mappingRecords...)
 			}
 		}
 	}
+	if len(denials) > 0 {
+		return records, &optionalReadDenied{denials: denials}
+	}
 	return records, nil
+}
+
+// isOptionalLambdaMappingDenial recognizes authorization failures for the one
+// reviewed optional Lambda read. Other API and transport failures stay fatal.
+func isOptionalLambdaMappingDenial(err error) bool {
+	var apiErr smithy.APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	switch apiErr.ErrorCode() {
+	case "AccessDenied", "AccessDeniedException", "UnauthorizedOperation":
+		return true
+	default:
+		return false
+	}
 }
 
 // chunks splits values into batches of at most size for the Describe calls
