@@ -18,12 +18,21 @@ import (
 )
 
 type fakeS3BucketDetails struct {
-	head      *awss3.HeadBucketOutput
-	tags      *awss3.GetBucketTaggingOutput
-	headErr   error
-	tagsErr   error
-	headOwner string
-	tagOwner  string
+	buckets         *awss3.ListBucketsOutput
+	listErr         error
+	head            *awss3.HeadBucketOutput
+	tags            *awss3.GetBucketTaggingOutput
+	encryption      *awss3.GetBucketEncryptionOutput
+	headErr         error
+	tagsErr         error
+	encryptionErr   error
+	headOwner       string
+	tagOwner        string
+	encryptionOwner string
+}
+
+func (f *fakeS3BucketDetails) ListBuckets(_ context.Context, _ *awss3.ListBucketsInput, _ ...func(*awss3.Options)) (*awss3.ListBucketsOutput, error) {
+	return f.buckets, f.listErr
 }
 
 func (f *fakeS3BucketDetails) HeadBucket(_ context.Context, input *awss3.HeadBucketInput, _ ...func(*awss3.Options)) (*awss3.HeadBucketOutput, error) {
@@ -34,6 +43,92 @@ func (f *fakeS3BucketDetails) HeadBucket(_ context.Context, input *awss3.HeadBuc
 func (f *fakeS3BucketDetails) GetBucketTagging(_ context.Context, input *awss3.GetBucketTaggingInput, _ ...func(*awss3.Options)) (*awss3.GetBucketTaggingOutput, error) {
 	f.tagOwner = aws.ToString(input.ExpectedBucketOwner)
 	return f.tags, f.tagsErr
+}
+
+func (f *fakeS3BucketDetails) GetBucketEncryption(_ context.Context, input *awss3.GetBucketEncryptionInput, _ ...func(*awss3.Options)) (*awss3.GetBucketEncryptionOutput, error) {
+	f.encryptionOwner = aws.ToString(input.ExpectedBucketOwner)
+	return f.encryption, f.encryptionErr
+}
+
+func TestS3EncryptionReadKeepsDeniedStateUnknown(t *testing.T) {
+	api := &fakeS3BucketDetails{encryptionErr: &smithy.GenericAPIError{Code: "AccessDenied"}}
+	attrs, denied, err := readS3BucketEncryption(context.Background(), api, "assets", "123456789012")
+	if err != nil || !denied || len(attrs) != 0 || api.encryptionOwner != "123456789012" {
+		t.Fatalf("attrs=%v denied=%t owner=%q err=%v", attrs, denied, api.encryptionOwner, err)
+	}
+	api.encryptionErr = &smithy.GenericAPIError{Code: "ServerSideEncryptionConfigurationNotFoundError"}
+	attrs, denied, err = readS3BucketEncryption(context.Background(), api, "assets", "123456789012")
+	if err != nil || denied || len(attrs["default_encryption_algorithms"].([]string)) != 0 || attrs["bucket_key_enabled"] != false {
+		t.Fatalf("missing configuration: attrs=%v denied=%t err=%v", attrs, denied, err)
+	}
+	api.encryptionErr = &smithy.GenericAPIError{Code: "ThrottlingException"}
+	_, denied, err = readS3BucketEncryption(context.Background(), api, "assets", "123456789012")
+	if !errors.Is(err, api.encryptionErr) || denied {
+		t.Fatalf("non-denial: denied=%t err=%v", denied, err)
+	}
+}
+
+func TestS3EncryptionReadMapsReportedRules(t *testing.T) {
+	api := &fakeS3BucketDetails{encryption: &awss3.GetBucketEncryptionOutput{
+		ServerSideEncryptionConfiguration: &s3types.ServerSideEncryptionConfiguration{Rules: []s3types.ServerSideEncryptionRule{
+			{ApplyServerSideEncryptionByDefault: &s3types.ServerSideEncryptionByDefault{SSEAlgorithm: s3types.ServerSideEncryptionAes256}},
+			{ApplyServerSideEncryptionByDefault: &s3types.ServerSideEncryptionByDefault{SSEAlgorithm: s3types.ServerSideEncryptionAwsKms, KMSMasterKeyID: aws.String("alias/team")}, BucketKeyEnabled: aws.Bool(true)},
+		}},
+	}}
+	attrs, denied, err := readS3BucketEncryption(context.Background(), api, "assets", "123456789012")
+	if err != nil || denied {
+		t.Fatalf("denied=%t err=%v", denied, err)
+	}
+	algorithms := attrs["default_encryption_algorithms"].([]string)
+	keys := attrs["kms_master_key_ids"].([]string)
+	if len(algorithms) != 2 || algorithms[0] != "AES256" || algorithms[1] != "aws:kms" || len(keys) != 1 || keys[0] != "alias/team" || attrs["bucket_key_enabled"] != true {
+		t.Fatalf("encryption attributes: %v", attrs)
+	}
+}
+
+func TestS3OptionalEncryptionDenialsKeepBucketsAndDistinctWarnings(t *testing.T) {
+	api := &fakeS3BucketDetails{
+		buckets: &awss3.ListBucketsOutput{Buckets: []s3types.Bucket{
+			{Name: aws.String("assets"), BucketRegion: aws.String("us-east-1")},
+			{Name: aws.String("archives"), BucketRegion: aws.String("us-east-1")},
+		}},
+		head:          &awss3.HeadBucketOutput{BucketRegion: aws.String("us-east-1")},
+		encryptionErr: &smithy.GenericAPIError{Code: "AccessDenied"},
+	}
+	records, err := listS3WithAPI(context.Background(), api, "us-east-1", VerifiedIdentity{AccountID: "123456789012", Partition: "aws"})
+	var denied *optionalReadDenied
+	if !errors.As(err, &denied) || len(denied.denials) != 2 || len(records) != 2 {
+		t.Fatalf("records=%v denials=%+v err=%v", records, denied, err)
+	}
+	if denied.denials[0].resource != "bucket:assets" || denied.denials[1].resource != "bucket:archives" {
+		t.Fatalf("warning resources: %+v", denied.denials)
+	}
+	for _, row := range records {
+		if row.Resource == nil || row.Resource.ResourceID == "" || row.Resource.Attributes["bucket_region"] != "us-east-1" {
+			t.Fatalf("lost core bucket evidence: %+v", row)
+		}
+		if _, present := row.Resource.Attributes["default_encryption_algorithms"]; present {
+			t.Fatalf("denied encryption presented as known: %+v", row.Resource.Attributes)
+		}
+	}
+	collectorWithS3 := Collector{
+		LoadConfig: func(_ context.Context, region string) (aws.Config, error) { return aws.Config{Region: region}, nil },
+		VerifyIdentity: func(_ context.Context, _ aws.Config) (VerifiedIdentity, error) {
+			return VerifiedIdentity{AccountID: "123456789012", Partition: "aws"}, nil
+		},
+		Loaders: map[string]Loader{"s3": func(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]collector.Record, error) {
+			return listS3WithAPI(ctx, api, cfg.Region, identity)
+		}},
+	}
+	outcome, err := collectorWithS3.CollectReport(context.Background(), Config{AccountID: "123456789012", Regions: []string{"us-east-1"}, Services: []string{"s3"}})
+	if err != nil || len(outcome.Resources) != 2 || len(outcome.WarningObservations) != 2 || len(outcome.Warnings) != 1 {
+		t.Fatalf("partial S3 outcome: resources=%d warnings=%d statuses=%v err=%v", len(outcome.Resources), len(outcome.WarningObservations), outcome.Warnings, err)
+	}
+	for _, warning := range outcome.WarningObservations {
+		if warning.Attributes["operation"] != "GetBucketEncryption" || warning.Attributes["effect"] != "encryption-unknown" {
+			t.Fatalf("warning identity: %+v", warning)
+		}
+	}
 }
 
 func TestS3BucketDetailsPreserveTagsAndTerminalDenial(t *testing.T) {
