@@ -45,6 +45,9 @@ func ecsServiceRecord(service awsecstypes.Service, region string) collector.Reco
 		},
 		CorrelationAnchors: []string{arn, strings.TrimSpace(name), taskDefinitionARN}, SourceRecordID: arn,
 	}
+	if edge, ok := ecsServiceTaskDefinitionRelationship(arn, taskDefinitionARN, region); ok {
+		row.Relationship = &edge
+	}
 	return row
 }
 
