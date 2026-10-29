@@ -144,6 +144,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 					State: item.Resource.State, Tags: item.Resource.Tags,
 					Attributes:         item.Resource.Attributes,
 					CorrelationAnchors: append([]string(nil), item.Resource.CorrelationAnchors...),
+					SourceRecordID:     item.Resource.SourceRecordID,
 				})
 			}
 		}

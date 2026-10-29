@@ -16,7 +16,7 @@ func TestAppendLiveResourcesBindsClaimAndDeduplicates(t *testing.T) {
 	base := mustCollect(t, "complete.json", claim, testObservedAt(), "")
 	observation := ResourceObservation{
 		Boundary:   Boundary{AccountID: "123456789012", Region: "us-east-1", ServiceKind: "ec2"},
-		ResourceID: "vpc-123", ResourceType: awsv1.ResourceTypeEC2VPC, Name: "example",
+		ResourceID: "vpc-123", ResourceType: awsv1.ResourceTypeEC2VPC, Name: "example", SourceRecordID: "source-row-vpc",
 		State: "available", Tags: map[string]string{"environment": "qa"},
 		Attributes: map[string]any{"cidr_block": "10.0.0.0/16"},
 	}
@@ -33,6 +33,9 @@ func TestAppendLiveResourcesBindsClaimAndDeduplicates(t *testing.T) {
 	}
 	if fact.SourceRef.URI != "aws://123456789012" || strings.Contains(fact.SourceRef.URI, claim.FencingToken) {
 		t.Fatalf("unsafe resource provenance URI %q", fact.SourceRef.URI)
+	}
+	if fact.SourceRef.RecordID != "source-row-vpc" {
+		t.Fatalf("source record ID = %q", fact.SourceRef.RecordID)
 	}
 	if got := fact.Payload["resource_type"]; got != awsv1.ResourceTypeEC2VPC {
 		t.Fatalf("resource_type = %v", got)
