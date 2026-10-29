@@ -6,8 +6,9 @@ typed resource identity to transitional placeholder records; STS verifies the
 active credentials account before service reads, and live mode ignores the old
 placeholder-only freshness digest. ECR repository reads now emit typed
 repository observations with reported tags and image-reference facts from
-DescribeImages; the regional S3 ListBuckets reader now emits bucket identity
-and its reported region and creation time. Bucket detail and posture reads,
+DescribeImages; the regional S3 ListBuckets reader now emits bucket identity,
+its reported region and creation time, and tags after HeadBucket and
+GetBucketTagging reads. Remaining bucket detail and posture reads,
 lifecycle policy facts, and the full scanner port remain unfinished. This plan
 maps the remaining in-tree implementation to standalone locations. No live AWS
 core-kind output or host grant has been proved.
@@ -116,8 +117,10 @@ importable only inside this module, satisfying `boundary_test.go`).
    references emit from existing DescribeImages pages; lifecycle policies
    still need their typed resource kind. S3 buckets now emit typed identity,
    listed bucket region, and creation time from region-filtered ListBuckets;
-   encryption, access controls, tags, posture, and policy facts await
-   separate detail reads. No missing encryption is treated as disabled.
+   HeadBucket verifies the expected owner and GetBucketTagging supplies tags.
+   Only NoSuchTagSet is an empty tag set; other read errors fail the claim.
+   Encryption, access controls, posture, and policy facts await separate
+   detail reads. No missing encryption is treated as disabled.
 5. Remaining envelopes kind by kind; delete transitional kinds last.
 6. `awsruntime` + `service/` scanners service by service.
 7. `recordpolicy` / `freshness` / `catalog` / `checkpoint` integration.

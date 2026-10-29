@@ -44,7 +44,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/signin v1.10.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.38.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.43.5 // indirect
-	github.com/aws/smithy-go v1.28.6 // indirect
+	github.com/aws/smithy-go v1.28.6
 	github.com/eshu-hq/eshu-sdk/collector v0.1.0-rc.4
 	github.com/eshu-hq/eshu-sdk/factschema v0.1.0-rc.7
 )

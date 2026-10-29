@@ -4,16 +4,64 @@
 package live
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 )
 
 const s3ListPageLimit int32 = 10000
+
+type s3BucketDetailsAPI interface {
+	HeadBucket(context.Context, *awss3.HeadBucketInput, ...func(*awss3.Options)) (*awss3.HeadBucketOutput, error)
+	GetBucketTagging(context.Context, *awss3.GetBucketTaggingInput, ...func(*awss3.Options)) (*awss3.GetBucketTaggingOutput, error)
+}
+
+// readS3BucketDetails follows the legacy required HeadBucket read and tag
+// read. Only NoSuchTagSet means that tagging was not configured; denials remain
+// terminal for the claim.
+func readS3BucketDetails(ctx context.Context, api s3BucketDetailsAPI, name, accountID string) (string, map[string]string, error) {
+	head, err := api.HeadBucket(ctx, &awss3.HeadBucketInput{
+		Bucket: aws.String(name), ExpectedBucketOwner: aws.String(accountID),
+	})
+	if err != nil {
+		return "", nil, fmt.Errorf("s3 head bucket %q: %w", name, err)
+	}
+	region := ""
+	if head != nil {
+		region = strings.TrimSpace(aws.ToString(head.BucketRegion))
+	}
+	result, err := api.GetBucketTagging(ctx, &awss3.GetBucketTaggingInput{
+		Bucket: aws.String(name), ExpectedBucketOwner: aws.String(accountID),
+	})
+	if err != nil {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) && apiErr.ErrorCode() == "NoSuchTagSet" {
+			return region, nil, nil
+		}
+		return "", nil, fmt.Errorf("s3 get bucket tagging %q: %w", name, err)
+	}
+	if result == nil {
+		return region, nil, nil
+	}
+	tags := make(map[string]string, len(result.TagSet))
+	for _, tag := range result.TagSet {
+		key := strings.TrimSpace(aws.ToString(tag.Key))
+		if key != "" {
+			tags[key] = aws.ToString(tag.Value)
+		}
+	}
+	if len(tags) == 0 {
+		return region, nil, nil
+	}
+	return region, tags, nil
+}
 
 // s3ListInput restricts bucket discovery to the claim region, as the legacy
 // scanner does. S3 returns an account-wide list without this filter.

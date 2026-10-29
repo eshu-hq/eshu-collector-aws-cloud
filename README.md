@@ -43,8 +43,10 @@ retaining its repository placeholder record. Existing DescribeImages pages emit
 one `aws_image_reference` per tag, including an empty tag for untagged images;
 the image placeholder record remains. The S3 reader now emits a typed bucket
 identity and the bucket region and creation time returned by regional
-ListBuckets. It does not infer encryption or posture from the absent detail
-reads. ECR lifecycle policies and the remaining AWS service readers still
+ListBuckets. It verifies each listed bucket with HeadBucket and emits tags
+from GetBucketTagging; only NoSuchTagSet is treated as an empty tag set.
+Other read errors fail the claim. It does not infer encryption or posture from
+the absent detail reads. ECR lifecycle policies and the remaining AWS service readers still
 lack typed output. The full port removes
 those placeholders and declares the other core-owned AWS fact kinds at schema
 `1.0.0`, all with
