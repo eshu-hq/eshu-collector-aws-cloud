@@ -96,12 +96,12 @@ importable only inside this module, satisfying `boundary_test.go`).
    the first EC2 identity slice is wired with fail-closed missing-ID handling
    and the legacy rule-ID fallback; VPC, subnet, security-group, and volume
    observations carry state, tags, and their describe-response attributes.
-   Security groups retain group-ID/name correlation anchors. Instance identity
-   observations carry state, launch AMI ID, and an ARN from the verified STS
-   account and partition. Volume ARNs and KMS links use that same identity;
-   subnet-to-VPC relationships are also emitted. Remaining EC2 attributes and
-   relationships, other services, real host grant proof, and replacement of
-   placeholder conformance fixtures remain.
+   Security groups retain group-ID/name anchors; rules carry metadata, tags,
+   and rule/group anchors. Instance identity observations carry state, launch
+   AMI ID, and an ARN from the verified STS account and partition. Volume ARNs
+   and KMS links use that same identity; subnet-to-VPC relationships are also
+   emitted. Remaining EC2 attributes and relationships, other services, real
+   host grant proof, and replacement of placeholder conformance fixtures remain.
 5. Remaining envelopes kind by kind; delete transitional kinds last.
 6. `awsruntime` + `service/` scanners service by service.
 7. `recordpolicy` / `freshness` / `catalog` / `checkpoint` integration.

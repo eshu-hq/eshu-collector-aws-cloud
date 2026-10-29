@@ -40,13 +40,16 @@ func TestSecurityGroupAnchorsReachClaimResources(t *testing.T) {
 	group := ec2types.SecurityGroup{GroupId: aws.String("sg-123"), GroupName: aws.String(" web ")}
 	row := securityGroupRecord(group, "us-east-1")
 	reader := Collector{
-		LoadConfig: fakeConfig(&[]string{}), VerifyIdentity: verifiedIdentity,
+		LoadConfig: fakeConfig(&[]string{}),
+		VerifyIdentity: func(context.Context, aws.Config) (VerifiedIdentity, error) {
+			return VerifiedIdentity{AccountID: "123456789012", Partition: "aws"}, nil
+		},
 		Loaders: map[string]Loader{"ec2": func(_ context.Context, _ aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
 			return []collector.Record{row}, nil
 		}},
 	}
 	outcome, err := reader.CollectReport(context.Background(), Config{
-		AccountID: "055929692761", Regions: []string{"us-east-1"}, Services: []string{"ec2"},
+		AccountID: "123456789012", Regions: []string{"us-east-1"}, Services: []string{"ec2"},
 	})
 	if err != nil {
 		t.Fatalf("CollectReport: %v", err)
