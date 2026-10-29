@@ -46,5 +46,6 @@ func eksAddonRecord(addon ekstypes.Addon, region string) (collector.Record, erro
 		Tags: eksTags(addon.Tags), Attributes: attrs,
 		CorrelationAnchors: []string{id, name, roleARN}, SourceRecordID: id,
 	}
+	result.Relationships = eksAddonRelationships(addon, region, id, arn)
 	return result, nil
 }

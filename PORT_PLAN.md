@@ -16,8 +16,10 @@ AMI and capacity type, node role, network placement, and scaling counts.
 DescribeAddon emits typed add-on identity, status, tags, version, timestamps,
 and service-account role ARN, excluding configuration values that may contain
 secrets. DescribeCluster emits reported service-role, subnet, and security-group
-relationships. IAM OIDC provider enrichment and the remaining EKS relationships
-remain unported.
+relationships. Reported nodegroup and add-on roles, nodegroup subnets, and
+cluster membership also emit typed relationships; membership requires matching
+observed cluster names. IAM OIDC provider enrichment and its relationship remain
+unported.
 ECS services, tasks, and task definitions, remaining bucket detail and posture
 reads, lifecycle policy facts, and the full scanner port remain unfinished. This plan
 maps the remaining in-tree implementation to standalone locations. No live AWS
