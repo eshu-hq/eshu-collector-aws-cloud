@@ -24,7 +24,8 @@ review). Keep internal helpers private.
 ## Emission contract
 
 `manifest.yaml` `spec.emittedFacts` declares `aws_resource`,
-`aws_relationship`, `aws_image_reference`, and `aws_warning` alongside three
+`aws_relationship`, `aws_image_reference`, `aws_warning`, and the replication-only
+`s3_bucket_posture` alongside three
 transitional placeholder kinds (`collector-aws-cloud.snapshot/record/warning`).
 The live EC2 reader emits typed resource identity for VPCs, subnets, security
 groups and rules, network interfaces, instances, AMI identities, and volumes,
@@ -80,12 +81,20 @@ require `s3:GetBucketWebsite` and `s3:GetBucketLogging`, and add two API calls
 per listed bucket. Live IAM access and request cost remain unverified. A
 missing website configuration and empty logging response mean disabled;
 other errors, including denials, fail the S3 read.
+GetBucketReplication adds one `s3:GetReplicationConfiguration` read per listed
+bucket with ExpectedBucketOwner. Its only typed posture field is
+`replication_enabled`: a configuration with any rule reports true even when
+the rule status is disabled, the explicit missing-configuration error or an
+empty rule list reports false, and a nil successful response leaves it unknown.
+The fact has the legacy bucket identity, anchors, and `#posture` source record;
+replication rules, destinations, and role never enter facts. A denied read
+fails the S3 service read. Live IAM access and request cost remain unverified.
 For encryption, the explicit missing-configuration response means a known
 empty configuration. Encryption AccessDenied leaves those attributes absent,
 retains the bucket, emits a typed warning, and makes the SDK result partial.
 Versioning and public-access-block denials fail the S3 read; the overall claim
 can still be partial when another service returns evidence. The separate
-`s3_bucket_posture` fact remains unported. ECS
+other S3 posture fields remain unported. ECS
 DescribeClusters emits cluster identity, tags, status, and
 reported counts. DescribeServices emits service identity, tags, status, counts,
 task-definition binding, and load-balancer metadata. DescribeTasks emits

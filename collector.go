@@ -101,6 +101,8 @@ type Record struct {
 	// Resource carries typed metadata from a live AWS read. The placeholder
 	// report format does not accept it from a file.
 	Resource *LiveResource `json:"-"`
+	// S3Posture carries a typed, replication-only S3 posture observation.
+	S3Posture *S3BucketPostureObservation `json:"-"`
 	// ImageReference carries a typed image digest and tag from DescribeImages.
 	ImageReference *LiveImageReference `json:"-"`
 	// Relationship carries one typed edge from a live AWS read.
@@ -175,7 +177,7 @@ type CollectOptions struct {
 func Contract() sdk.Contract {
 	return sdk.Contract{
 		ProtocolVersion: sdk.ProtocolVersionV1Alpha1,
-		Facts: []sdk.FactDeclaration{
+		Facts: append([]sdk.FactDeclaration{
 			{
 				Kind:             FactKindSnapshot,
 				SchemaVersions:   []string{"1.0.0"},
@@ -211,7 +213,7 @@ func Contract() sdk.Contract {
 				SchemaVersions:   []string{"1.0.0"},
 				SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceReported},
 			},
-		},
+		}, s3BucketPostureDeclaration()),
 	}
 }
 

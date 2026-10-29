@@ -55,6 +55,7 @@ type Outcome struct {
 	Resources       []collector.ResourceObservation
 	Relationships   []collector.RelationshipObservation
 	ImageReferences []collector.ImageReferenceObservation
+	S3Postures      []collector.S3BucketPostureObservation
 }
 
 func (c Collector) now() time.Time {
@@ -90,6 +91,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 	resources := []collector.ResourceObservation{}
 	relationships := []collector.RelationshipObservation{}
 	imageReferences := []collector.ImageReferenceObservation{}
+	s3Postures := []collector.S3BucketPostureObservation{}
 	warningObservations := []collector.WarningObservation{}
 	ordinaryFailure := false
 	for i, region := range config.Regions {
@@ -141,6 +143,11 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 				}
 			}
 			for _, item := range listed {
+				if item.S3Posture != nil {
+					posture := *item.S3Posture
+					posture.Boundary.AccountID = config.AccountID
+					s3Postures = append(s3Postures, posture)
+				}
 				if !item.TypedOnly {
 					records = append(records, item)
 				}
@@ -191,6 +198,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 		Resources:           resources,
 		Relationships:       relationships,
 		ImageReferences:     imageReferences,
+		S3Postures:          s3Postures,
 	}, nil
 }
 

@@ -139,6 +139,15 @@ func listS3WithAPI(ctx context.Context, client s3BucketAPI, region string, ident
 			for key, value := range websiteLogging {
 				row.Resource.Attributes[key] = value
 			}
+			replication, err := readS3Replication(ctx, client, aws.ToString(bucket.Name), identity.AccountID)
+			if err != nil {
+				return nil, err
+			}
+			row.S3Posture = &collector.S3BucketPostureObservation{
+				Boundary:  collector.Boundary{Region: region, ServiceKind: "s3"},
+				BucketARN: row.Resource.ARN, BucketName: aws.ToString(bucket.Name),
+				ReplicationEnabled: replication, SourceRecordID: row.Resource.ARN + "#posture",
+			}
 			encryption, denied, err := readS3BucketEncryption(ctx, client, aws.ToString(bucket.Name), identity.AccountID)
 			if err != nil {
 				return nil, err
