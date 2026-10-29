@@ -43,6 +43,7 @@ func eksClusterRecord(cluster ekstypes.Cluster, region string) (collector.Record
 		Tags: eksTags(cluster.Tags), Attributes: attrs,
 		CorrelationAnchors: []string{arn, name}, SourceRecordID: id,
 	}
+	result.Relationships = eksClusterRelationships(cluster, region, id, arn)
 	return result, nil
 }
 

@@ -59,11 +59,12 @@ the OIDC issuer URL. DescribeNodegroup emits managed nodegroup identity,
 status, tags, version, AMI and capacity type, node role, network placement,
 and scaling counts. EKS DescribeAddon emits add-on identity, status, tags,
 version, timestamps, and service-account role ARN; its configuration values
-are excluded because they may contain secrets. IAM provider enrichment and
-EKS relationships remain unported. ECR lifecycle policies and other AWS service
-readers still lack typed output. The full port removes
-those placeholders and declares the other core-owned AWS fact kinds at schema
-`1.0.0`, all with
+are excluded because they may contain secrets. DescribeCluster also emits
+reported service-role, subnet, and security-group relationships. IAM OIDC
+provider enrichment and the remaining EKS relationships remain unported.
+ECR lifecycle policies and other AWS service readers still lack typed output.
+The full port removes those placeholders and declares the other core-owned AWS
+fact kinds at schema `1.0.0`, all with
 `reported` confidence (the in-tree AWS envelopes record facts returned by
 the AWS APIs as reported):
 
