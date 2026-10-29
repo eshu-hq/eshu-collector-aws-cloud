@@ -59,8 +59,9 @@ emission at runtime. See [PORT_PLAN.md](PORT_PLAN.md).
 The typed `aws_resource` envelope is connected to claim-bound live EC2 reads.
 VPC and subnet observations carry the legacy scanner's state, tags, and API
 attributes, including CIDR associations. Instance identity observations carry
-state and the launch AMI ID from the same `DescribeInstances` response. Other
-EC2 resource types still carry identity and name only; relationships and other
+state and the launch AMI ID from the same `DescribeInstances` response. The
+subnet-to-VPC edge is the only typed relationship currently emitted; other EC2
+resource types still carry identity and name only, and other relationships and
 fact kinds remain unported. This is staged implementation, not a full parity
 or live host admission claim.
 Instance ARNs use the account and partition verified by STS before EC2 reads;
