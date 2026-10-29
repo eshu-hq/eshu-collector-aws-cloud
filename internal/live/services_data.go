@@ -132,6 +132,13 @@ func listS3WithAPI(ctx context.Context, client s3BucketAPI, region string, ident
 			for key, value := range policyAndOwnership {
 				row.Resource.Attributes[key] = value
 			}
+			websiteLogging, err := readS3WebsiteLogging(ctx, client, aws.ToString(bucket.Name), identity.AccountID)
+			if err != nil {
+				return nil, err
+			}
+			for key, value := range websiteLogging {
+				row.Resource.Attributes[key] = value
+			}
 			encryption, denied, err := readS3BucketEncryption(ctx, client, aws.ToString(bucket.Name), identity.AccountID)
 			if err != nil {
 				return nil, err

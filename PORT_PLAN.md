@@ -156,11 +156,18 @@ importable only inside this module, satisfying `boundary_test.go`).
    requires `lambda:GetFunction`; live IAM access and cost remain unverified.
    S3 buckets emit typed identity, listed region, creation time, and tags after
    HeadBucket owner verification and GetBucketTagging. GetBucketEncryption,
-   GetBucketVersioning, GetPublicAccessBlock, GetBucketPolicyStatus, and
-   GetBucketOwnershipControls add bounded bucket metadata. The latter two emit
-   only a nullable public-policy boolean and reported ownership enum values;
-   they never read the policy document. Missing configurations remain distinct
-   from denied reads, which fail the S3 read.
+   GetBucketVersioning, GetPublicAccessBlock, GetBucketPolicyStatus,
+   GetBucketOwnershipControls, GetBucketWebsite, and GetBucketLogging add
+   bounded bucket metadata. Policy status is a nullable public-policy boolean;
+   ownership controls are reported enum values. No policy document is read.
+   Website emits enabled state, document-presence flags, redirect host, and
+   routing-rule count; logging emits enabled state, target bucket, and prefix.
+   Document object keys, logging grants, and object-key formats are excluded.
+   Website and logging use ExpectedBucketOwner, require `s3:GetBucketWebsite`
+   and `s3:GetBucketLogging`, and add two API calls per listed bucket. Live IAM
+   access and request cost remain unverified. Missing website configuration
+   and empty logging output mean disabled; other errors, including denials,
+   fail the S3 read. Missing policy or ownership controls stay unknown.
    Encryption denial retains the bucket with unknown encryption and a partial
    result. Versioning and public-access-block errors fail the S3 read; a
    multi-service claim may still be partial when another service succeeds.
