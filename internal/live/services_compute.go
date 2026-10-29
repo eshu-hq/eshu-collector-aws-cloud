@@ -273,7 +273,11 @@ func listEKS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 				return nil, fmt.Errorf("eks describe cluster: %w", err)
 			}
 			if described.Cluster != nil {
-				records = append(records, record(aws.ToString(described.Cluster.Arn), "eks", region, aws.ToString(described.Cluster.Name), "cluster"))
+				row, mapErr := eksClusterRecord(*described.Cluster, region)
+				if mapErr != nil {
+					return nil, mapErr
+				}
+				records = append(records, row)
 			}
 			nodegroups := awseks.NewListNodegroupsPaginator(client, &awseks.ListNodegroupsInput{ClusterName: aws.String(name)})
 			for nodegroups.HasMorePages() {
