@@ -25,16 +25,22 @@ type fakeS3BucketDetails struct {
 	encryption      *awss3.GetBucketEncryptionOutput
 	versioning      *awss3.GetBucketVersioningOutput
 	publicAccess    *awss3.GetPublicAccessBlockOutput
+	website         *awss3.GetBucketWebsiteOutput
+	logging         *awss3.GetBucketLoggingOutput
 	headErr         error
 	tagsErr         error
 	encryptionErr   error
 	versioningErr   error
 	publicAccessErr error
+	websiteErr      error
+	loggingErr      error
 	headOwner       string
 	tagOwner        string
 	encryptionOwner string
 	versioningOwner string
 	publicOwner     string
+	websiteOwner    string
+	loggingOwner    string
 }
 
 func (f *fakeS3BucketDetails) ListBuckets(_ context.Context, _ *awss3.ListBucketsInput, _ ...func(*awss3.Options)) (*awss3.ListBucketsOutput, error) {
@@ -64,6 +70,52 @@ func (f *fakeS3BucketDetails) GetBucketVersioning(_ context.Context, input *awss
 func (f *fakeS3BucketDetails) GetPublicAccessBlock(_ context.Context, input *awss3.GetPublicAccessBlockInput, _ ...func(*awss3.Options)) (*awss3.GetPublicAccessBlockOutput, error) {
 	f.publicOwner = aws.ToString(input.ExpectedBucketOwner)
 	return f.publicAccess, f.publicAccessErr
+}
+
+func (f *fakeS3BucketDetails) GetBucketWebsite(_ context.Context, input *awss3.GetBucketWebsiteInput, _ ...func(*awss3.Options)) (*awss3.GetBucketWebsiteOutput, error) {
+	f.websiteOwner = aws.ToString(input.ExpectedBucketOwner)
+	return f.website, f.websiteErr
+}
+
+func (f *fakeS3BucketDetails) GetBucketLogging(_ context.Context, input *awss3.GetBucketLoggingInput, _ ...func(*awss3.Options)) (*awss3.GetBucketLoggingOutput, error) {
+	f.loggingOwner = aws.ToString(input.ExpectedBucketOwner)
+	return f.logging, f.loggingErr
+}
+
+func TestS3WebsiteLoggingPreservesLegacyMetadataAndMissingState(t *testing.T) {
+	api := &fakeS3BucketDetails{
+		buckets: &awss3.ListBucketsOutput{Buckets: []s3types.Bucket{{Name: aws.String("assets"), BucketRegion: aws.String("us-east-1")}}},
+		head:    &awss3.HeadBucketOutput{BucketRegion: aws.String("us-east-1")},
+		website: &awss3.GetBucketWebsiteOutput{IndexDocument: &s3types.IndexDocument{Suffix: aws.String("index.html")}, RedirectAllRequestsTo: &s3types.RedirectAllRequestsTo{HostName: aws.String("example.com")}, RoutingRules: []s3types.RoutingRule{{}}},
+		logging: &awss3.GetBucketLoggingOutput{LoggingEnabled: &s3types.LoggingEnabled{TargetBucket: aws.String("audit"), TargetPrefix: aws.String("logs/")}},
+	}
+	identity := VerifiedIdentity{AccountID: "123456789012", Partition: "aws"}
+	rows, err := listS3WithAPI(context.Background(), api, "us-east-1", identity)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("rows=%v err=%v", rows, err)
+	}
+	attrs := rows[0].Resource.Attributes
+	if api.websiteOwner != identity.AccountID || api.loggingOwner != identity.AccountID || attrs["website_enabled"] != true || attrs["website_has_index_document"] != true || attrs["website_has_error_document"] != false || attrs["website_redirect_host_name"] != "example.com" || attrs["website_routing_rule_count"] != 1 || attrs["logging_enabled"] != true || attrs["logging_target_bucket"] != "audit" || attrs["logging_target_prefix"] != "logs/" {
+		t.Fatalf("website/logging metadata: owners=%q,%q attrs=%v", api.websiteOwner, api.loggingOwner, attrs)
+	}
+	api.website = nil
+	api.websiteErr = &smithy.GenericAPIError{Code: "NoSuchWebsiteConfiguration"}
+	api.logging = &awss3.GetBucketLoggingOutput{}
+	rows, err = listS3WithAPI(context.Background(), api, "us-east-1", identity)
+	if err != nil || len(rows) != 1 || rows[0].Resource.Attributes["website_enabled"] != false || rows[0].Resource.Attributes["logging_enabled"] != false {
+		t.Fatalf("missing settings: rows=%v err=%v", rows, err)
+	}
+	api.websiteErr = &smithy.GenericAPIError{Code: "AccessDenied"}
+	_, err = listS3WithAPI(context.Background(), api, "us-east-1", identity)
+	if !errors.Is(err, api.websiteErr) {
+		t.Fatalf("website denial: %v", err)
+	}
+	api.websiteErr = nil
+	api.loggingErr = &smithy.GenericAPIError{Code: "AccessDenied"}
+	_, err = listS3WithAPI(context.Background(), api, "us-east-1", identity)
+	if !errors.Is(err, api.loggingErr) {
+		t.Fatalf("logging denial: %v", err)
+	}
 }
 
 func TestS3BucketPostureReadsPreserveMissingAndDenial(t *testing.T) {

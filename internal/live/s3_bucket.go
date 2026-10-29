@@ -24,6 +24,51 @@ type s3BucketDetailsAPI interface {
 	GetBucketEncryption(context.Context, *awss3.GetBucketEncryptionInput, ...func(*awss3.Options)) (*awss3.GetBucketEncryptionOutput, error)
 	GetBucketVersioning(context.Context, *awss3.GetBucketVersioningInput, ...func(*awss3.Options)) (*awss3.GetBucketVersioningOutput, error)
 	GetPublicAccessBlock(context.Context, *awss3.GetPublicAccessBlockInput, ...func(*awss3.Options)) (*awss3.GetPublicAccessBlockOutput, error)
+	GetBucketWebsite(context.Context, *awss3.GetBucketWebsiteInput, ...func(*awss3.Options)) (*awss3.GetBucketWebsiteOutput, error)
+	GetBucketLogging(context.Context, *awss3.GetBucketLoggingInput, ...func(*awss3.Options)) (*awss3.GetBucketLoggingOutput, error)
+}
+
+// readS3WebsiteLogging maps only the legacy metadata fields. A missing website
+// configuration and an empty logging response are known disabled states;
+// denied or otherwise failed reads abort the bucket inventory.
+func readS3WebsiteLogging(ctx context.Context, api s3BucketDetailsAPI, name, accountID string) (map[string]any, error) {
+	website, err := api.GetBucketWebsite(ctx, &awss3.GetBucketWebsiteInput{
+		Bucket: aws.String(name), ExpectedBucketOwner: aws.String(accountID),
+	})
+	if err != nil {
+		var apiErr smithy.APIError
+		if !errors.As(err, &apiErr) || apiErr.ErrorCode() != "NoSuchWebsiteConfiguration" {
+			return nil, fmt.Errorf("s3 get bucket website %q: %w", name, err)
+		}
+		website = nil
+	}
+	logging, err := api.GetBucketLogging(ctx, &awss3.GetBucketLoggingInput{
+		Bucket: aws.String(name), ExpectedBucketOwner: aws.String(accountID),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("s3 get bucket logging %q: %w", name, err)
+	}
+	attrs := map[string]any{
+		"website_enabled":            website != nil,
+		"website_has_index_document": website != nil && website.IndexDocument != nil,
+		"website_has_error_document": website != nil && website.ErrorDocument != nil,
+		"website_redirect_host_name": "",
+		"website_routing_rule_count": 0,
+		"logging_enabled":            logging != nil && logging.LoggingEnabled != nil,
+		"logging_target_bucket":      "",
+		"logging_target_prefix":      "",
+	}
+	if website != nil {
+		if website.RedirectAllRequestsTo != nil {
+			attrs["website_redirect_host_name"] = strings.TrimSpace(aws.ToString(website.RedirectAllRequestsTo.HostName))
+		}
+		attrs["website_routing_rule_count"] = len(website.RoutingRules)
+	}
+	if logging != nil && logging.LoggingEnabled != nil {
+		attrs["logging_target_bucket"] = strings.TrimSpace(aws.ToString(logging.LoggingEnabled.TargetBucket))
+		attrs["logging_target_prefix"] = strings.TrimSpace(aws.ToString(logging.LoggingEnabled.TargetPrefix))
+	}
+	return attrs, nil
 }
 
 // readS3BucketPosture returns only reported bucket-level settings. An absent

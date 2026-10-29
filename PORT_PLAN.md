@@ -156,7 +156,16 @@ importable only inside this module, satisfying `boundary_test.go`).
    requires `lambda:GetFunction`; live IAM access and cost remain unverified.
    S3 buckets emit typed identity, listed region, creation time, and tags after
    HeadBucket owner verification and GetBucketTagging. GetBucketEncryption,
-   GetBucketVersioning, and GetPublicAccessBlock add bounded bucket metadata.
+   GetBucketVersioning, GetPublicAccessBlock, GetBucketWebsite, and
+   GetBucketLogging add bounded bucket metadata. Website emits only enabled,
+   document-presence flags, redirect host, and routing-rule count; logging
+   emits only enabled, target bucket, and target prefix. Document object keys,
+   logging grants, and object-key formats are excluded. The two added reads
+   use ExpectedBucketOwner, require `s3:GetBucketWebsite` and
+   `s3:GetBucketLogging`, and add two API calls per listed bucket. Live IAM
+   access and request cost remain unverified. Missing website configuration
+   and empty logging output mean disabled; other errors, including denials,
+   fail the S3 read.
    Encryption denial retains the bucket with unknown encryption and a partial
    result. Versioning and public-access-block errors fail the S3 read; a
    multi-service claim may still be partial when another service succeeds.
