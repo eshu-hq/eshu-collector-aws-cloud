@@ -203,7 +203,11 @@ func listSSM(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("ssm describe parameters: %w", err)
 		}
 		for _, parameter := range page.Parameters {
-			records = append(records, record("", "ssm", region, aws.ToString(parameter.Name), "parameter"))
+			row, err := ssmParameterRecord(parameter, region)
+			if err != nil {
+				return nil, err
+			}
+			records = append(records, row)
 		}
 	}
 	return records, nil
