@@ -23,12 +23,18 @@ type fakeS3BucketDetails struct {
 	head            *awss3.HeadBucketOutput
 	tags            *awss3.GetBucketTaggingOutput
 	encryption      *awss3.GetBucketEncryptionOutput
+	versioning      *awss3.GetBucketVersioningOutput
+	publicAccess    *awss3.GetPublicAccessBlockOutput
 	headErr         error
 	tagsErr         error
 	encryptionErr   error
+	versioningErr   error
+	publicAccessErr error
 	headOwner       string
 	tagOwner        string
 	encryptionOwner string
+	versioningOwner string
+	publicOwner     string
 }
 
 func (f *fakeS3BucketDetails) ListBuckets(_ context.Context, _ *awss3.ListBucketsInput, _ ...func(*awss3.Options)) (*awss3.ListBucketsOutput, error) {
@@ -48,6 +54,57 @@ func (f *fakeS3BucketDetails) GetBucketTagging(_ context.Context, input *awss3.G
 func (f *fakeS3BucketDetails) GetBucketEncryption(_ context.Context, input *awss3.GetBucketEncryptionInput, _ ...func(*awss3.Options)) (*awss3.GetBucketEncryptionOutput, error) {
 	f.encryptionOwner = aws.ToString(input.ExpectedBucketOwner)
 	return f.encryption, f.encryptionErr
+}
+
+func (f *fakeS3BucketDetails) GetBucketVersioning(_ context.Context, input *awss3.GetBucketVersioningInput, _ ...func(*awss3.Options)) (*awss3.GetBucketVersioningOutput, error) {
+	f.versioningOwner = aws.ToString(input.ExpectedBucketOwner)
+	return f.versioning, f.versioningErr
+}
+
+func (f *fakeS3BucketDetails) GetPublicAccessBlock(_ context.Context, input *awss3.GetPublicAccessBlockInput, _ ...func(*awss3.Options)) (*awss3.GetPublicAccessBlockOutput, error) {
+	f.publicOwner = aws.ToString(input.ExpectedBucketOwner)
+	return f.publicAccess, f.publicAccessErr
+}
+
+func TestS3BucketPostureReadsPreserveMissingAndDenial(t *testing.T) {
+	api := &fakeS3BucketDetails{
+		buckets:         &awss3.ListBucketsOutput{Buckets: []s3types.Bucket{{Name: aws.String("assets"), BucketRegion: aws.String("us-east-1")}}},
+		head:            &awss3.HeadBucketOutput{BucketRegion: aws.String("us-east-1")},
+		versioning:      &awss3.GetBucketVersioningOutput{Status: s3types.BucketVersioningStatusEnabled, MFADelete: s3types.MFADeleteStatusDisabled},
+		publicAccessErr: &smithy.GenericAPIError{Code: "NoSuchPublicAccessBlockConfiguration"},
+	}
+	identity := VerifiedIdentity{AccountID: "123456789012", Partition: "aws"}
+	rows, err := listS3WithAPI(context.Background(), api, "us-east-1", identity)
+	if err != nil || len(rows) != 1 || api.versioningOwner != identity.AccountID || api.publicOwner != identity.AccountID {
+		t.Fatalf("rows=%v owners=%q,%q err=%v", rows, api.versioningOwner, api.publicOwner, err)
+	}
+	attrs := rows[0].Resource.Attributes
+	if attrs["versioning_status"] != "Enabled" || attrs["mfa_delete"] != "Disabled" {
+		t.Fatalf("versioning: %v", attrs)
+	}
+	for _, key := range []string{"block_public_acls", "ignore_public_acls", "block_public_policy", "restrict_public_buckets"} {
+		if value, ok := attrs[key]; !ok || value != nil {
+			t.Fatalf("missing public access configuration %q = %v, present=%t", key, value, ok)
+		}
+	}
+	api.publicAccessErr = nil
+	api.publicAccess = &awss3.GetPublicAccessBlockOutput{PublicAccessBlockConfiguration: &s3types.PublicAccessBlockConfiguration{
+		BlockPublicAcls: aws.Bool(true), IgnorePublicAcls: aws.Bool(false),
+		BlockPublicPolicy: aws.Bool(true), RestrictPublicBuckets: aws.Bool(true),
+	}}
+	rows, err = listS3WithAPI(context.Background(), api, "us-east-1", identity)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("configured public access: rows=%v err=%v", rows, err)
+	}
+	attrs = rows[0].Resource.Attributes
+	if attrs["block_public_acls"] != true || attrs["ignore_public_acls"] != false || attrs["block_public_policy"] != true || attrs["restrict_public_buckets"] != true {
+		t.Fatalf("configured public access flags: %v", attrs)
+	}
+	api.publicAccessErr = &smithy.GenericAPIError{Code: "AccessDenied"}
+	_, err = listS3WithAPI(context.Background(), api, "us-east-1", identity)
+	if !errors.Is(err, api.publicAccessErr) {
+		t.Fatalf("public access denial: %v", err)
+	}
 }
 
 func TestS3EncryptionReadKeepsDeniedStateUnknown(t *testing.T) {

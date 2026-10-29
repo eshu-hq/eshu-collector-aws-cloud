@@ -22,6 +22,54 @@ type s3BucketDetailsAPI interface {
 	HeadBucket(context.Context, *awss3.HeadBucketInput, ...func(*awss3.Options)) (*awss3.HeadBucketOutput, error)
 	GetBucketTagging(context.Context, *awss3.GetBucketTaggingInput, ...func(*awss3.Options)) (*awss3.GetBucketTaggingOutput, error)
 	GetBucketEncryption(context.Context, *awss3.GetBucketEncryptionInput, ...func(*awss3.Options)) (*awss3.GetBucketEncryptionOutput, error)
+	GetBucketVersioning(context.Context, *awss3.GetBucketVersioningInput, ...func(*awss3.Options)) (*awss3.GetBucketVersioningOutput, error)
+	GetPublicAccessBlock(context.Context, *awss3.GetPublicAccessBlockInput, ...func(*awss3.Options)) (*awss3.GetPublicAccessBlockOutput, error)
+}
+
+// readS3BucketPosture returns only reported bucket-level settings. An absent
+// public-access-block configuration has unknown flags; it is not four false
+// flags. An access denial or any other unexpected error fails the S3 read.
+func readS3BucketPosture(ctx context.Context, api s3BucketDetailsAPI, name, accountID string) (map[string]any, error) {
+	versioning, err := api.GetBucketVersioning(ctx, &awss3.GetBucketVersioningInput{
+		Bucket: aws.String(name), ExpectedBucketOwner: aws.String(accountID),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("s3 get bucket versioning %q: %w", name, err)
+	}
+	attrs := map[string]any{"versioning_status": "", "mfa_delete": ""}
+	if versioning != nil {
+		attrs["versioning_status"] = strings.TrimSpace(string(versioning.Status))
+		attrs["mfa_delete"] = strings.TrimSpace(string(versioning.MFADelete))
+	}
+	block, err := api.GetPublicAccessBlock(ctx, &awss3.GetPublicAccessBlockInput{
+		Bucket: aws.String(name), ExpectedBucketOwner: aws.String(accountID),
+	})
+	if err != nil {
+		var apiErr smithy.APIError
+		if !errors.As(err, &apiErr) || apiErr.ErrorCode() != "NoSuchPublicAccessBlockConfiguration" {
+			return nil, fmt.Errorf("s3 get public access block %q: %w", name, err)
+		}
+		block = nil
+	}
+	attrs["block_public_acls"] = nil
+	attrs["ignore_public_acls"] = nil
+	attrs["block_public_policy"] = nil
+	attrs["restrict_public_buckets"] = nil
+	if block != nil && block.PublicAccessBlockConfiguration != nil {
+		config := block.PublicAccessBlockConfiguration
+		attrs["block_public_acls"] = optionalS3Bool(config.BlockPublicAcls)
+		attrs["ignore_public_acls"] = optionalS3Bool(config.IgnorePublicAcls)
+		attrs["block_public_policy"] = optionalS3Bool(config.BlockPublicPolicy)
+		attrs["restrict_public_buckets"] = optionalS3Bool(config.RestrictPublicBuckets)
+	}
+	return attrs, nil
+}
+
+func optionalS3Bool(value *bool) any {
+	if value == nil {
+		return nil
+	}
+	return *value
 }
 
 type s3BucketAPI interface {
