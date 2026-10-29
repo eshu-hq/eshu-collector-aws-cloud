@@ -221,7 +221,7 @@ One bounded `DescribeImages` call per scan (at most 100 distinct image IDs,
 deprecated images included) stamps the reported typed image fields
 (`platform_details`, `platform`, `architecture`, `creation_date`,
 `deprecation_time`, `owner_alias`, `root_device_type`) onto the matching AMI
-facts. Creator-controlled image `name`/`description` text is never emitted
+facts. The structurally validated image `name` is admitted as untrusted creator-controlled text; the image `description` is never emitted
 (see eshu-hq/eshu#9525).
 AMI targets add typed facts without adding transitional record facts; all
 emitted facts count toward the claim's record limit.
