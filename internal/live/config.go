@@ -28,6 +28,7 @@ var SupportedServices = []string{
 	"eventbridge",
 	"iam",
 	"lambda",
+	"kms",
 	"rds",
 	"route53",
 	"s3",

@@ -113,6 +113,17 @@ image read. A missing policy emits nothing; a denied read fails the ECR
 service. The policy JSON body is omitted because it can contain user-supplied
 values. This adds one API call per repository and requires
 `ecr:GetLifecyclePolicy`; the live IAM grant and call cost remain unverified.
+The KMS reader emits typed `aws_kms_key` resources from paginated ListKeys and
+one DescribeKey per listed key. It verifies each reported key ARN against the
+listed key ID and the STS-verified account, partition, and region; missing or
+conflicting identity fails the service read. The resource includes only
+DescribeKey metadata such as manager, state, usage, origin, algorithms,
+creation/deletion dates, and multi-Region configuration. It does not read
+key material, raw policies, aliases, grants, tags, or rotation status;
+legacy `alias_count`, `grant_count`, `policy_revision_names`, and
+`rotation_status_known` are therefore absent rather than guessed. The new
+read requires `kms:ListKeys` and `kms:DescribeKey`, with one DescribeKey
+call per listed key; live IAM access and call cost remain unverified.
 Other AWS service readers still lack typed output.
 The full port removes those placeholders and declares the other core-owned AWS
 fact kinds at schema `1.0.0`, all with
