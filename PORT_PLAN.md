@@ -54,6 +54,11 @@ Source of truth for paths: `go/internal/collector/awscloud/` in
 `eshu-hq/eshu/sdk/go/factschema/schema/` and family declarations in
 `go/internal/facts/cloud/`.
 
+The CloudFront `ListDistributions` slice emits typed distribution resources
+and reported ACM/WAF relationships at `aws-global` without additional API
+reads. Origin metadata keeps custom header names without values; tags remain
+unobserved. Other service port and deployment proof remain in progress.
+
 ## Identity (done in scaffold)
 
 | In-tree | Standalone |

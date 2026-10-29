@@ -179,6 +179,12 @@ the AWS APIs as reported):
 `aws_resource_policy_permission`, `aws_warning`, `ec2_instance_posture`,
 `s3_bucket_posture`, `rds_instance_posture`, `s3_external_principal_grant`.
 
+The live CloudFront reader emits a typed `aws_cloudfront_distribution`
+resource and reported ACM certificate and WAF web ACL relationships from
+`ListDistributions`. These account-global facts use the `aws-global` region.
+Origin metadata retains custom header names without values. Tags are not
+observed because `ListTagsForResource` is a separate read.
+
 The remaining bare AWS kinds stay out of the manifest until their typed
 emitters are ported and the host supplies a trusted grant snapshot to
 conformance (#8909).
