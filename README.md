@@ -58,8 +58,9 @@ emission at runtime. See [PORT_PLAN.md](PORT_PLAN.md).
 
 The typed `aws_resource` envelope is connected to claim-bound live EC2 reads.
 VPC, subnet, and volume observations carry reported state, tags, and API
-attributes, including CIDR associations and volume attachments. Instance
-identity observations carry state and launch AMI ID from the same
+attributes, including CIDR associations and volume attachments. Security-group
+observations carry the reported group name, tags, description, owner, and VPC
+ID. Instance identity observations carry state and launch AMI ID from the same
 `DescribeInstances` response. Subnet-to-VPC and volume-to-KMS are the two
 typed relationships currently emitted; other EC2 resource types still carry
 identity and name only. This is staged implementation, not a full parity or
