@@ -120,6 +120,8 @@ type LiveResource struct {
 	State        string
 	Tags         map[string]string
 	Attributes   map[string]any
+	// CorrelationAnchors carry source-reported join identities into the fact.
+	CorrelationAnchors []string
 }
 
 // CollectOptions controls emission for one claimed scope.

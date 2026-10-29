@@ -26,6 +26,7 @@ func securityGroupRecord(group ec2types.SecurityGroup, region string) collector.
 	}
 	resource := result.Resource
 	resource.Name = name
+	resource.CorrelationAnchors = []string{id, strings.TrimSpace(name)}
 	resource.Tags = ec2Tags(group.Tags)
 	resource.Attributes = map[string]any{
 		"description": strings.TrimSpace(aws.ToString(group.Description)),
