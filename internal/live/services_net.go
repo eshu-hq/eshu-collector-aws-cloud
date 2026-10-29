@@ -85,7 +85,6 @@ func listAPIGateway(ctx context.Context, cfg aws.Config) ([]collector.Record, er
 // metadata only.
 func listCloudFront(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 	client := awscloudfront.NewFromConfig(cfg)
-	region := cfg.Region
 	records := []collector.Record{}
 	distributions := awscloudfront.NewListDistributionsPaginator(client, &awscloudfront.ListDistributionsInput{})
 	for distributions.HasMorePages() {
@@ -97,11 +96,7 @@ func listCloudFront(ctx context.Context, cfg aws.Config) ([]collector.Record, er
 			continue
 		}
 		for _, distribution := range page.DistributionList.Items {
-			name := aws.ToString(distribution.DomainName)
-			if name == "" {
-				name = aws.ToString(distribution.Id)
-			}
-			records = append(records, record(aws.ToString(distribution.ARN), "cloudfront", region, name, "distribution"))
+			records = append(records, cloudFrontDistributionRecord(distribution))
 		}
 	}
 	return records, nil
