@@ -39,6 +39,47 @@ func TestECSServiceTaskDefinitionRelationshipRequiresBothARNs(t *testing.T) {
 	}
 }
 
+func TestECSServiceLoadBalancerRelationshipsMatchLegacy(t *testing.T) {
+	serviceARN := "arn:aws:ecs:us-east-1:123456789012:service/prod/web"
+	targetARN := "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/web/abc"
+	row := ecsServiceRecord(awsecstypes.Service{
+		ServiceArn: aws.String(serviceARN),
+		LoadBalancers: []awsecstypes.LoadBalancer{
+			{TargetGroupArn: aws.String(" " + targetARN + " "), LoadBalancerName: aws.String("ignored"), ContainerName: aws.String(" web "), ContainerPort: aws.Int32(8080)},
+			{LoadBalancerName: aws.String(" classic "), ContainerName: aws.String("api"), ContainerPort: aws.Int32(80)},
+		},
+	}, "us-east-1")
+	if len(row.Relationships) != 2 {
+		t.Fatalf("load balancer relationships = %+v, want two", row.Relationships)
+	}
+	for i, want := range []struct{ id, arn, kind, record string }{
+		{targetARN, targetARN, "aws_elbv2_target_group", serviceARN + "#load-balancer#" + targetARN},
+		{"classic", "", "aws_elb_load_balancer", serviceARN + "#load-balancer#classic"},
+	} {
+		edge := row.Relationships[i]
+		if edge.RelationshipType != catalog.RelationshipECSServiceTargetsLoadBalancer || edge.SourceResourceID != serviceARN || edge.SourceARN != serviceARN || edge.TargetResourceID != want.id || edge.TargetARN != want.arn || edge.TargetType != want.kind || edge.SourceRecordID != want.record || edge.Region != "us-east-1" || edge.ServiceKind != "ecs" {
+			t.Fatalf("load balancer relationship %d changed: %+v", i, edge)
+		}
+		if edge.Attributes["container_port"] != []int32{8080, 80}[i] || edge.Attributes["container_name"] != []string{"web", "api"}[i] {
+			t.Fatalf("load balancer attributes %d changed: %+v", i, edge.Attributes)
+		}
+		observed := relationshipObservation("123456789012", edge)
+		if observed.Boundary.AccountID != "123456789012" || observed.Boundary.Region != "us-east-1" || observed.Boundary.ServiceKind != "ecs" {
+			t.Fatalf("relationship lost claim binding: %+v", observed.Boundary)
+		}
+	}
+}
+
+func TestECSServiceLoadBalancerRelationshipsNeedReportedTarget(t *testing.T) {
+	row := ecsServiceRecord(awsecstypes.Service{
+		ServiceArn:    aws.String("arn:aws:ecs:us-east-1:123456789012:service/prod/web"),
+		LoadBalancers: []awsecstypes.LoadBalancer{{ContainerName: aws.String("web"), ContainerPort: aws.Int32(80)}},
+	}, "us-east-1")
+	if len(row.Relationships) != 0 {
+		t.Fatalf("invented load balancer relationship: %+v", row.Relationships)
+	}
+}
+
 func TestECSTaskNetworkInterfaceRelationshipMatchesLegacy(t *testing.T) {
 	taskARN := "arn:aws:ecs:us-east-1:123456789012:task/prod/abc"
 	task := awsecstypes.Task{

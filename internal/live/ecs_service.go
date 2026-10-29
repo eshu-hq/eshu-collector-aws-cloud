@@ -48,6 +48,7 @@ func ecsServiceRecord(service awsecstypes.Service, region string) collector.Reco
 	if edge, ok := ecsServiceTaskDefinitionRelationship(arn, taskDefinitionARN, region); ok {
 		row.Relationship = &edge
 	}
+	row.Relationships = ecsServiceLoadBalancerRelationships(arn, region, service.LoadBalancers)
 	return row
 }
 
