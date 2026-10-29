@@ -101,7 +101,7 @@ type Record struct {
 	// Resource carries typed metadata from a live AWS read. The placeholder
 	// report format does not accept it from a file.
 	Resource *LiveResource `json:"-"`
-	// S3Posture carries a typed, replication-only S3 posture observation.
+	// S3Posture carries confirmed bucket settings and derived policy flags.
 	S3Posture *S3BucketPostureObservation `json:"-"`
 	// ImageReference carries a typed image digest and tag from DescribeImages.
 	ImageReference *LiveImageReference `json:"-"`

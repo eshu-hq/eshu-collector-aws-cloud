@@ -11,7 +11,7 @@ import (
 	sdk "github.com/eshu-hq/eshu-sdk/collector"
 )
 
-// AppendLiveS3BucketPostures adds claim-bound replication posture under fact budgets.
+// AppendLiveS3BucketPostures adds claim-bound bucket posture under fact budgets.
 func AppendLiveS3BucketPostures(result sdk.Result, observations []S3BucketPostureObservation, sourceURI string, limits ResourceUse) (sdk.Result, error) {
 	if result.State != sdk.ResultComplete && result.State != sdk.ResultPartial {
 		return result, nil
