@@ -254,8 +254,8 @@ func listRoute53(ctx context.Context, cfg aws.Config) ([]collector.Record, error
 }
 
 // listSNS mirrors the in-tree sns scanner: topics and their subscriptions.
-// Subscription endpoints (emails, phone numbers, URLs) stay unrecorded:
-// only the protocol and the subscription ARN identify a subscription.
+// Subscription endpoints stay out of records; ARN endpoints produce typed
+// relationships, while email, phone, and HTTP(S) endpoints are omitted.
 func listSNS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 	client := awssns.NewFromConfig(cfg)
 	region := cfg.Region
@@ -276,7 +276,7 @@ func listSNS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 					return nil, fmt.Errorf("sns list subscriptions: %w", err)
 				}
 				for _, subscription := range subscriptionPage.Subscriptions {
-					records = append(records, record(aws.ToString(subscription.SubscriptionArn), "sns", region, aws.ToString(subscription.Protocol), "subscription"))
+					records = append(records, snsSubscriptionRecord(arn, region, subscription))
 				}
 			}
 		}
