@@ -131,9 +131,9 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 						warningObservations = append(warningObservations, collector.WarningObservation{
 							Boundary:    collector.Boundary{AccountID: config.AccountID, Region: region, ServiceKind: service},
 							WarningKind: "permission_denied", ErrorClass: "permission_denied",
-							Message:        entry.operation + " denied for " + entry.resource + "; " + entry.effect,
+							Message:        optionalDenialMessage(entry),
 							SourceRecordID: entry.operation + ":" + entry.resource,
-							Attributes:     map[string]any{"operation": entry.operation, "resource": entry.resource, "effect": entry.effect},
+							Attributes:     optionalDenialAttributes(entry),
 						})
 					}
 				} else {
@@ -203,8 +203,50 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 }
 
 // optionalDenial identifies one reviewed API read whose denial leaves the
-// enclosing service's other observations usable.
-type optionalDenial struct{ operation, resource, effect string }
+// enclosing service's other observations usable. Message overrides the
+// default denial wording for non-denial degradations (cap truncation,
+// unresolved images); attributes carries extra warning attributes such as
+// counts, never identities.
+type optionalDenial struct {
+	operation, resource, effect string
+	message                     string
+	attributes                  map[string]any
+}
+
+// optionalDenialMessage renders the warning message, keeping the exact
+// historical denial wording unless the entry overrides it.
+func optionalDenialMessage(entry optionalDenial) string {
+	if strings.TrimSpace(entry.message) != "" {
+		return entry.message
+	}
+	return entry.operation + " denied for " + entry.resource + "; " + entry.effect
+}
+
+// optionalDenialAttributes merges the entry's extra attributes over the
+// operation, resource, and effect identity the warning fact requires.
+func optionalDenialAttributes(entry optionalDenial) map[string]any {
+	attrs := map[string]any{"operation": entry.operation, "resource": entry.resource, "effect": entry.effect}
+	for key, value := range entry.attributes {
+		attrs[key] = value
+	}
+	return attrs
+}
+
+// combineOptionalDenials merges per-operation optional denials into one
+// carrier so a scan keeps every surviving record behind a single warning set.
+func combineOptionalDenials(denials ...*optionalReadDenied) error {
+	var merged []optionalDenial
+	for _, denial := range denials {
+		if denial == nil {
+			continue
+		}
+		merged = append(merged, denial.denials...)
+	}
+	if len(merged) == 0 {
+		return nil
+	}
+	return &optionalReadDenied{denials: merged}
+}
 
 // optionalReadDenied carries one or more optional denials beside surviving records.
 type optionalReadDenied struct{ denials []optionalDenial }

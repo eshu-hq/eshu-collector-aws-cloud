@@ -73,7 +73,7 @@ func listEC2(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]
 	}
 	rules := awsec2.NewDescribeSecurityGroupRulesPaginator(client, &awsec2.DescribeSecurityGroupRulesInput{})
 	ruleRecords := []collector.Record{}
-	var ruleDenial error
+	var ruleDenial *optionalReadDenied
 	for rules.HasMorePages() {
 		page, err := rules.NextPage(ctx)
 		if err != nil {
@@ -126,6 +126,15 @@ func listEC2(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]
 			}
 		}
 	}
+	amiDenial, err := appendAMIDetails(ctx, client, region, records, seenAMIIDs)
+	if err != nil {
+		var denied *optionalReadDenied
+		if errors.As(err, &denied) {
+			amiDenial = denied
+		} else {
+			return nil, err
+		}
+	}
 	volumes := awsec2.NewDescribeVolumesPaginator(client, &awsec2.DescribeVolumesInput{})
 	for volumes.HasMorePages() {
 		page, err := volumes.NextPage(ctx)
@@ -139,7 +148,7 @@ func listEC2(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]
 			}
 		}
 	}
-	return records, ruleDenial
+	return records, combineOptionalDenials(ruleDenial, amiDenial)
 }
 
 // isOptionalEC2RuleDenial recognizes the two EC2 authorization errors for the

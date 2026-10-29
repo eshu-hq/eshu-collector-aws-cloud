@@ -1,6 +1,6 @@
-# #9301 DescribeImages plan (PREPARATION ONLY — no implementation)
+# #9301 DescribeImages plan (IMPLEMENTED typed-only in the live path)
 
-Status: plan only. No collector emission is implemented in this lane.
+Status: implemented for typed fields in `internal/live/ec2_ami.go` (branch `drive/9301-ami-describe-plan`). The typed EC2 scanner port in this package remains fenced (see NOT_PORTED.md); emission flows through the live record-to-`aws_resource` seam instead. Per the arbiter ruling 2026-10-29 (epic #9295), raw AMI name/description passthrough is REJECTED and stays unimplemented; the exclusion proof lives in `internal/live/ec2_ami_test.go` (`TestAMINameDescriptionNeverSurface`) for #9525.
 Revalidated 2026-10-29 against collector `origin/main`: plan holds as-is,
 no rebase needed (0 behind).
 Sequencing: #9297 (R1 degrade contract) lands before #9301 implementation.
@@ -71,8 +71,8 @@ AWS source mapping (to verify at implementation against the SDK type):
 
 | Attribute key       | AWS `Image` source        | Notes |
 |---|---|---|
-| `name`              | `Name`                    | FREE TEXT — redaction UNDECIDED (section 5) |
-| `description`       | `Description`             | FREE TEXT — redaction UNDECIDED (section 5) |
+| `name`              | `Name`                    | REJECTED by arbiter ruling 2026-10-29 — never emitted (#9525) |
+| `description`       | `Description`             | REJECTED by arbiter ruling 2026-10-29 — never emitted (#9525) |
 | `platform_details`  | `PlatformDetails`         | AWS-reported string; documented examples are not an exhaustive enum — needs its own source contract; record as reported, never infer OS version |
 | `platform`          | `Platform`                | AWS-reported enum-ish string (`Windows` or empty for Linux) |
 | `architecture`      | `Architecture`            | Bounded enum (`i386`, `x86_64`, `arm64`, `x86_64_mac`, `arm64_mac`) |

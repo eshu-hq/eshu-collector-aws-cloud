@@ -217,6 +217,12 @@ verified partition. Instance identity observations carry state and launch AMI
 ID from the same `DescribeInstances` response. These edges, subnet-to-VPC,
 volume-to-KMS, and instance-to-AMI are the typed EC2 relationships currently
 emitted. AMI identities are deduplicated by ID within each regional EC2 scan.
+One bounded `DescribeImages` call per scan (at most 100 distinct image IDs,
+deprecated images included) stamps the reported typed image fields
+(`platform_details`, `platform`, `architecture`, `creation_date`,
+`deprecation_time`, `owner_alias`, `root_device_type`) onto the matching AMI
+facts. Creator-controlled image `name`/`description` text is never emitted
+(see eshu-hq/eshu#9525).
 AMI targets add typed facts without adding transitional record facts; all
 emitted facts count toward the claim's record limit.
 
@@ -287,7 +293,8 @@ Core/optional split per service:
 
 - EC2: core is the VPC, subnet, security-group, network-interface,
   instance, AMI, and volume listings; optional is
-  `DescribeSecurityGroupRules` only.
+  `DescribeSecurityGroupRules` and `DescribeImages` (AMI detail
+  enrichment) only.
 - EKS: core is the cluster, nodegroup, and add-on listings plus
   `GetOpenIDConnectProvider`; optional is
   `iam:ListOpenIDConnectProviders` only.
@@ -306,6 +313,17 @@ if any rule page is denied, emits a typed `aws_warning` naming the operation,
 regional resource, and missing-rule effect, and returns SDK `ResultPartial` with
 a warning status. Other EC2 API errors keep their existing failure behavior.
 The warning does not prove that a security group has no rules.
+
+## EC2 AMI detail enrichment
+
+A permission denial from EC2 `DescribeImages` keeps every core observation and
+adds one `aws_warning` with the `ami-details-unavailable` effect. A scan that
+references more than 100 distinct AMI IDs resolves the first 100 in sorted
+order and warns with the `ami-details-cap-truncated` effect and the dropped
+count. Images the call cannot see (shared without permission, deregistered)
+keep their identity-only fact and warn once with the `ami-image-unresolved`
+effect and the unresolved count; no OS version is inferred. Other
+`DescribeImages` errors fail the EC2 read.
 
 ## Lambda mapping-read denial
 
