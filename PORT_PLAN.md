@@ -17,9 +17,9 @@ DescribeAddon emits typed add-on identity, status, tags, version, timestamps,
 and service-account role ARN, excluding configuration values that may contain
 secrets. DescribeCluster emits reported service-role, subnet, and security-group
 relationships. Reported nodegroup and add-on roles, nodegroup subnets, and
-cluster membership also emit typed relationships; membership requires matching
-observed cluster names. IAM OIDC provider enrichment and its relationship remain
-unported.
+cluster membership also emit typed relationships. Membership uses the observed
+parent list request and rejects a nonblank conflicting child cluster name.
+IAM OIDC provider enrichment and its relationship remain unported.
 ECS services, tasks, and task definitions, remaining bucket detail and posture
 reads, lifecycle policy facts, and the full scanner port remain unfinished. This plan
 maps the remaining in-tree implementation to standalone locations. No live AWS

@@ -61,7 +61,8 @@ version, timestamps, and service-account role ARN; its configuration values
 are excluded because they may contain secrets. DescribeCluster also emits
 reported service-role, subnet, and security-group relationships. Reported
 nodegroup and add-on role edges, nodegroup subnet edges, and cluster membership
-edges are also typed. Membership requires matching observed cluster names. IAM
+edges are also typed. Membership uses the observed parent list request and
+rejects a nonblank conflicting child cluster name. IAM
 OIDC provider enrichment and its relationship remain unported. ECR lifecycle
 policies and other AWS service readers still lack typed output. The full port removes
 those placeholders and declares the other core-owned AWS fact kinds at schema

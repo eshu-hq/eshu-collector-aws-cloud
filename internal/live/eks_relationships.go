@@ -103,13 +103,18 @@ func eksAddonRelationships(addon ekstypes.Addon, region, addonID, addonARN strin
 	}}
 }
 
-// eksMembershipRelationship joins an observed child to its observed parent cluster.
-// A missing or conflicting cluster name leaves membership unasserted.
-func eksMembershipRelationship(cluster, child *collector.LiveResource, reportedClusterName string) (collector.LiveRelationship, bool) {
+// eksMembershipRelationship joins an observed child to the parent of its list request.
+// A nonblank conflicting child cluster name leaves membership unasserted.
+func eksMembershipRelationship(cluster, child *collector.LiveResource, requestedClusterName, reportedClusterName string) (collector.LiveRelationship, bool) {
 	if cluster == nil || child == nil || cluster.ResourceType != "aws_eks_cluster" ||
 		cluster.ServiceKind != "eks" || child.ServiceKind != "eks" || cluster.Region != child.Region ||
-		cluster.ResourceID == "" || child.ResourceID == "" ||
-		strings.TrimSpace(cluster.Name) == "" || strings.TrimSpace(cluster.Name) != strings.TrimSpace(reportedClusterName) {
+		cluster.ResourceID == "" || child.ResourceID == "" {
+		return collector.LiveRelationship{}, false
+	}
+	parentName := strings.TrimSpace(cluster.Name)
+	requestedName := strings.TrimSpace(requestedClusterName)
+	reportedName := strings.TrimSpace(reportedClusterName)
+	if parentName == "" || requestedName != parentName || (reportedName != "" && reportedName != parentName) {
 		return collector.LiveRelationship{}, false
 	}
 	kind := ""
