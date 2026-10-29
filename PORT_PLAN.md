@@ -7,8 +7,10 @@ active credentials account before service reads, and live mode ignores the old
 placeholder-only freshness digest. ECR repository reads now emit typed
 repository observations with reported tags and image-reference facts from
 DescribeImages; the regional S3 ListBuckets reader now emits bucket identity
-and its reported region and creation time. Bucket detail and posture reads,
-lifecycle policy facts, and the full scanner port remain unfinished. This plan
+and its reported region and creation time. ECS DescribeClusters now emits typed
+cluster identity, tags, status, and reported counts. ECS services, tasks, and
+task definitions, bucket detail and posture reads, lifecycle policy facts,
+and the full scanner port remain unfinished. This plan
 maps the remaining in-tree implementation to standalone locations. No live AWS
 core-kind output or host grant has been proved.
 
