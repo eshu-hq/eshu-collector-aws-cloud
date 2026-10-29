@@ -63,6 +63,12 @@ The SNS `ListSubscriptionsByTopic` slice emits typed topic-to-resource edges
 only for ARN endpoints returned by that call. Email, phone, and HTTP(S)
 endpoints are omitted; topic attributes and tags remain outside this slice.
 
+The SSM `DescribeParameters` slice emits typed parameter metadata and KMS
+relationships without another AWS read. It retains only presence flags for
+raw descriptions and patterns and type/status for inline policies. Parameter
+values, raw policy JSON, and tags remain outside this slice. The configured
+validated source URI is an explicit provenance addition to the legacy facts.
+
 ## Identity (done in scaffold)
 
 | In-tree | Standalone |

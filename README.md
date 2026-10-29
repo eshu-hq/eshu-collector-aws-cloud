@@ -191,6 +191,15 @@ retain typed targets; other ARN endpoints use a generic AWS target. Email,
 phone, and HTTP(S) endpoint values are excluded. Topic attributes and tags
 remain unobserved because those require separate API reads.
 
+The SSM Parameter Store reader emits typed `aws_ssm_parameter` metadata and
+`ssm_parameter_uses_kms_key` relationships from the existing
+`DescribeParameters` pages. It retains type, tier, data type, modification
+time, and description/pattern presence flags; inline policies carry only type
+and status. Parameter values, raw descriptions, allowed patterns, and policy
+JSON are excluded. Tags require a separate read and remain unobserved. Typed
+facts use the validated configured source URI; the legacy envelope did not
+carry a source URI.
+
 The remaining bare AWS kinds stay out of the manifest until their typed
 emitters are ported and the host supplies a trusted grant snapshot to
 conformance (#8909).
