@@ -12,6 +12,7 @@ import (
 	awsec2 "github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	awsecr "github.com/aws/aws-sdk-go-v2/service/ecr"
+	ecrtypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	awsecs "github.com/aws/aws-sdk-go-v2/service/ecs"
 	awseks "github.com/aws/aws-sdk-go-v2/service/eks"
 	awselbv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
@@ -153,7 +154,17 @@ func listECR(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("ecr describe repositories: %w", err)
 		}
 		for _, repository := range page.Repositories {
-			records = append(records, record(aws.ToString(repository.RepositoryArn), "ecr", region, aws.ToString(repository.RepositoryName), "repository"))
+			tags := []ecrtypes.Tag(nil)
+			if arn := strings.TrimSpace(aws.ToString(repository.RepositoryArn)); arn != "" {
+				tagResult, tagErr := client.ListTagsForResource(ctx, &awsecr.ListTagsForResourceInput{ResourceArn: aws.String(arn)})
+				if tagErr != nil {
+					return nil, fmt.Errorf("ecr list repository tags: %w", tagErr)
+				}
+				if tagResult != nil {
+					tags = tagResult.Tags
+				}
+			}
+			records = append(records, ecrRepositoryRecord(repository, tags, region))
 			images := awsecr.NewDescribeImagesPaginator(client, &awsecr.DescribeImagesInput{
 				RepositoryName: repository.RepositoryName,
 			})

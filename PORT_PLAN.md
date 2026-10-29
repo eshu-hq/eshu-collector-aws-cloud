@@ -4,7 +4,8 @@ Status: PARTIAL PORT. The resource envelope has a typed `NewResourceFact`
 seam with historical fixture/key proof. Claim-bound live EC2 reads now append
 typed resource identity to transitional placeholder records; STS verifies the
 active credentials account before service reads, and live mode ignores the old
-placeholder-only freshness digest. All other live service loaders and the full
+placeholder-only freshness digest. ECR repository reads now emit typed
+repository observations with reported tags; image and policy facts and the full
 scanner port remain unfinished. This plan maps
 the remaining in-tree implementation to standalone locations. No live AWS
 core-kind output or host grant has been proved.
@@ -108,7 +109,9 @@ importable only inside this module, satisfying `boundary_test.go`).
    AMI targets do not add transitional record facts; typed facts still count
    toward the claim's record limit. Remaining EC2 attributes and relationships,
    other services, real host grant proof, and replacement of placeholder
-   conformance fixtures remain.
+   conformance fixtures remain. ECR repository observations use the existing
+   DescribeRepositories pages plus ListTagsForResource per ARN; ECR images and
+   lifecycle policies still need their typed kinds.
 5. Remaining envelopes kind by kind; delete transitional kinds last.
 6. `awsruntime` + `service/` scanners service by service.
 7. `recordpolicy` / `freshness` / `catalog` / `checkpoint` integration.

@@ -127,6 +127,8 @@ type LiveResource struct {
 	Attributes   map[string]any
 	// CorrelationAnchors carry source-reported join identities into the fact.
 	CorrelationAnchors []string
+	// SourceRecordID preserves a source-specific record key when it differs from the resource ID.
+	SourceRecordID string
 }
 
 // LiveRelationship is one relationship returned by a live AWS read.

@@ -37,8 +37,10 @@ subnets, instances, AMIs, and volumes; group names for security groups. Missing
 required source IDs fail the EC2 read, while subnet ARN and security-group-rule
 content use the legacy deterministic identity fallbacks. The live
 path currently re-emits on every read because the old placeholder digest does
-not cover typed facts or service failures. The remaining
-AWS service readers still produce placeholder records. The full port removes
+not cover typed facts or service failures. The ECR reader emits typed
+repository observations from DescribeRepositories and ListTagsForResource while
+retaining its repository placeholder record. ECR images and the other AWS
+service readers still produce placeholder records. The full port removes
 those placeholders and declares the other core-owned AWS fact kinds at schema
 `1.0.0`, all with
 `reported` confidence (the in-tree AWS envelopes record facts returned by

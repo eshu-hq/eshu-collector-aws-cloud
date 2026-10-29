@@ -38,7 +38,9 @@ func AppendLiveResources(result sdk.Result, resources []ResourceObservation, sou
 		resource.Boundary.ClaimToken = result.Claim.FencingToken
 		resource.Boundary.ObservedAt = result.Generation.ObservedAt
 		resource.SourceURI = sourceURI
-		resource.SourceRecordID = resource.ResourceID
+		if strings.TrimSpace(resource.SourceRecordID) == "" {
+			resource.SourceRecordID = resource.ResourceID
+		}
 		fact, err := NewResourceFact(resource)
 		if err != nil {
 			return sdk.Result{}, err
