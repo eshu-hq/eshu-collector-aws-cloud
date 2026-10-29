@@ -67,7 +67,10 @@ func ecsTaskNetworkInterfaces(attachments []awsecstypes.Attachment) ([]map[strin
 		}
 		details := map[string]string{}
 		for _, detail := range attachment.Details {
-			details[strings.TrimSpace(aws.ToString(detail.Name))] = aws.ToString(detail.Value)
+			key := strings.TrimSpace(aws.ToString(detail.Name))
+			if _, seen := details[key]; !seen {
+				details[key] = aws.ToString(detail.Value)
+			}
 		}
 		id := strings.TrimSpace(details["networkInterfaceId"])
 		if id == "" {
