@@ -79,3 +79,25 @@ func TestS3CollectsEveryConfiguredRegion(t *testing.T) {
 		t.Fatalf("calls=%v records=%d", calls, len(outcome.Report.Records))
 	}
 }
+
+func TestS3BucketRecordPreservesUnknownCreationTime(t *testing.T) {
+	bucket := s3types.Bucket{Name: aws.String("assets")}
+	got, err := s3BucketRecord(bucket, "us-east-1", VerifiedIdentity{AccountID: "123456789012", Partition: "aws"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, ok := got.Resource.Attributes["creation_time"]
+	if !ok || value != nil {
+		t.Fatalf("creation_time = %v, present=%t; want explicit null", value, ok)
+	}
+	zero := time.Time{}
+	bucket.CreationDate = &zero
+	got, err = s3BucketRecord(bucket, "us-east-1", VerifiedIdentity{AccountID: "123456789012", Partition: "aws"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, ok = got.Resource.Attributes["creation_time"]
+	if !ok || value != nil {
+		t.Fatalf("zero creation_time = %v, present=%t; want explicit null", value, ok)
+	}
+}
