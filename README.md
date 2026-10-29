@@ -23,10 +23,12 @@ review). Keep internal helpers private.
 
 ## Emission contract
 
-`manifest.yaml` `spec.emittedFacts` declares `aws_resource` alongside three
+`manifest.yaml` `spec.emittedFacts` declares `aws_resource` and
+`aws_relationship` alongside three
 transitional placeholder kinds (`collector-aws-cloud.snapshot/record/warning`).
 The live EC2 reader emits typed resource identity for VPCs, subnets, security
-groups and rules, network interfaces, instances, and volumes. Before any live
+groups and rules, network interfaces, instances, and volumes, plus a
+subnet-to-VPC relationship when both IDs are reported. Before any live
 service read, it verifies the active credentials account with STS in each
 configured region and fails the claim if it differs from the target account.
 Typed EC2 names follow legacy scanner identity rules: stable IDs for VPCs,

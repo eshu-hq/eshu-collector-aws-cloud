@@ -106,6 +106,14 @@ func TestTrustedCoreKindConformance(t *testing.T) {
 	}
 	request := pinnedRequest(t, payload, map[string]json.RawMessage{"aws_resource": schema})
 	request.Manifest.Spec.EmittedFacts = request.Manifest.Spec.EmittedFacts[:len(request.Manifest.Spec.EmittedFacts)-1]
+	// This test isolates aws_resource; the shared conformance fixture covers both core kinds.
+	families := request.Manifest.Spec.EmittedFacts[:0:0]
+	for _, family := range request.Manifest.Spec.EmittedFacts {
+		if family.Kind != AWSKindRelationship {
+			families = append(families, family)
+		}
+	}
+	request.Manifest.Spec.EmittedFacts = families
 	request.Fixtures[0].Facts[0].Kind = "aws_resource"
 	request.Fixtures[0].Facts[0].SourceConfidence = sdk.SourceConfidenceReported
 	request.ReservedFactKinds = []string{"aws_resource"}
