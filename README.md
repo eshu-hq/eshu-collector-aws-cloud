@@ -80,6 +80,13 @@ require `s3:GetBucketWebsite` and `s3:GetBucketLogging`, and add two API calls
 per listed bucket. Live IAM access and request cost remain unverified. A
 missing website configuration and empty logging response mean disabled;
 other errors, including denials, fail the S3 read.
+GetBucketReplication adds one point read per bucket, bound by
+ExpectedBucketOwner, and requires `s3:GetReplicationConfiguration`. Only the
+presence of at least one rule becomes `replication_enabled`; rule details,
+destinations, and the replication role stay out of records. The explicit
+`ReplicationConfigurationNotFoundError` means false. An empty successful
+response leaves the field unknown, while denial fails the S3 read. Live IAM
+access and request cost remain unverified.
 For encryption, the explicit missing-configuration response means a known
 empty configuration. Encryption AccessDenied leaves those attributes absent,
 retains the bucket, emits a typed warning, and makes the SDK result partial.

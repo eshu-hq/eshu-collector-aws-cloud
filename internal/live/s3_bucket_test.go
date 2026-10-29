@@ -18,35 +18,38 @@ import (
 )
 
 type fakeS3BucketDetails struct {
-	buckets         *awss3.ListBucketsOutput
-	listErr         error
-	head            *awss3.HeadBucketOutput
-	tags            *awss3.GetBucketTaggingOutput
-	encryption      *awss3.GetBucketEncryptionOutput
-	versioning      *awss3.GetBucketVersioningOutput
-	publicAccess    *awss3.GetPublicAccessBlockOutput
-	policyStatus    *awss3.GetBucketPolicyStatusOutput
-	ownership       *awss3.GetBucketOwnershipControlsOutput
-	website         *awss3.GetBucketWebsiteOutput
-	logging         *awss3.GetBucketLoggingOutput
-	headErr         error
-	tagsErr         error
-	encryptionErr   error
-	versioningErr   error
-	publicAccessErr error
-	policyErr       error
-	ownershipErr    error
-	websiteErr      error
-	loggingErr      error
-	headOwner       string
-	tagOwner        string
-	encryptionOwner string
-	versioningOwner string
-	publicOwner     string
-	policyOwner     string
-	ownershipOwner  string
-	websiteOwner    string
-	loggingOwner    string
+	buckets          *awss3.ListBucketsOutput
+	listErr          error
+	head             *awss3.HeadBucketOutput
+	tags             *awss3.GetBucketTaggingOutput
+	encryption       *awss3.GetBucketEncryptionOutput
+	versioning       *awss3.GetBucketVersioningOutput
+	publicAccess     *awss3.GetPublicAccessBlockOutput
+	policyStatus     *awss3.GetBucketPolicyStatusOutput
+	ownership        *awss3.GetBucketOwnershipControlsOutput
+	website          *awss3.GetBucketWebsiteOutput
+	logging          *awss3.GetBucketLoggingOutput
+	replication      *awss3.GetBucketReplicationOutput
+	headErr          error
+	tagsErr          error
+	encryptionErr    error
+	versioningErr    error
+	publicAccessErr  error
+	policyErr        error
+	ownershipErr     error
+	websiteErr       error
+	loggingErr       error
+	replicationErr   error
+	headOwner        string
+	tagOwner         string
+	encryptionOwner  string
+	versioningOwner  string
+	publicOwner      string
+	policyOwner      string
+	ownershipOwner   string
+	websiteOwner     string
+	loggingOwner     string
+	replicationOwner string
 }
 
 func (f *fakeS3BucketDetails) ListBuckets(_ context.Context, _ *awss3.ListBucketsInput, _ ...func(*awss3.Options)) (*awss3.ListBucketsOutput, error) {
@@ -132,6 +135,46 @@ func (f *fakeS3BucketDetails) GetBucketWebsite(_ context.Context, input *awss3.G
 func (f *fakeS3BucketDetails) GetBucketLogging(_ context.Context, input *awss3.GetBucketLoggingInput, _ ...func(*awss3.Options)) (*awss3.GetBucketLoggingOutput, error) {
 	f.loggingOwner = aws.ToString(input.ExpectedBucketOwner)
 	return f.logging, f.loggingErr
+}
+
+func (f *fakeS3BucketDetails) GetBucketReplication(_ context.Context, input *awss3.GetBucketReplicationInput, _ ...func(*awss3.Options)) (*awss3.GetBucketReplicationOutput, error) {
+	f.replicationOwner = aws.ToString(input.ExpectedBucketOwner)
+	return f.replication, f.replicationErr
+}
+
+func TestS3ReplicationPresenceAndMissingConfiguration(t *testing.T) {
+	api := &fakeS3BucketDetails{
+		buckets: &awss3.ListBucketsOutput{Buckets: []s3types.Bucket{{Name: aws.String("assets"), BucketRegion: aws.String("us-east-1")}}},
+		head:    &awss3.HeadBucketOutput{BucketRegion: aws.String("us-east-1")},
+		replication: &awss3.GetBucketReplicationOutput{ReplicationConfiguration: &s3types.ReplicationConfiguration{
+			Role:  aws.String("arn:aws:iam::123456789012:role/secret"),
+			Rules: []s3types.ReplicationRule{{}},
+		}},
+	}
+	identity := VerifiedIdentity{AccountID: "123456789012", Partition: "aws"}
+	rows, err := listS3WithAPI(context.Background(), api, "us-east-1", identity)
+	if err != nil || len(rows) != 1 || api.replicationOwner != identity.AccountID || rows[0].Resource.Attributes["replication_enabled"] != true {
+		t.Fatalf("configured replication: rows=%v owner=%q err=%v", rows, api.replicationOwner, err)
+	}
+	if _, leaked := rows[0].Resource.Attributes["replication_rules"]; leaked {
+		t.Fatalf("replication rules leaked: %v", rows[0].Resource.Attributes)
+	}
+	api.replicationErr = &smithy.GenericAPIError{Code: "ReplicationConfigurationNotFoundError"}
+	rows, err = listS3WithAPI(context.Background(), api, "us-east-1", identity)
+	if err != nil || len(rows) != 1 || rows[0].Resource.Attributes["replication_enabled"] != false {
+		t.Fatalf("missing replication: rows=%v err=%v", rows, err)
+	}
+	api.replicationErr = nil
+	api.replication = nil
+	rows, err = listS3WithAPI(context.Background(), api, "us-east-1", identity)
+	if err != nil || len(rows) != 1 || rows[0].Resource.Attributes["replication_enabled"] != nil {
+		t.Fatalf("unknown replication response: rows=%v err=%v", rows, err)
+	}
+	api.replicationErr = &smithy.GenericAPIError{Code: "AccessDenied"}
+	_, err = listS3WithAPI(context.Background(), api, "us-east-1", identity)
+	if !errors.Is(err, api.replicationErr) {
+		t.Fatalf("replication denial: %v", err)
+	}
 }
 
 func TestS3WebsiteLoggingPreservesLegacyMetadataAndMissingState(t *testing.T) {

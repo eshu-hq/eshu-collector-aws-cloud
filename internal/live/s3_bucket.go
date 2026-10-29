@@ -28,6 +28,26 @@ type s3BucketDetailsAPI interface {
 	GetBucketOwnershipControls(context.Context, *awss3.GetBucketOwnershipControlsInput, ...func(*awss3.Options)) (*awss3.GetBucketOwnershipControlsOutput, error)
 	GetBucketWebsite(context.Context, *awss3.GetBucketWebsiteInput, ...func(*awss3.Options)) (*awss3.GetBucketWebsiteOutput, error)
 	GetBucketLogging(context.Context, *awss3.GetBucketLoggingInput, ...func(*awss3.Options)) (*awss3.GetBucketLoggingOutput, error)
+	GetBucketReplication(context.Context, *awss3.GetBucketReplicationInput, ...func(*awss3.Options)) (*awss3.GetBucketReplicationOutput, error)
+}
+
+// readS3Replication reduces the configuration to the legacy presence boolean.
+// Only S3's explicit missing-configuration error establishes known absence.
+func readS3Replication(ctx context.Context, api s3BucketDetailsAPI, name, accountID string) (any, error) {
+	output, err := api.GetBucketReplication(ctx, &awss3.GetBucketReplicationInput{
+		Bucket: aws.String(name), ExpectedBucketOwner: aws.String(accountID),
+	})
+	if err != nil {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) && apiErr.ErrorCode() == "ReplicationConfigurationNotFoundError" {
+			return false, nil
+		}
+		return nil, fmt.Errorf("s3 get bucket replication %q: %w", name, err)
+	}
+	if output == nil || output.ReplicationConfiguration == nil {
+		return nil, nil
+	}
+	return len(output.ReplicationConfiguration.Rules) > 0, nil
 }
 
 // readS3WebsiteLogging maps only the legacy metadata fields. A missing website
