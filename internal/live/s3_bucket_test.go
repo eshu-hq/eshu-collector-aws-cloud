@@ -94,8 +94,16 @@ func TestS3PolicyAndOwnershipMetadata(t *testing.T) {
 	api.policyErr = &smithy.GenericAPIError{Code: "NoSuchBucketPolicy"}
 	api.ownershipErr = &smithy.GenericAPIError{Code: "OwnershipControlsNotFoundError"}
 	attrs, err = readS3PolicyAndOwnership(context.Background(), api, "assets", "123456789012")
-	if err != nil || attrs["policy_is_public"] != nil || len(attrs["ownership_controls"].([]string)) != 0 {
+	if err != nil || attrs["policy_is_public"] != nil || attrs["ownership_controls"] != nil {
 		t.Fatalf("missing configuration: attrs=%v err=%v", attrs, err)
+	}
+	api.policyErr = nil
+	api.policyStatus = &awss3.GetBucketPolicyStatusOutput{PolicyStatus: &s3types.PolicyStatus{}}
+	api.ownershipErr = nil
+	api.ownership = &awss3.GetBucketOwnershipControlsOutput{OwnershipControls: &s3types.OwnershipControls{Rules: []s3types.OwnershipControlsRule{{}, {ObjectOwnership: "  "}}}}
+	attrs, err = readS3PolicyAndOwnership(context.Background(), api, "assets", "123456789012")
+	if err != nil || attrs["policy_is_public"] != nil || attrs["ownership_controls"] != nil {
+		t.Fatalf("empty reported values: attrs=%v err=%v", attrs, err)
 	}
 	api.policyErr = &smithy.GenericAPIError{Code: "AccessDenied"}
 	_, err = readS3PolicyAndOwnership(context.Background(), api, "assets", "123456789012")
