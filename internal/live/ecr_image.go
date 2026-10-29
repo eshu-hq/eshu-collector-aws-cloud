@@ -4,6 +4,9 @@
 package live
 
 import (
+	"sort"
+	"strings"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	ecrtypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
@@ -33,4 +36,29 @@ func ecrImageRecords(repositoryARN, repositoryName string, image ecrtypes.ImageD
 		}})
 	}
 	return result
+}
+
+// appendUniqueECRImageRecords suppresses repeated details from later pages
+// before they can add either placeholder records or typed references.
+func appendUniqueECRImageRecords(records []collector.Record, seen map[string]struct{}, repositoryARN, repositoryName string, image ecrtypes.ImageDetail, region string) []collector.Record {
+	key := ecrImageDedupeKey(repositoryARN, image)
+	if _, exists := seen[key]; exists {
+		return records
+	}
+	seen[key] = struct{}{}
+	return append(records, ecrImageRecords(repositoryARN, repositoryName, image, region)...)
+}
+
+// ecrImageDedupeKey matches the legacy adapter's per-repository image key.
+// Tag order does not distinguish repeated DescribeImages rows across pages.
+func ecrImageDedupeKey(repositoryARN string, image ecrtypes.ImageDetail) string {
+	tags := append([]string(nil), image.ImageTags...)
+	sort.Strings(tags)
+	return strings.Join([]string{
+		strings.TrimSpace(repositoryARN),
+		strings.TrimSpace(aws.ToString(image.RepositoryName)),
+		strings.TrimSpace(aws.ToString(image.RegistryId)),
+		strings.TrimSpace(aws.ToString(image.ImageDigest)),
+		strings.Join(tags, "\x00"),
+	}, "\x00")
 }

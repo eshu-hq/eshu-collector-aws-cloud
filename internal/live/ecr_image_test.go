@@ -32,3 +32,29 @@ func TestECRImageReferencesPreserveTagsAndDigest(t *testing.T) {
 		t.Fatalf("untagged image = %#v", untagged)
 	}
 }
+
+func TestECRImageDedupeKeyIgnoresTagOrderButKeepsRegistry(t *testing.T) {
+	base := ecrtypes.ImageDetail{RepositoryName: aws.String("team/api"), RegistryId: aws.String("123456789012"), ImageDigest: aws.String("sha256:abc"), ImageTags: []string{"latest", "v1"}}
+	reordered := base
+	reordered.ImageTags = []string{"v1", "latest"}
+	if ecrImageDedupeKey("arn:aws:ecr:us-east-1:123456789012:repository/team/api", base) != ecrImageDedupeKey("arn:aws:ecr:us-east-1:123456789012:repository/team/api", reordered) {
+		t.Fatal("same image with reordered tags must share one key")
+	}
+	otherRegistry := base
+	otherRegistry.RegistryId = aws.String("210987654321")
+	if ecrImageDedupeKey("arn:aws:ecr:us-east-1:123456789012:repository/team/api", base) == ecrImageDedupeKey("arn:aws:ecr:us-east-1:123456789012:repository/team/api", otherRegistry) {
+		t.Fatal("different registries must keep distinct image keys")
+	}
+}
+
+func TestECRDuplicateImageDoesNotAddRecords(t *testing.T) {
+	image := ecrtypes.ImageDetail{RepositoryName: aws.String("team/api"), RegistryId: aws.String("123456789012"), ImageDigest: aws.String("sha256:abc"), ImageTags: []string{"latest", "v1"}}
+	seen := make(map[string]struct{})
+	first := appendUniqueECRImageRecords(nil, seen, "repository-arn", "team/api", image, "us-east-1")
+	reordered := image
+	reordered.ImageTags = []string{"v1", "latest"}
+	second := appendUniqueECRImageRecords(first, seen, "repository-arn", "team/api", reordered, "us-east-1")
+	if len(first) != 3 || len(second) != len(first) {
+		t.Fatalf("first/duplicate record counts = %d/%d, want 3/3", len(first), len(second))
+	}
+}
