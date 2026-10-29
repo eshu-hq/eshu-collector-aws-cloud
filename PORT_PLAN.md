@@ -32,8 +32,10 @@ request and rejects a nonblank conflicting child cluster name. IAM OIDC provider
 metadata and the cluster relationship are ported. An unmatched or denied
 IAM list retains an issuer-only provider and edge. An explicit
 ListOpenIDConnectProviders denial leaves EKS observations partial; a
-GetOpenIDConnectProvider failure remains terminal. Live IAM and request-cost
-proof are pending. Remaining bucket detail
+GetOpenIDConnectProvider failure remains terminal. The live KMS reader now
+emits verified key metadata, and the IAM reader emits verified role metadata
+without raw trust documents. Their live IAM and request-cost proof is pending.
+Remaining bucket detail
 and posture reads, policy-text parity, and the full scanner port remain
 unfinished. This plan maps the remaining in-tree implementation to standalone
 locations. No live AWS

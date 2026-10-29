@@ -1,6 +1,10 @@
 # NOT_PORTED.md — `internal/service/kms`
 
-Ported: `doc.go`, `types.go`.
+Ported: `doc.go`, `types.go`. The bounded live loader also emits typed
+`aws_kms_key` metadata from ListKeys and DescribeKey, binding the reported ARN
+to the STS-verified account, partition, region, and listed key ID. It does not
+read key material, raw policies, aliases, grants, tags, or rotation status.
+The full SDK adapter and legacy scanner remain unported.
 
 ## Not ported (class-c)
 

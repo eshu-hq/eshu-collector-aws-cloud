@@ -129,15 +129,23 @@ The KMS reader emits typed `aws_kms_key` resources from paginated ListKeys and
 one DescribeKey per nonblank listed key ID. A blank ListKeys ID is skipped,
 matching the legacy scanner. For described keys it verifies the reported ARN
 against the listed key ID and the STS-verified account, partition, and region;
-missing or conflicting DescribeKey identity fails the service read. The resource includes only
-DescribeKey metadata such as manager, state, usage, origin, algorithms,
+missing or conflicting DescribeKey identity fails the service read. The resource
+includes only DescribeKey metadata such as manager, state, usage, origin, algorithms,
 creation/deletion dates, and multi-Region configuration. It does not read
 key material, raw policies, aliases, grants, tags, or rotation status;
 legacy `alias_count`, `grant_count`, `policy_revision_names`, and
 `rotation_status_known` are therefore absent rather than guessed. The new
 read requires `kms:ListKeys` and `kms:DescribeKey`, with one DescribeKey
 call per nonblank listed key ID; live IAM access and call cost remain unverified.
-Other AWS service readers still lack typed output.
+The IAM reader emits typed `aws_iam_role` resources from ListRoles, GetRole,
+ListAttachedRolePolicies, and ListRolePolicies. It binds each ARN to the
+STS-verified account and partition, and retains role path, policy references,
+permissions boundary, and trust-policy presence. Raw trust documents and
+normalized permission statements are excluded. A missing GetRole detail uses
+the listed role; read errors fail the IAM service. Enrichment adds at least
+three reads per listed role, with pagination possibly adding more. Live IAM
+access and request cost remain unverified. Other service readers remain partial
+ports.
 The full port removes those placeholders and declares the other core-owned AWS
 fact kinds at schema `1.0.0`, all with
 `reported` confidence (the in-tree AWS envelopes record facts returned by
