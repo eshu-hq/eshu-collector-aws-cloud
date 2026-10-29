@@ -29,8 +29,9 @@ emits reported service-role, subnet, and security-group relationships.
 Reported nodegroup and add-on roles, nodegroup subnets, and cluster membership
 also emit typed relationships. Membership uses the observed parent list
 request and rejects a nonblank conflicting child cluster name. IAM OIDC provider
-metadata and the matched cluster relationship are ported. An explicit
-ListOpenIDConnectProviders denial leaves core EKS observations partial; a
+metadata and the cluster relationship are ported. An unmatched or denied
+IAM list retains an issuer-only provider and edge. An explicit
+ListOpenIDConnectProviders denial leaves EKS observations partial; a
 GetOpenIDConnectProvider failure remains terminal. Live IAM and request-cost
 proof are pending. Remaining bucket detail
 and posture reads, policy-text parity, and the full scanner port remain

@@ -32,7 +32,7 @@ func TestEKSOIDCListDenialKeepsClustersAndWarns(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || len(out.Resources) != 2 || len(out.WarningObservations) != 1 || len(out.Warnings) != 1 {
+			if err != nil || len(out.Resources) != 4 || len(out.WarningObservations) != 1 || len(out.Warnings) != 1 {
 				t.Fatalf("partial EKS result: resources=%d warnings=%v observations=%v err=%v", len(out.Resources), out.Warnings, out.WarningObservations, err)
 			}
 			warning := out.WarningObservations[0]
@@ -42,13 +42,57 @@ func TestEKSOIDCListDenialKeepsClustersAndWarns(t *testing.T) {
 			if (*calls)["ListOpenIDConnectProviders"] != 1 || (*calls)["ListNodegroups"] != 2 || (*calls)["ListAddons"] != 2 {
 				t.Fatalf("read coverage = %v", *calls)
 			}
+			var clusters, issuerProviders int
 			for _, row := range out.Resources {
-				provider, ok := row.Attributes["oidc_provider"].(map[string]any)
-				if !ok || provider["arn"] != "" {
-					t.Fatalf("unverified provider on %s: %v", row.ResourceID, provider)
+				switch row.ResourceType {
+				case "aws_eks_cluster":
+					clusters++
+					provider, ok := row.Attributes["oidc_provider"].(map[string]any)
+					if !ok || provider["arn"] != "" {
+						t.Fatalf("unverified provider on %s: %v", row.ResourceID, provider)
+					}
+				case "aws_eks_oidc_provider":
+					issuerProviders++
+					if row.ARN != "" || row.ResourceID != "https://issuer.example.invalid/id/demo" {
+						t.Fatalf("issuer-only provider must not assert IAM match: %+v", row)
+					}
 				}
 			}
+			if clusters != 2 || issuerProviders != 2 || len(out.Relationships) != 2 {
+				t.Fatalf("issuer fallback coverage: clusters=%d providers=%d edges=%d", clusters, issuerProviders, len(out.Relationships))
+			}
 		})
+	}
+}
+
+func TestEKSOIDCNoMatchRetainsIssuerResource(t *testing.T) {
+	cfg, calls := eksOIDCTestConfig(t, "NoMatch", "")
+	records, err := listEKS(context.Background(), cfg, VerifiedIdentity{AccountID: "123456789012", Partition: "aws"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var clusters, providers, edges int
+	for _, row := range records {
+		if row.Resource == nil {
+			continue
+		}
+		switch row.Resource.ResourceType {
+		case "aws_eks_cluster":
+			clusters++
+			for _, edge := range row.Relationships {
+				if edge.RelationshipType == "eks_cluster_has_oidc_provider" && edge.TargetARN == "" && edge.TargetResourceID == "https://issuer.example.invalid/id/demo" {
+					edges++
+				}
+			}
+		case "aws_eks_oidc_provider":
+			providers++
+			if row.Resource.ARN != "" || row.Resource.ResourceID != "https://issuer.example.invalid/id/demo" {
+				t.Fatalf("unexpected IAM assertion: %+v", row.Resource)
+			}
+		}
+	}
+	if clusters != 2 || providers != 2 || edges != 2 || (*calls)["GetOpenIDConnectProvider"] != 0 {
+		t.Fatalf("issuer-only fallback: clusters=%d providers=%d edges=%d calls=%v", clusters, providers, edges, *calls)
 	}
 }
 
@@ -123,6 +167,9 @@ func eksOIDCTestConfig(t *testing.T, listError, getError string) (aws.Config, *m
 			code := getError
 			if action == "ListOpenIDConnectProviders" {
 				code = listError
+				if code == "NoMatch" {
+					code = ""
+				}
 			}
 			if code != "" {
 				w.WriteHeader(http.StatusForbidden)
@@ -130,6 +177,10 @@ func eksOIDCTestConfig(t *testing.T, listError, getError string) (aws.Config, *m
 				return
 			}
 			if action == "ListOpenIDConnectProviders" {
+				if listError == "NoMatch" {
+					fmt.Fprint(w, `<ListOpenIDConnectProvidersResponse><ListOpenIDConnectProvidersResult><OpenIDConnectProviderList/></ListOpenIDConnectProvidersResult></ListOpenIDConnectProvidersResponse>`)
+					return
+				}
 				fmt.Fprint(w, `<ListOpenIDConnectProvidersResponse><ListOpenIDConnectProvidersResult><OpenIDConnectProviderList><member><Arn>arn:aws:iam::123456789012:oidc-provider/issuer.example.invalid/id/demo</Arn></member></OpenIDConnectProviderList></ListOpenIDConnectProvidersResult></ListOpenIDConnectProvidersResponse>`)
 			} else {
 				fmt.Fprint(w, `<GetOpenIDConnectProviderResponse><GetOpenIDConnectProviderResult><Url>issuer.example.invalid/id/demo</Url><ClientIDList><member>sts.amazonaws.com</member></ClientIDList><ThumbprintList><member>abc123</member></ThumbprintList></GetOpenIDConnectProviderResult></GetOpenIDConnectProviderResponse>`)

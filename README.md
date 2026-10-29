@@ -76,10 +76,11 @@ edges are also typed. Membership uses the observed parent list request and
 rejects a nonblank conflicting child cluster name. EKS IAM OIDC provider
 enrichment reads the account provider list once per service-region read and
 fetches provider metadata, matching only the EKS-reported issuer. It emits a
-provider resource and cluster relationship for a match. An explicit
+provider resource and cluster relationship for a match, or an issuer-only
+resource and relationship when IAM has no match. An explicit
 ListOpenIDConnectProviders permission denial retains the cluster, nodegroup,
-and add-on observations with a scoped warning and partial SDK result; other
-list failures and every GetOpenIDConnectProvider failure remain terminal to
+add-on, and issuer-only provider observations with a scoped warning and
+partial SDK result; other list failures and every GetOpenIDConnectProvider failure remain terminal to
 the EKS read. This requires iam:ListOpenIDConnectProviders and
 iam:GetOpenIDConnectProvider for complete enrichment; live IAM permission and
 request cost have not been verified.
