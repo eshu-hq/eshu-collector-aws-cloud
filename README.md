@@ -24,7 +24,7 @@ review). Keep internal helpers private.
 ## Emission contract
 
 `manifest.yaml` `spec.emittedFacts` declares `aws_resource`,
-`aws_relationship`, `aws_image_reference`, `aws_warning`, and the replication-only
+`aws_relationship`, `aws_image_reference`, `aws_warning`, and the typed
 `s3_bucket_posture` alongside three
 transitional placeholder kinds (`collector-aws-cloud.snapshot/record/warning`).
 The live EC2 reader emits typed resource identity for VPCs, subnets, security
@@ -82,19 +82,27 @@ per listed bucket. Live IAM access and request cost remain unverified. A
 missing website configuration and empty logging response mean disabled;
 other errors, including denials, fail the S3 read.
 GetBucketReplication adds one `s3:GetReplicationConfiguration` read per listed
-bucket with ExpectedBucketOwner. Its only typed posture field is
+bucket with ExpectedBucketOwner. Its replication posture field is
 `replication_enabled`: a configuration with any rule reports true even when
 the rule status is disabled, the explicit missing-configuration error or an
 empty rule list reports false, and a nil successful response leaves it unknown.
 The fact has the legacy bucket identity, anchors, and `#posture` source record;
 replication rules, destinations, and role never enter facts. A denied read
 fails the S3 service read. Live IAM access and request cost remain unverified.
+The same typed posture fact now includes reported logging enabled/target,
+versioning and MFA-delete state, object ownership and ACL-disabled state, and
+default encryption summary from the existing bucket reads. Missing or empty
+versioning and ownership responses leave their derived fields unknown.
+Encryption fields are populated only after a confirmed response or S3's
+explicit missing-configuration error; a denied or nil successful response
+leaves them unknown. Public-access and policy-derived posture remain unset
+until bucket policy presence and grant derivation are ported. No logging edge
+is synthesized by this collector.
 For encryption, the explicit missing-configuration response means a known
 empty configuration. Encryption AccessDenied leaves those attributes absent,
 retains the bucket, emits a typed warning, and makes the SDK result partial.
 Versioning and public-access-block denials fail the S3 read; the overall claim
-can still be partial when another service returns evidence. The separate
-other S3 posture fields remain unported. ECS
+can still be partial when another service returns evidence. ECS
 DescribeClusters emits cluster identity, tags, status, and
 reported counts. DescribeServices emits service identity, tags, status, counts,
 task-definition binding, and load-balancer metadata. DescribeTasks emits

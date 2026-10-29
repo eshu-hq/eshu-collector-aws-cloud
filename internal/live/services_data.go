@@ -132,7 +132,7 @@ func listS3WithAPI(ctx context.Context, client s3BucketAPI, region string, ident
 			for key, value := range policyAndOwnership {
 				row.Resource.Attributes[key] = value
 			}
-			websiteLogging, err := readS3WebsiteLogging(ctx, client, aws.ToString(bucket.Name), identity.AccountID)
+			websiteLogging, loggingObserved, err := readS3WebsiteLogging(ctx, client, aws.ToString(bucket.Name), identity.AccountID)
 			if err != nil {
 				return nil, err
 			}
@@ -148,6 +148,7 @@ func listS3WithAPI(ctx context.Context, client s3BucketAPI, region string, ident
 				BucketARN: row.Resource.ARN, BucketName: aws.ToString(bucket.Name),
 				ReplicationEnabled: replication, SourceRecordID: row.Resource.ARN + "#posture",
 			}
+			applyS3KnownPosture(row.S3Posture, posture, policyAndOwnership, websiteLogging, loggingObserved)
 			encryption, denied, err := readS3BucketEncryption(ctx, client, aws.ToString(bucket.Name), identity.AccountID)
 			if err != nil {
 				return nil, err
@@ -155,6 +156,7 @@ func listS3WithAPI(ctx context.Context, client s3BucketAPI, region string, ident
 			if denied {
 				denials = append(denials, optionalDenial{operation: "GetBucketEncryption", resource: "bucket:" + aws.ToString(bucket.Name), effect: "encryption-unknown"})
 			} else {
+				applyS3EncryptionPosture(row.S3Posture, encryption)
 				for key, value := range encryption {
 					row.Resource.Attributes[key] = value
 				}

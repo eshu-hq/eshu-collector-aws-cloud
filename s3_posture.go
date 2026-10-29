@@ -20,7 +20,7 @@ func s3BucketPostureDeclaration() sdk.FactDeclaration {
 	return sdk.FactDeclaration{Kind: AWSKindS3BucketPosture, SchemaVersions: []string{"1.0.0"}, SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceReported}}
 }
 
-// NewS3BucketPostureFact builds the replication-only typed bucket posture fact.
+// NewS3BucketPostureFact builds a typed bucket posture fact from reported settings.
 func NewS3BucketPostureFact(observation S3BucketPostureObservation) (sdk.Fact, error) {
 	if err := validateResourceBoundary(observation.Boundary); err != nil {
 		return sdk.Fact{}, err
@@ -68,12 +68,31 @@ func NewS3BucketPostureFact(observation S3BucketPostureObservation) (sdk.Fact, e
 	if name != "" {
 		nameValue = &name
 	}
+	var loggingTarget, versioningStatus, kmsKey *string
+	if value := strings.TrimSpace(observation.LoggingTargetBucket); value != "" {
+		loggingTarget = &value
+	}
+	if observation.VersioningStatus != nil {
+		value := strings.TrimSpace(*observation.VersioningStatus)
+		if value != "" {
+			versioningStatus = &value
+		}
+	}
+	if value := strings.TrimSpace(observation.SSEKMSKeyARN); value != "" {
+		kmsKey = &value
+	}
 	service := strings.TrimSpace(observation.Boundary.ServiceKind)
 	instance := strings.TrimSpace(observation.Boundary.CollectorInstanceID)
 	payload, err := factschema.EncodeS3BucketPosture(awsv1.S3BucketPosture{
 		AccountID: observation.Boundary.AccountID, Region: observation.Boundary.Region,
 		ServiceKind: &service, CollectorInstanceID: &instance,
 		BucketARN: arnValue, BucketName: nameValue, ReplicationEnabled: observation.ReplicationEnabled,
+		LoggingEnabled: observation.LoggingEnabled, LoggingTargetBucket: loggingTarget,
+		VersioningStatus: versioningStatus, VersioningEnabled: observation.VersioningEnabled,
+		MFADeleteEnabled: observation.MFADeleteEnabled, ObjectOwnership: observation.ObjectOwnership,
+		ACLDisabled: observation.ACLDisabled, DefaultEncryptionEnabled: observation.DefaultEncryptionEnabled,
+		EncryptionAlgorithms: observation.EncryptionAlgorithms, SSEKMSKeyARN: kmsKey,
+		BucketKeyEnabled:   observation.BucketKeyEnabled,
 		CorrelationAnchors: anchors,
 	})
 	if err != nil {
