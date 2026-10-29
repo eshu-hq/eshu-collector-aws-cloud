@@ -168,6 +168,7 @@ var ec2ResourceTypes = map[string]string{
 	"security-group-rule": awsv1.ResourceTypeEC2SecurityGroupRule,
 	"network-interface":   awsv1.ResourceTypeEC2NetworkInterface,
 	"instance":            awsv1.ResourceTypeEC2Instance,
+	"ami":                 awsv1.ResourceTypeEC2AMI,
 	"volume":              awsv1.ResourceTypeEC2Volume,
 }
 

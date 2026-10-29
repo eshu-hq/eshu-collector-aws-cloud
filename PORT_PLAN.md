@@ -100,7 +100,9 @@ importable only inside this module, satisfying `boundary_test.go`).
    and rule/group anchors. Instance identity observations carry state, launch
    AMI ID, and an ARN from the verified STS account and partition. Volume ARNs
    and KMS links use that same identity; subnet-to-VPC relationships are also
-   emitted. Remaining EC2 attributes and relationships, other services, real
+   emitted. The instance-to-AMI link uses the existing DescribeInstances row,
+   and one AMI identity fact is emitted per distinct AMI ID in the EC2 scan.
+   Remaining EC2 attributes and relationships, other services, real
    host grant proof, and replacement of placeholder conformance fixtures remain.
 5. Remaining envelopes kind by kind; delete transitional kinds last.
 6. `awsruntime` + `service/` scanners service by service.
