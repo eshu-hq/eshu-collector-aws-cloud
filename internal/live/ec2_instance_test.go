@@ -104,10 +104,23 @@ func TestInstancePosturePreservesReportedAndUnknownMetadata(t *testing.T) {
 	if fact.Kind != collector.AWSKindEC2InstancePosture || fact.Payload["imds_v2_required"] != true || fact.Payload["detailed_monitoring_enabled"] != true || fact.Payload["imds_http_put_hop_limit"] != int32(2) {
 		t.Fatalf("typed posture payload = %#v", fact.Payload)
 	}
+	for key, want := range map[string]any{
+		"ebs_optimized": true, "public_ip_associated": true,
+		"public_ip_address":    "198.51.100.7",
+		"instance_profile_arn": "arn:aws:iam::123456789012:instance-profile/example",
+		"tenancy":              "default", "nitro_enclave_enabled": true,
+	} {
+		if got := fact.Payload[key]; got != want {
+			t.Fatalf("typed posture %s = %#v, want %#v", key, got, want)
+		}
+	}
+	if fact.SourceRef.RecordID != "i-123" || fact.SourceRef.ScopeID != "scope-1" || fact.SourceRef.GenerationID != "generation-1" || fact.SourceRef.FactKey != fact.StableKey || fact.SourceRef.URI != "aws://123456789012" {
+		t.Fatalf("typed posture source identity = %#v", fact.SourceRef)
+	}
 	if _, present := fact.Payload["user_data_present"]; present {
 		t.Fatalf("unobserved user-data presence emitted = %#v", fact.Payload)
 	}
-	if devices, ok := fact.Payload["block_devices"].([]map[string]any); !ok || len(devices) != 1 || devices[0]["volume_id"] != "vol-123" || devices[0]["encrypted"] != nil {
+	if devices, ok := fact.Payload["block_devices"].([]map[string]any); !ok || len(devices) != 1 || devices[0]["volume_id"] != "vol-123" || devices[0]["delete_on_termination"] != false || devices[0]["status"] != "attached" || devices[0]["encrypted"] != nil {
 		t.Fatalf("typed block device payload = %#v", fact.Payload["block_devices"])
 	}
 	instance.MetadataOptions = nil
