@@ -21,11 +21,11 @@ import (
 	awsv1 "github.com/eshu-hq/eshu-sdk/factschema/aws/v1"
 )
 
-// adversarialAMIName and adversarialAMIDescription carry secret-shaped and
-// private-identifier values an image creator could publish. They must never
-// surface through producer emission (see eshu-hq/eshu#9525).
+// adversarialAMIDescription carries secret-shaped creator text that must never
+// surface: description admission stays permanently excluded under
+// eshu-hq/eshu#9525. benignAMIName is the fixture's admitted creator label.
 const (
-	adversarialAMIName        = "legacy-php-5.6 AKIAIOSFODNN7EXAMPLE"
+	benignAMIName             = "ubuntu-jammy-22.04-amd64-server-20240115"
 	adversarialAMIDescription = "db_password=hunter2; owner jdoe@corp.example -- internal only, do not share"
 )
 
@@ -115,7 +115,7 @@ func amiFullImageXML() string {
 			`<deprecationTime>2025-06-01T00:00:00.000Z</deprecationTime>`+
 			`<description>`+adversarialAMIDescription+`</description>`+
 			`<imageOwnerAlias>amazon</imageOwnerAlias>`+
-			`<name>`+adversarialAMIName+`</name>`+
+			`<name>`+benignAMIName+`</name>`+
 			`<platformDetails>Linux/UNIX</platformDetails>`+
 			`<rootDeviceType>ebs</rootDeviceType>`)
 }
@@ -183,6 +183,7 @@ func TestAMIDetailsEnrichResolvedAMIs(t *testing.T) {
 	}
 	wantFull := map[string]any{
 		"platform_details": "Linux/UNIX",
+		"name":             benignAMIName,
 		"architecture":     "x86_64",
 		"creation_date":    "2024-01-15T10:30:00.000Z",
 		"deprecation_time": "2025-06-01T00:00:00.000Z",
@@ -190,7 +191,7 @@ func TestAMIDetailsEnrichResolvedAMIs(t *testing.T) {
 		"root_device_type": "ebs",
 	}
 	if len(full.Resource.Attributes) != len(wantFull) {
-		t.Fatalf("ami-full attributes = %#v, want exactly %d typed keys", full.Resource.Attributes, len(wantFull))
+		t.Fatalf("ami-full attributes = %#v, want exactly %d admitted keys", full.Resource.Attributes, len(wantFull))
 	}
 	for key, want := range wantFull {
 		if full.Resource.Attributes[key] != want {
@@ -459,10 +460,10 @@ func TestAMIDetailsInputToPayloadGolden(t *testing.T) {
 	}
 }
 
-// TestAMINameDescriptionNeverSurface is the #9525 exclusion proof: adversarial
-// creator-controlled name/description values must not reach producer emission
-// in any key or value, benign or secret-shaped.
-func TestAMINameDescriptionNeverSurface(t *testing.T) {
+// TestAMIDescriptionNeverSurface is the #9525 prose-exclusion proof: the
+// adversarial description must not reach producer emission in any key or
+// value, while the valid name on the same image is admitted verbatim.
+func TestAMIDescriptionNeverSurface(t *testing.T) {
 	instances := amiInstancesXML(`<item><instanceId>i-1</instanceId><imageId>ami-full</imageId></item>`)
 	fixture := newAMITestServer(t, instances, map[string]string{"ami-full": amiFullImageXML()}, "")
 	records, err := listEC2(context.Background(), amiTestConfig(fixture.server), VerifiedIdentity{AccountID: "123456789012", Partition: "aws"})
@@ -473,22 +474,18 @@ func TestAMINameDescriptionNeverSurface(t *testing.T) {
 	if row == nil {
 		t.Fatal("ami-full record missing")
 	}
-	secrets := []string{"AKIAIOSFODNN7EXAMPLE", "hunter2", "jdoe@corp.example"}
-	scanJSON := func(value any) string {
-		encoded, marshalErr := json.Marshal(value)
-		if marshalErr != nil {
-			t.Fatal(marshalErr)
-		}
-		return string(encoded)
+	if _, present := row.Resource.Attributes["description"]; present {
+		t.Fatal("AMI attributes admit description")
 	}
-	for _, key := range []string{"name", "description"} {
-		if _, present := row.Resource.Attributes[key]; present {
-			t.Fatalf("AMI attributes admit %q", key)
-		}
+	if got := row.Resource.Attributes["name"]; got != benignAMIName {
+		t.Fatalf("name = %#v, want admitted verbatim %q", got, benignAMIName)
 	}
-	emitted := scanJSON(row) + scanJSON(row.Resource.Attributes)
-	for _, secret := range secrets {
-		if strings.Contains(emitted, secret) {
+	emitted, marshalErr := json.Marshal([]any{row, row.Resource.Attributes})
+	if marshalErr != nil {
+		t.Fatal(marshalErr)
+	}
+	for _, secret := range []string{"hunter2", "jdoe@corp.example", "db_password"} {
+		if strings.Contains(string(emitted), secret) {
 			t.Fatalf("emitted record contains %q: %s", secret, emitted)
 		}
 	}

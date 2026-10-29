@@ -25,11 +25,15 @@ import (
 const maxAMIImagesPerScan = 100
 
 // amiImageDetail is the scanner-owned projection of the EC2 Image fields the
-// #9301 contract admits. It carries no name or description field by
-// construction: creator-controlled free text never enters the producer
-// (see eshu-hq/eshu#9525).
+// #9301 contract admits, plus the conditionally admitted Name under
+// eshu-hq/eshu#9525. It carries no description field by construction:
+// creator-controlled prose never enters the producer. The admitted name stays
+// untrusted creator-controlled text: admission claims structural validity
+// only, never secret-freedom (see inspectAMIName).
 type amiImageDetail struct {
 	imageID         string
+	name            string
+	nameDropped     bool
 	platformDetails string
 	platform        string
 	architecture    string
@@ -39,10 +43,15 @@ type amiImageDetail struct {
 	rootDeviceType  string
 }
 
-// attributes returns the admitted typed attribute map. Absent and blank
-// values stay omitted; unparseable timestamps are dropped, never synthesized.
+// attributes returns the admitted attribute map: the typed fields plus the
+// validated name. Absent and blank values stay omitted; unparseable
+// timestamps are dropped, never synthesized; a dropped name stays absent and
+// warns once per scan via the ami_name_dropped effect.
 func (detail amiImageDetail) attributes() map[string]any {
 	attrs := map[string]any{}
+	if detail.name != "" {
+		attrs["name"] = detail.name
+	}
 	if value := strings.TrimSpace(detail.platformDetails); value != "" {
 		attrs["platform_details"] = value
 	}
@@ -73,10 +82,14 @@ func validAMITimestamp(value string) bool {
 	return err == nil
 }
 
-// amiDetailFromImage projects one SDK image onto the admitted typed fields.
-// The image Name and Description are deliberately never read.
+// amiDetailFromImage projects one SDK image onto the admitted fields. The
+// image Name passes the #9525 structural admission (inspectAMIName); a
+// dropped name keeps the AMI id and typed fields and warns once per scan.
+// The image Description is deliberately never read: prose admission is
+// permanently excluded, so exclusion holds by construction.
 func amiDetailFromImage(image ec2types.Image) amiImageDetail {
-	return amiImageDetail{
+	verdict := inspectAMIName(aws.ToString(image.Name))
+	detail := amiImageDetail{
 		imageID:         strings.TrimSpace(aws.ToString(image.ImageId)),
 		platformDetails: aws.ToString(image.PlatformDetails),
 		platform:        string(image.Platform),
@@ -86,10 +99,15 @@ func amiDetailFromImage(image ec2types.Image) amiImageDetail {
 		ownerAlias:      aws.ToString(image.ImageOwnerAlias),
 		rootDeviceType:  string(image.RootDeviceType),
 	}
+	if verdict.admit {
+		detail.name = verdict.value
+	}
+	detail.nameDropped = verdict.drop
+	return detail
 }
 
 // appendAMIDetails resolves the scan's deduplicated AMI ids through one
-// bounded DescribeImages call and stamps the admitted typed fields onto the
+// bounded DescribeImages call and stamps the admitted fields onto the
 // matching AMI records. Identity records and the instance relationship survive
 // every degradation path: a denial degrades to one warning, a truncated set
 // warns with the dropped count, and images the call cannot see warn as
@@ -146,7 +164,7 @@ func appendAMIDetails(ctx context.Context, client *awsec2.Client, region string,
 	if output != nil {
 		images = output.Images
 	}
-	resolved := stampAMIDetails(byID, images)
+	resolved, nameDropped := stampAMIDetails(byID, images)
 	unresolved := 0
 	for _, id := range ids {
 		if _, ok := resolved[id]; !ok {
@@ -163,6 +181,7 @@ func appendAMIDetails(ctx context.Context, client *awsec2.Client, region string,
 			attributes: map[string]any{"unresolved_count": unresolved},
 		})
 	}
+	denials = appendAMINameDroppedDenial(denials, region, nameDropped)
 	if len(denials) == 0 {
 		return nil, nil
 	}
@@ -182,11 +201,15 @@ func indexAMIRecords(records []collector.Record, size int) map[string]*collector
 	return byID
 }
 
-// stampAMIDetails projects each image onto the admitted typed fields of its
-// AMI record and reports the stamped ids. Images the scan never referenced
-// still stamp when present; callers count unresolved ids against the request.
-func stampAMIDetails(byID map[string]*collector.Record, images []ec2types.Image) map[string]struct{} {
+// stampAMIDetails projects each image onto the admitted fields of its AMI
+// record and reports the stamped ids plus the dropped-name count. Images the
+// scan never referenced still stamp when present; callers count unresolved
+// ids against the request. The dropped count covers stamped records only —
+// the facts the scan actually emits — and feeds one deduped
+// ami_name_dropped warning per scan, never one per image.
+func stampAMIDetails(byID map[string]*collector.Record, images []ec2types.Image) (map[string]struct{}, int) {
 	resolved := make(map[string]struct{}, len(images))
+	nameDropped := 0
 	for _, image := range images {
 		detail := amiDetailFromImage(image)
 		if detail.imageID == "" {
@@ -195,9 +218,30 @@ func stampAMIDetails(byID map[string]*collector.Record, images []ec2types.Image)
 		resolved[detail.imageID] = struct{}{}
 		if row, ok := byID[detail.imageID]; ok && row.Resource != nil {
 			row.Resource.Attributes = detail.attributes()
+			if detail.nameDropped {
+				nameDropped++
+			}
 		}
 	}
-	return resolved
+	return resolved, nameDropped
+}
+
+// appendAMINameDroppedDenial records one deduped ami_name_dropped warning for
+// the scan when stamping dropped at least one name. The message and attributes
+// carry the effect and the dropped count only — never the raw text, which
+// stays out of diagnostics under the redacted-marker rule.
+func appendAMINameDroppedDenial(denials []optionalDenial, region string, dropped int) []optionalDenial {
+	if dropped == 0 {
+		return denials
+	}
+	return append(denials, optionalDenial{
+		operation: "DescribeImages",
+		resource:  "region:" + region,
+		effect:    "ami_name_dropped",
+		message: fmt.Sprintf("DescribeImages dropped %d inadmissible AMI name(s) for region:%s; ami_name_dropped",
+			dropped, region),
+		attributes: map[string]any{"dropped_count": dropped},
+	})
 }
 
 // appendAMIDetailsSingles isolates unknown or invisible AMI ids after the
@@ -232,7 +276,7 @@ func appendAMIDetailsSingles(ctx context.Context, client *awsec2.Client, region 
 			images = append(images, output.Images...)
 		}
 	}
-	resolved := stampAMIDetails(indexAMIRecords(records, len(ids)), images)
+	resolved, nameDropped := stampAMIDetails(indexAMIRecords(records, len(ids)), images)
 	unresolved := 0
 	for _, id := range ids {
 		if _, ok := resolved[id]; !ok {
@@ -249,6 +293,7 @@ func appendAMIDetailsSingles(ctx context.Context, client *awsec2.Client, region 
 			attributes: map[string]any{"unresolved_count": unresolved},
 		})
 	}
+	denials = appendAMINameDroppedDenial(denials, region, nameDropped)
 	if len(denials) == 0 {
 		return nil, nil
 	}

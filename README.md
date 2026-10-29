@@ -325,6 +325,15 @@ keep their identity-only fact and warn once with the `ami-image-unresolved`
 effect and the unresolved count; no OS version is inferred. Other
 `DescribeImages` errors fail the EC2 read.
 
+The image `Name` is admitted only under structural validation: a scalar
+string of 3-128 runes in the exact AWS `CreateImage` charset, passing a
+hygiene scan over the shared sensitive-key predicate. Any other value drops
+the field while the AMI keeps its id and typed fields, with one deduped
+`aws_warning` carrying the `ami_name_dropped` effect and the dropped count.
+The admitted name is untrusted creator-controlled text: admission claims
+structural validity, never secret-freedom. The image `Description` is never
+read or emitted.
+
 ## Lambda mapping-read denial
 
 An `AccessDenied`, `AccessDeniedException`, or `UnauthorizedOperation` from
