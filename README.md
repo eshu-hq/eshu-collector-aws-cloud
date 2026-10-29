@@ -25,10 +25,18 @@ review). Keep internal helpers private.
 
 `manifest.yaml` `spec.emittedFacts` declares `aws_resource`,
 `aws_relationship`, `aws_image_reference`, `aws_warning`, and
-`ec2_instance_posture` alongside three
+`ec2_instance_posture` and `rds_instance_posture` alongside three
 transitional placeholder kinds (`collector-aws-cloud.snapshot/record/warning`).
 The live EC2 reader emits typed resource identity for VPCs, subnets, security
 groups and rules, network interfaces, instances, AMI identities, and volumes,
+and one typed instance posture fact per described instance. The RDS reader emits
+typed resource identity for described DB instances, clusters, and subnet groups,
+and one typed posture fact per instance or cluster from the existing describe
+response. RDS posture excludes endpoints, database names, usernames, and
+security parameter values. Resource identity retains the legacy endpoint
+correlation anchors. The SDK source URI uses the validated configured source
+URI because the legacy RDS envelope has no URI. RDS tags and full enrichment
+parity remain unfinished; no extra RDS API calls were added for this slice.
 plus subnet-to-VPC, volume-to-KMS, instance-to-AMI, and network-interface
 relationships when their IDs are reported. Before any live service read, it
 verifies the active credentials account with STS in each configured region and fails the claim
@@ -282,7 +290,7 @@ producer, version, kind, schema, and scope; namespaced kinds need none.
 The AWS issuance request set contains thirteen grants, one per core kind at
 schema `1.0.0`. The current manifest declares `aws_resource`,
 `aws_relationship`, `aws_image_reference`, `aws_warning`, and
-`ec2_instance_posture` alongside three transitional
+`ec2_instance_posture` and `rds_instance_posture` alongside three transitional
 namespaced kinds.
 `TestManifestEmissionsAreAuthorized` fails when a declared kind is
 outside the collector's namespace and has no live grant scoped to a

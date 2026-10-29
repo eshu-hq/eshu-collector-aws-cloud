@@ -32,7 +32,13 @@ request and rejects a nonblank conflicting child cluster name. IAM OIDC provider
 metadata and the cluster relationship are ported. An unmatched or denied
 IAM list retains an issuer-only provider and edge. An explicit
 ListOpenIDConnectProviders denial leaves EKS observations partial; a
-GetOpenIDConnectProvider failure remains terminal. The live KMS reader now
+GetOpenIDConnectProvider failure remains terminal. The RDS DescribeDBInstances and DescribeDBClusters pages now emit one
+metadata-only `rds_instance_posture` per listed instance or cluster, alongside
+minimum typed resource identity for those rows and DB subnet groups. The
+posture omits endpoint addresses, usernames, database names, credentials, and
+security parameters. The resource keeps legacy correlation anchors; tags and
+full enrichment parity remain unfinished. The typed SDK source URI is the
+validated configured URI, since the legacy envelope omits it. The live KMS reader now
 emits verified key metadata, and the IAM reader emits verified role and
 user metadata at the legacy `aws-global` fact boundary without raw trust
 documents, policy documents, or credential material. Their live IAM and
@@ -61,7 +67,7 @@ Source of truth for paths: `go/internal/collector/awscloud/` in
 
 `Contract()` and `manifest.yaml` declare `aws_resource`,
 `aws_relationship`, `aws_image_reference`, `aws_warning`,
-`ec2_instance_posture`, and 3 transitional placeholder kinds
+`ec2_instance_posture`, `rds_instance_posture`, and 3 transitional placeholder kinds
 (`collector-aws-cloud.snapshot/record/warning`). The port will declare the
 remaining AWS kinds at `1.0.0` `reported` and:
 
