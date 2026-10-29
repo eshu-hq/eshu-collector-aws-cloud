@@ -31,7 +31,8 @@ func TestLambdaMappingDenialKeepsFunctionsAliasesAndOtherMappings(t *testing.T) 
 				case path == "/2015-03-31/functions":
 					fmt.Fprintf(w, `{"Functions":[{"FunctionName":"first","FunctionArn":%q},{"FunctionName":"second","FunctionArn":%q}]}`, firstARN, secondARN)
 				case strings.HasPrefix(path, "/2015-03-31/functions/") && !strings.HasSuffix(path, "/aliases"):
-					fmt.Fprintf(w, `{"Configuration":{"FunctionName":"first","FunctionArn":%q}}`, strings.TrimPrefix(path, "/2015-03-31/functions/"))
+					functionARN := strings.TrimPrefix(path, "/2015-03-31/functions/")
+					fmt.Fprintf(w, `{"Configuration":{"FunctionName":%q,"FunctionArn":%q}}`, functionARN[strings.LastIndex(functionARN, ":")+1:], functionARN)
 				case strings.HasSuffix(path, "/aliases"):
 					fmt.Fprint(w, `{"Aliases":[{"Name":"live","AliasArn":"arn:aws:lambda:us-east-1:123456789012:function:first:live"}]}`)
 				case path == "/2015-03-31/event-source-mappings" && r.URL.Query().Get("FunctionName") == firstARN:
@@ -127,7 +128,7 @@ func TestLambdaMappingDenialKeepsFunctionsAliasesAndOtherMappings(t *testing.T) 
 func TestLambdaGetFunctionEnrichesSafeMetadataWithoutSecrets(t *testing.T) {
 	const arn = "arn:aws:lambda:us-east-1:123456789012:function:worker"
 	const image = "123456789012.dkr.ecr.us-east-1.amazonaws.com/team/worker:prod"
-	const resolved = "123456789012.dkr.ecr.us-east-1.amazonaws.com/team/worker@sha256:abc123"
+	const resolved = "123456789012.dkr.ecr.us-east-1.amazonaws.com/team/worker@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
@@ -158,6 +159,9 @@ func TestLambdaGetFunctionEnrichesSafeMetadataWithoutSecrets(t *testing.T) {
 	if attributes["runtime"] != "python3.13" || attributes["source_kms_key_arn"] != "arn:aws:kms:us-east-1:123456789012:key/code" || attributes["image_uri"] != image || attributes["resolved_image_uri"] != resolved {
 		t.Fatalf("GetFunction attributes=%#v", attributes)
 	}
+	if edge := records[0].Relationship; edge == nil || edge.RelationshipType != "lambda_function_uses_image" || edge.SourceResourceID != arn || edge.SourceARN != arn || edge.TargetResourceID != image || edge.TargetType != "container_image" || edge.SourceRecordID != arn+"#container-image#"+image || edge.Attributes["resolved_image_uri"] != resolved {
+		t.Fatalf("Lambda image relationship=%#v", edge)
+	}
 	if _, ok := attributes["environment"]; ok {
 		t.Fatal("raw environment must not be emitted")
 	}
@@ -169,5 +173,39 @@ func TestLambdaGetFunctionEnrichesSafeMetadataWithoutSecrets(t *testing.T) {
 	}
 	if serialized := fmt.Sprintf("%+v", records); strings.Contains(serialized, "raw-secret") || strings.Contains(serialized, "download.example") {
 		t.Fatal("Lambda records contain environment values or package URL")
+	}
+	outcome, err := (Collector{
+		LoadConfig: func(context.Context, string) (aws.Config, error) { return cfg, nil },
+		VerifyIdentity: func(context.Context, aws.Config) (VerifiedIdentity, error) {
+			return VerifiedIdentity{AccountID: "123456789012", Partition: "aws"}, nil
+		},
+		Loaders: map[string]Loader{"lambda": func(context.Context, aws.Config, VerifiedIdentity) ([]collector.Record, error) {
+			return records, nil
+		}},
+	}).CollectReport(context.Background(), Config{AccountID: "123456789012", Regions: []string{"us-east-1"}, Services: []string{"lambda"}})
+	if err != nil || len(outcome.Relationships) != 1 {
+		t.Fatalf("Lambda outcome relationships=%#v err=%v", outcome.Relationships, err)
+	}
+	claim := sdk.Claim{ComponentID: collector.ComponentID, InstanceID: "test-instance", CollectorKind: collector.CollectorKind,
+		SourceSystem: collector.SourceSystem, Scope: sdk.Scope{ID: "component:test-instance", Kind: "component"},
+		GenerationID: "generation-1", FencingToken: "fence-1"}
+	uri := "aws://123456789012/us-east-1"
+	limits := collector.ResourceUse{MaxRecordsPerClaim: 4, MaxPayloadBytes: 65536}
+	base, err := collector.Collect(claim, outcome.Report, collector.CollectOptions{SourceURI: uri, ObservedAt: time.Now().UTC(), Limits: limits})
+	if err != nil {
+		t.Fatal(err)
+	}
+	withResource, err := collector.AppendLiveResources(base, outcome.Resources, uri, limits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	complete, err := collector.AppendLiveRelationships(withResource, outcome.Relationships, uri, limits)
+	if err != nil || complete.State != sdk.ResultComplete || len(complete.Facts) != 4 || complete.Facts[3].Kind != collector.AWSKindRelationship {
+		t.Fatalf("Lambda image fact=%#v err=%v", complete, err)
+	}
+	limits.MaxRecordsPerClaim = 3
+	bounded, err := collector.AppendLiveRelationships(withResource, outcome.Relationships, uri, limits)
+	if err != nil || bounded.State != sdk.ResultTerminal || len(bounded.Facts) != 0 {
+		t.Fatalf("Lambda image fact budget=%#v err=%v", bounded, err)
 	}
 }

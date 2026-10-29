@@ -44,9 +44,11 @@ one `aws_image_reference` per tag, including an empty tag for untagged images;
 the image placeholder record remains. Lambda ListFunctions rows are enriched
 by one GetFunction read per function. They emit typed `aws_resource` identity,
 configuration metadata, VPC and logging configuration, source KMS key ARN, and
-ECR image references. The GetFunction configuration must match the listed
-identity. Only validated ECR image references enter attributes and correlation
-anchors; unsafe references fail the Lambda read without logging the value.
+ECR image references. A validated image URI also emits the reported
+`lambda_function_uses_image` relationship with the resolved digest reference.
+The GetFunction ARN and nonempty function name must match the listed identity.
+Only validated ECR image references enter attributes and correlation anchors;
+unsafe references fail the Lambda read without logging the value.
 Presigned package download URLs never enter records. Function environment
 values and tags remain deferred until this collector has the legacy keyed
 redaction path. GetFunction requires `lambda:GetFunction`; AWS may also require

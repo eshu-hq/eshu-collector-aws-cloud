@@ -62,7 +62,7 @@ func lambdaFunctionRecord(function lambdatypes.FunctionConfiguration, region str
 	return result, nil
 }
 
-var lambdaECRImageReference = regexp.MustCompile(`^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com(?:\.cn)?/[A-Za-z0-9._/-]+(?::[A-Za-z0-9._-]+|@sha256:[a-fA-F0-9]{6,64})$`)
+var lambdaECRImageReference = regexp.MustCompile(`^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com(?:\.cn)?/[A-Za-z0-9._/-]+(?::[A-Za-z0-9._-]+|@sha256:[a-fA-F0-9]{64})$`)
 
 // lambdaGetFunctionRecord maps the authoritative GetFunction configuration and
 // stable code references without copying package URLs, environment, or tags.
@@ -84,6 +84,11 @@ func lambdaGetFunctionRecord(listed lambdatypes.FunctionConfiguration, output *a
 	}
 	if listedID != actualID {
 		return collector.Record{}, fmt.Errorf("Lambda GetFunction identity differs from ListFunctions")
+	}
+	listedName := strings.TrimSpace(aws.ToString(listed.FunctionName))
+	actualName := strings.TrimSpace(aws.ToString(configuration.FunctionName))
+	if listedName != "" && actualName != "" && listedName != actualName {
+		return collector.Record{}, fmt.Errorf("Lambda GetFunction name differs from ListFunctions")
 	}
 	result, err := lambdaFunctionRecord(configuration, region)
 	if err != nil {
@@ -107,9 +112,24 @@ func lambdaGetFunctionRecord(listed lambdatypes.FunctionConfiguration, output *a
 		result.Resource.Attributes[key] = value
 		result.Resource.CorrelationAnchors = append(result.Resource.CorrelationAnchors, value)
 	}
+	if imageURI, ok := result.Resource.Attributes["image_uri"].(string); ok && result.Resource.ARN != "" {
+		resolved, _ := result.Resource.Attributes["resolved_image_uri"].(string)
+		arn := result.Resource.ARN
+		result.Relationship = &collector.LiveRelationship{
+			Region: region, ServiceKind: "lambda", RelationshipType: "lambda_function_uses_image",
+			SourceResourceID: arn, SourceARN: arn, TargetResourceID: imageURI,
+			TargetType: "container_image", SourceRecordID: arn + "#container-image#" + imageURI,
+			Attributes: map[string]any{
+				"package_type":       strings.TrimSpace(string(configuration.PackageType)),
+				"resolved_image_uri": resolved,
+			},
+		}
+	}
 	if keyARN := strings.TrimSpace(aws.ToString(output.Code.SourceKMSKeyArn)); keyARN != "" {
 		parsed, err := awsarn.Parse(keyARN)
-		if err != nil || parsed.Service != "kms" || !lambdaKMSKeyResource.MatchString(parsed.Resource) {
+		if err != nil || parsed.Service != "kms" || parsed.Partition != partitionForRegion(region) ||
+			parsed.Region != region || !regionPattern.MatchString(parsed.Region) ||
+			!accountPattern.MatchString(parsed.AccountID) || !lambdaKMSKeyResource.MatchString(parsed.Resource) {
 			return collector.Record{}, fmt.Errorf("Lambda GetFunction returned unsafe source KMS key ARN")
 		}
 		result.Resource.Attributes["source_kms_key_arn"] = keyARN

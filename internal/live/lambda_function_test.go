@@ -47,15 +47,20 @@ func TestLambdaFunctionRecordCarriesListFunctionsMetadata(t *testing.T) {
 }
 
 func TestLambdaGetFunctionRecordRejectsMismatchedIdentityAndUnsafeReferences(t *testing.T) {
-	listed := lambdatypes.FunctionConfiguration{FunctionArn: aws.String("arn:aws:lambda:us-east-1:123456789012:function:worker")}
+	listed := lambdatypes.FunctionConfiguration{FunctionArn: aws.String("arn:aws:lambda:us-east-1:123456789012:function:worker"), FunctionName: aws.String("worker")}
 	for _, test := range []struct {
 		name   string
 		output *awslambda.GetFunctionOutput
 	}{
 		{name: "missing response"},
 		{name: "different function", output: &awslambda.GetFunctionOutput{Configuration: &lambdatypes.FunctionConfiguration{FunctionArn: aws.String("arn:aws:lambda:us-east-1:123456789012:function:other")}}},
+		{name: "same ARN different name", output: &awslambda.GetFunctionOutput{Configuration: &lambdatypes.FunctionConfiguration{FunctionArn: listed.FunctionArn, FunctionName: aws.String("other")}}},
 		{name: "URL in image field", output: &awslambda.GetFunctionOutput{Code: &lambdatypes.FunctionCodeLocation{ImageUri: aws.String("https://user:secret@example.com/image")}}},
 		{name: "query in image field", output: &awslambda.GetFunctionOutput{Code: &lambdatypes.FunctionCodeLocation{ImageUri: aws.String("123456789012.dkr.ecr.us-east-1.amazonaws.com/team/worker:prod?token=secret")}}},
+		{name: "short digest", output: &awslambda.GetFunctionOutput{Code: &lambdatypes.FunctionCodeLocation{ResolvedImageUri: aws.String("123456789012.dkr.ecr.us-east-1.amazonaws.com/team/worker@sha256:abc123")}}},
+		{name: "KMS wrong partition", output: &awslambda.GetFunctionOutput{Code: &lambdatypes.FunctionCodeLocation{SourceKMSKeyArn: aws.String("arn:aws-cn:kms:us-east-1:210987654321:key/code")}}},
+		{name: "KMS wrong region", output: &awslambda.GetFunctionOutput{Code: &lambdatypes.FunctionCodeLocation{SourceKMSKeyArn: aws.String("arn:aws:kms:us-west-2:210987654321:key/code")}}},
+		{name: "KMS malformed account", output: &awslambda.GetFunctionOutput{Code: &lambdatypes.FunctionCodeLocation{SourceKMSKeyArn: aws.String("arn:aws:kms:us-east-1:abc:key/code")}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := lambdaGetFunctionRecord(listed, test.output, "us-east-1")
