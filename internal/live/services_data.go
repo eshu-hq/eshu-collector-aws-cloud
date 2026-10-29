@@ -85,19 +85,29 @@ func listRDS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 // listS3 mirrors the in-tree s3 scanner's bucket inventory: control-plane
 // metadata only. Object contents, policy documents, ACL grants, and
 // notification payloads stay unread.
-func listS3(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
+func listS3(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]collector.Record, error) {
+	input, err := s3ListInput(cfg.Region)
+	if err != nil {
+		return nil, err
+	}
 	client := awss3.NewFromConfig(cfg)
 	region := cfg.Region
 	records := []collector.Record{}
-	buckets := awss3.NewListBucketsPaginator(client, &awss3.ListBucketsInput{})
+	buckets := awss3.NewListBucketsPaginator(client, input)
 	for buckets.HasMorePages() {
 		page, err := buckets.NextPage(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("s3 list buckets: %w", err)
 		}
 		for _, bucket := range page.Buckets {
-			name := aws.ToString(bucket.Name)
-			records = append(records, record("arn:aws:s3:::"+name, "s3", region, name, "bucket"))
+			if aws.ToString(bucket.Name) == "" {
+				continue
+			}
+			row, err := s3BucketRecord(bucket, region, identity)
+			if err != nil {
+				return nil, err
+			}
+			records = append(records, row)
 		}
 	}
 	return records, nil

@@ -37,7 +37,7 @@ var loaders = map[string]Loader{
 	"lambda":         withoutIdentity(listLambda),
 	"rds":            withoutIdentity(listRDS),
 	"route53":        withoutIdentity(listRoute53),
-	"s3":             withoutIdentity(listS3),
+	"s3":             listS3,
 	"secretsmanager": withoutIdentity(listSecretsManager),
 	"sns":            withoutIdentity(listSNS),
 	"sqs":            withoutIdentity(listSQS),
@@ -51,5 +51,4 @@ var globalServices = map[string]bool{
 	"cloudfront": true,
 	"iam":        true,
 	"route53":    true,
-	"s3":         true,
 }
