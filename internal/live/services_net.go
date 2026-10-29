@@ -168,19 +168,12 @@ func listEventBridge(ctx context.Context, cfg aws.Config) ([]collector.Record, e
 // listIAM mirrors the in-tree iam scanner's read surface (roles, users,
 // customer-managed policies, instance profiles, OIDC providers) as
 // metadata-only records. Policy documents stay unread.
-func listIAM(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
+func listIAM(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]collector.Record, error) {
 	client := awsiam.NewFromConfig(cfg)
 	region := cfg.Region
-	records := []collector.Record{}
-	roles := awsiam.NewListRolesPaginator(client, &awsiam.ListRolesInput{})
-	for roles.HasMorePages() {
-		page, err := roles.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("iam list roles: %w", err)
-		}
-		for _, role := range page.Roles {
-			records = append(records, record(aws.ToString(role.Arn), "iam", region, aws.ToString(role.RoleName), "role"))
-		}
+	records, err := listIAMRoleRecords(ctx, client, region, identity)
+	if err != nil {
+		return nil, err
 	}
 	users := awsiam.NewListUsersPaginator(client, &awsiam.ListUsersInput{})
 	for users.HasMorePages() {
