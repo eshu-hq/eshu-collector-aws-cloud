@@ -30,7 +30,7 @@ var loaders = map[string]Loader{
 	"ec2":            listEC2,
 	"ecr":            withoutIdentity(listECR),
 	"ecs":            withoutIdentity(listECS),
-	"eks":            withoutIdentity(listEKS),
+	"eks":            listEKS,
 	"elbv2":          withoutIdentity(listELBV2),
 	"eventbridge":    withoutIdentity(listEventBridge),
 	"iam":            withoutIdentity(listIAM),

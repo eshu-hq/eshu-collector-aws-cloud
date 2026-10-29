@@ -217,9 +217,13 @@ func listECR(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 
 // listEKS reads clusters, nodegroups, and addons for typed resource observations.
 // Reported roles and network placements, plus matched membership, produce edges.
-func listEKS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
+func listEKS(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]collector.Record, error) {
 	client := awseks.NewFromConfig(cfg)
 	region := cfg.Region
+	if !accountPattern.MatchString(identity.AccountID) || identity.Partition != partitionForRegion(region) {
+		return nil, fmt.Errorf("eks read requires verified account and region partition")
+	}
+	providers := eksOIDCReader{cfg: cfg}
 	records := []collector.Record{}
 	clusters := awseks.NewListClustersPaginator(client, &awseks.ListClustersInput{})
 	for clusters.HasMorePages() {
@@ -238,8 +242,15 @@ func listEKS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 				if mapErr != nil {
 					return nil, mapErr
 				}
+				providerRow, err := providers.enrich(ctx, &row, *described.Cluster, identity)
+				if err != nil {
+					return nil, fmt.Errorf("eks enrich cluster OIDC provider: %w", err)
+				}
 				clusterResource = row.Resource
 				records = append(records, row)
+				if providerRow != nil {
+					records = append(records, *providerRow)
+				}
 			}
 			nodegroups := awseks.NewListNodegroupsPaginator(client, &awseks.ListNodegroupsInput{ClusterName: aws.String(name)})
 			for nodegroups.HasMorePages() {
@@ -288,6 +299,9 @@ func listEKS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 				}
 			}
 		}
+	}
+	if providers.denial != nil {
+		return records, providers.denial
 	}
 	return records, nil
 }
