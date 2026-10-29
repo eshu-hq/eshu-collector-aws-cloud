@@ -175,16 +175,11 @@ func listIAM(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]
 	if err != nil {
 		return nil, err
 	}
-	users := awsiam.NewListUsersPaginator(client, &awsiam.ListUsersInput{})
-	for users.HasMorePages() {
-		page, err := users.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("iam list users: %w", err)
-		}
-		for _, user := range page.Users {
-			records = append(records, record(aws.ToString(user.Arn), "iam", region, aws.ToString(user.UserName), "user"))
-		}
+	userRecords, err := listIAMUserRecords(ctx, client, region, identity)
+	if err != nil {
+		return nil, err
 	}
+	records = append(records, userRecords...)
 	policies := awsiam.NewListPoliciesPaginator(client, &awsiam.ListPoliciesInput{Scope: iamtypes.PolicyScopeTypeLocal})
 	for policies.HasMorePages() {
 		page, err := policies.NextPage(ctx)
