@@ -92,10 +92,10 @@ group metadata. Network interface edges link reported subnets, VPCs, security
 groups, and attached instances; attachment targets use the reported owner and
 verified partition. Instance identity observations carry state and launch AMI
 ID from the same `DescribeInstances` response. These edges, subnet-to-VPC,
-volume-to-KMS, and instance-to-AMI are the typed relationships currently
-emitted. AMI identities are deduplicated by ID within each regional EC2 scan. AMI targets add typed
-facts without adding transitional record facts; all emitted facts count toward
-the claim's record limit.
+volume-to-KMS, and instance-to-AMI are the typed EC2 relationships currently
+emitted. AMI identities are deduplicated by ID within each regional EC2 scan.
+AMI targets add typed facts without adding transitional record facts; all
+emitted facts count toward the claim's record limit.
 
 This is staged implementation, not a full parity or live host admission claim.
 Instance and volume ARNs use the account and partition verified by STS before
