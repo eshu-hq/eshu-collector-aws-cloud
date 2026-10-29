@@ -22,7 +22,7 @@ func fakeConfig(regions *[]string) func(context.Context, string) (aws.Config, er
 }
 
 func verifiedIdentity(_ context.Context, _ aws.Config) (VerifiedIdentity, error) {
-	return VerifiedIdentity{AccountID: "055929692761", Partition: "aws"}, nil
+	return VerifiedIdentity{AccountID: "111122223333", Partition: "aws"}, nil
 }
 
 // TestCollectReportListsOnlyAllowlistedServices proves the orchestrator calls
@@ -47,7 +47,7 @@ func TestCollectReportListsOnlyAllowlistedServices(t *testing.T) {
 			},
 		},
 	}
-	config := Config{AccountID: "055929692761", Regions: []string{"us-east-1"}, Services: []string{"iam", "sqs"}}
+	config := Config{AccountID: "111122223333", Regions: []string{"us-east-1"}, Services: []string{"iam", "sqs"}}
 	outcome, err := collector.CollectReport(context.Background(), config)
 	if err != nil {
 		t.Fatalf("CollectReport error = %v", err)
@@ -58,7 +58,7 @@ func TestCollectReportListsOnlyAllowlistedServices(t *testing.T) {
 	if len(outcome.Report.Records) != 2 {
 		t.Fatalf("len(Records) = %d, want 2", len(outcome.Report.Records))
 	}
-	if len(calls) != 2 || !strings.Contains(outcome.Report.Source, "055929692761") {
+	if len(calls) != 2 || !strings.Contains(outcome.Report.Source, "111122223333") {
 		t.Fatalf("calls = %v source = %q, want scoped reads", calls, outcome.Report.Source)
 	}
 }
@@ -79,7 +79,7 @@ func TestCollectReportSkipsGlobalServicesAfterFirstRegion(t *testing.T) {
 			},
 		},
 	}
-	config := Config{AccountID: "055929692761", Regions: []string{"us-east-1", "eu-west-1"}, Services: []string{"iam"}}
+	config := Config{AccountID: "111122223333", Regions: []string{"us-east-1", "eu-west-1"}, Services: []string{"iam"}}
 	if _, err := collector.CollectReport(context.Background(), config); err != nil {
 		t.Fatalf("CollectReport error = %v", err)
 	}
@@ -106,7 +106,7 @@ func TestCollectReportDegradesPartialServiceFailure(t *testing.T) {
 			},
 		},
 	}
-	config := Config{AccountID: "055929692761", Regions: []string{"us-east-1"}, Services: []string{"iam", "sqs"}}
+	config := Config{AccountID: "111122223333", Regions: []string{"us-east-1"}, Services: []string{"iam", "sqs"}}
 	outcome, err := collector.CollectReport(context.Background(), config)
 	if err != nil {
 		t.Fatalf("CollectReport error = %v, want degraded outcome", err)
@@ -127,7 +127,7 @@ func TestCollectReportRetainsOptionalEC2Denial(t *testing.T) {
 				&optionalReadDenied{denials: []optionalDenial{{operation: "DescribeSecurityGroupRules", resource: "region:us-east-1", effect: "security-group-rules-unavailable"}}}
 		}},
 	}
-	outcome, err := reader.CollectReport(context.Background(), Config{AccountID: "055929692761", Regions: []string{"us-east-1"}, Services: []string{"ec2"}})
+	outcome, err := reader.CollectReport(context.Background(), Config{AccountID: "111122223333", Regions: []string{"us-east-1"}, Services: []string{"ec2"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestCollectReportKeepsEmptyOptionalDenial(t *testing.T) {
 			return nil, &optionalReadDenied{denials: []optionalDenial{{operation: "DescribeSecurityGroupRules", resource: "region:us-east-1", effect: "security-group-rules-unavailable"}}}
 		}},
 	}
-	outcome, err := reader.CollectReport(context.Background(), Config{AccountID: "055929692761", Regions: []string{"us-east-1"}, Services: []string{"ec2"}})
+	outcome, err := reader.CollectReport(context.Background(), Config{AccountID: "111122223333", Regions: []string{"us-east-1"}, Services: []string{"ec2"}})
 	if err != nil {
 		t.Fatalf("empty optional denial: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestCollectReportFailsWhenNothingIsReadable(t *testing.T) {
 			},
 		},
 	}
-	config := Config{AccountID: "055929692761", Regions: []string{"us-east-1"}, Services: []string{"sqs"}}
+	config := Config{AccountID: "111122223333", Regions: []string{"us-east-1"}, Services: []string{"sqs"}}
 	if _, err := collector.CollectReport(context.Background(), config); err == nil {
 		t.Fatal("CollectReport error = nil, want failure on total read loss")
 	}
@@ -191,7 +191,7 @@ func TestCollectReportFailsConfigLoad(t *testing.T) {
 		},
 		Loaders: map[string]Loader{},
 	}
-	config := Config{AccountID: "055929692761", Regions: []string{"us-east-1"}, Services: []string{"iam"}}
+	config := Config{AccountID: "111122223333", Regions: []string{"us-east-1"}, Services: []string{"iam"}}
 	if _, err := collector.CollectReport(context.Background(), config); err == nil {
 		t.Fatal("CollectReport error = nil, want config failure")
 	}
@@ -240,7 +240,7 @@ func TestCollectReportRejectsWrongAccountBeforeServiceRead(t *testing.T) {
 			return []collector.Record{record("vpc-123", "ec2", "us-east-1", "tag", "vpc")}, nil
 		}},
 	}
-	_, err := c.CollectReport(context.Background(), Config{AccountID: "055929692761", Regions: []string{"us-east-1"}, Services: []string{"ec2"}})
+	_, err := c.CollectReport(context.Background(), Config{AccountID: "111122223333", Regions: []string{"us-east-1"}, Services: []string{"ec2"}})
 	if err == nil || calls != 0 {
 		t.Fatalf("wrong account err=%v reads=%d, want error before read", err, calls)
 	}
@@ -258,7 +258,7 @@ func TestCollectReportRejectsUnverifiedAccountBeforeServiceRead(t *testing.T) {
 			return nil, nil
 		}},
 	}
-	_, err := c.CollectReport(context.Background(), Config{AccountID: "055929692761", Regions: []string{"us-east-1"}, Services: []string{"ec2"}})
+	_, err := c.CollectReport(context.Background(), Config{AccountID: "111122223333", Regions: []string{"us-east-1"}, Services: []string{"ec2"}})
 	if err == nil || calls != 0 {
 		t.Fatalf("unverified account err=%v reads=%d, want error before read", err, calls)
 	}
@@ -269,14 +269,14 @@ func TestCollectReportRejectsWrongPartitionBeforeServiceRead(t *testing.T) {
 	c := Collector{
 		LoadConfig: fakeConfig(&[]string{}),
 		VerifyIdentity: func(context.Context, aws.Config) (VerifiedIdentity, error) {
-			return VerifiedIdentity{AccountID: "055929692761", Partition: "aws"}, nil
+			return VerifiedIdentity{AccountID: "111122223333", Partition: "aws"}, nil
 		},
 		Loaders: map[string]Loader{"ec2": func(context.Context, aws.Config, VerifiedIdentity) ([]collector.Record, error) {
 			calls++
 			return nil, nil
 		}},
 	}
-	_, err := c.CollectReport(context.Background(), Config{AccountID: "055929692761", Regions: []string{"us-gov-west-1"}, Services: []string{"ec2"}})
+	_, err := c.CollectReport(context.Background(), Config{AccountID: "111122223333", Regions: []string{"us-gov-west-1"}, Services: []string{"ec2"}})
 	if err == nil || calls != 0 {
 		t.Fatalf("wrong partition err=%v reads=%d, want error before read", err, calls)
 	}

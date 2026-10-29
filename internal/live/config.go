@@ -48,7 +48,14 @@ type Config struct {
 	AccountID string
 	Regions   []string
 	Services  []string
-	SourceURI string
+	// RoleARN and ExternalID carry the opt-in cross-account credentials for
+	// the scope: when set, collection assumes the role (STS AssumeRole with
+	// the external ID) instead of reading with ambient credentials. Both
+	// empty means ambient credentials, the historical single-account shape.
+	// A role in any account but the scope account is rejected at parse.
+	RoleARN    string
+	ExternalID string
+	SourceURI  string
 	// PreviousDigest is the host hint; live collection currently ignores it
 	// until typed resources and failed service pairs enter the digest.
 	PreviousDigest string
@@ -111,7 +118,13 @@ func ParseConfig(config map[string]any) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	roleARN, externalID, err := parseCredentials(config, account)
+	if err != nil {
+		return Config{}, err
+	}
 	parsed.AccountID = account
+	parsed.RoleARN = roleARN
+	parsed.ExternalID = externalID
 	parsed.Regions = regions
 	parsed.Services = services
 	parsed.SourceURI = sourceURI
@@ -227,6 +240,97 @@ func scopeSingleton(config map[string]any) map[string]any {
 		return nil
 	}
 	return scope
+}
+
+// credentialScope resolves the scope object that may carry a credentials
+// block: the singleton-list element or a map-shape target_scopes (both are
+// first-class host input per parseAccount). A bare account string has no
+// scope object. A multi-scope list with credentials anywhere fails closed:
+// the role cannot be attributed to one account.
+func credentialScope(config map[string]any) (map[string]any, error) {
+	raw := firstPresent(config, "target_scopes")
+	if raw == nil {
+		if nested, ok := config["source"].(map[string]any); ok {
+			raw = firstPresent(nested, "target_scopes")
+		}
+	}
+	switch value := raw.(type) {
+	case nil:
+		return nil, nil
+	case map[string]any:
+		return value, nil
+	case []any:
+		if len(value) == 1 {
+			scope, ok := value[0].(map[string]any)
+			if !ok {
+				return nil, nil
+			}
+			return scope, nil
+		}
+		// A multi-scope list carrying credentials anywhere fails closed
+		// here too, so the check does not depend on ParseConfig calling
+		// parseAccount first. (Via ParseConfig the account check fires
+		// first; this guards direct callers and reorderings.)
+		for _, entry := range value {
+			if scope, ok := entry.(map[string]any); ok {
+				if _, has := scope["credentials"]; has {
+					return nil, fmt.Errorf("config target_scopes lists %d scopes with credentials: one account per claim", len(value))
+				}
+			}
+		}
+		return nil, nil
+	default:
+		return nil, nil
+	}
+}
+
+// roleARNPattern admits only IAM role ARNs: no user, policy, or
+// instance-profile ARN can smuggle through the credentials block.
+var roleARNPattern = regexp.MustCompile(`^arn:(aws|aws-us-gov):iam::([0-9]{12}):role/(.+)$`)
+
+// parseCredentials resolves the opt-in cross-account block from the singleton
+// scope object (the same level as account_id, mirroring the coordinator's
+// per-scope credentials shape). Absent means ambient credentials. Anything
+// malformed fails closed, including a role in any account but the scope
+// account: the guard pins the assume target to the scope so a copied block
+// can never read a foreign account.
+func parseCredentials(config map[string]any, account string) (string, string, error) {
+	scope, err := credentialScope(config)
+	if err != nil {
+		return "", "", err
+	}
+	if scope == nil {
+		return "", "", nil
+	}
+	raw, ok := scope["credentials"]
+	if !ok || raw == nil {
+		return "", "", nil
+	}
+	creds, ok := raw.(map[string]any)
+	if !ok {
+		return "", "", fmt.Errorf("config target_scopes credentials must be an object")
+	}
+	mode, ok := creds["mode"].(string)
+	if !ok || mode != "central_assume_role" {
+		return "", "", fmt.Errorf("config target_scopes credentials mode %#v is not supported (want central_assume_role)", creds["mode"])
+	}
+	roleARN, ok := creds["role_arn"].(string)
+	if !ok {
+		return "", "", fmt.Errorf("config target_scopes credentials role_arn must be a string")
+	}
+	roleARN = strings.TrimSpace(roleARN)
+	match := roleARNPattern.FindStringSubmatch(roleARN)
+	if match == nil || strings.TrimSpace(match[3]) == "" {
+		return "", "", fmt.Errorf("config target_scopes credentials role_arn %q is not an IAM role ARN", roleARN)
+	}
+	if match[2] != account {
+		return "", "", fmt.Errorf("config target_scopes credentials role_arn account %q does not match scope account %q", match[2], account)
+	}
+	externalID, ok := creds["external_id"].(string)
+	if !ok || strings.TrimSpace(externalID) == "" {
+		return "", "", fmt.Errorf("config target_scopes credentials external_id is required")
+	}
+	return roleARN, strings.TrimSpace(externalID), nil
 }
 
 func firstPresent(config map[string]any, keys ...string) any {

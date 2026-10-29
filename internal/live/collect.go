@@ -39,6 +39,10 @@ type Collector struct {
 	VerifyIdentity func(ctx context.Context, cfg aws.Config) (VerifiedIdentity, error)
 	// Loaders overrides the production service registry; nil selects it.
 	Loaders map[string]Loader
+	// AssumeRole exchanges ambient credentials for the scope role when
+	// Config carries one; nil fails closed on such scopes. Production wires
+	// AssumeScopeRole (STS AssumeRole with the scope external ID).
+	AssumeRole func(ctx context.Context, base aws.Config, roleARN, externalID string) (aws.Config, error)
 	// Now supplies the report timestamp; nil selects time.Now.
 	Now func() time.Time
 }
@@ -99,6 +103,16 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 		if err != nil {
 			return Outcome{}, fmt.Errorf("live %s: %w", region, err)
 		}
+		assumed := config.RoleARN != ""
+		if assumed {
+			if c.AssumeRole == nil {
+				return Outcome{}, fmt.Errorf("live %s: scope carries a role but no assume-role implementation is wired", region)
+			}
+			cfg, err = c.AssumeRole(ctx, cfg, config.RoleARN, config.ExternalID)
+			if err != nil {
+				return Outcome{}, fmt.Errorf("live %s: assume scope role: %w", region, err)
+			}
+		}
 		cfg.Region = region
 		verify := c.VerifyIdentity
 		if verify == nil {
@@ -106,10 +120,10 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 		}
 		identity, err := verify(ctx, cfg)
 		if err != nil || identity.AccountID == "" || identity.Partition == "" {
-			return Outcome{}, fmt.Errorf("live AWS account verification failed for region %s", region)
+			return Outcome{}, verifyError(region, assumed, config.RoleARN, fmt.Errorf("live AWS account verification failed"))
 		}
 		if identity.AccountID != config.AccountID {
-			return Outcome{}, fmt.Errorf("live AWS credentials do not match configured account for region %s", region)
+			return Outcome{}, verifyError(region, assumed, config.RoleARN, fmt.Errorf("live AWS credentials do not match configured account"))
 		}
 		if identity.Partition != partitionForRegion(region) {
 			return Outcome{}, fmt.Errorf("live AWS caller partition does not match configured region %s", region)
