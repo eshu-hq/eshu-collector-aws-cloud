@@ -315,7 +315,11 @@ func listEKS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 						return nil, fmt.Errorf("eks describe addon: %w", err)
 					}
 					if described.Addon != nil {
-						records = append(records, record(aws.ToString(described.Addon.AddonArn), "eks", region, aws.ToString(described.Addon.AddonName), "addon"))
+						row, mapErr := eksAddonRecord(*described.Addon, region)
+						if mapErr != nil {
+							return nil, mapErr
+						}
+						records = append(records, row)
 					}
 				}
 			}
