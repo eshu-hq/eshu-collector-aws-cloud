@@ -301,7 +301,7 @@ func listEKS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 						if mapErr != nil {
 							return nil, mapErr
 						}
-						if edge, ok := eksMembershipRelationship(clusterResource, row.Resource, aws.ToString(described.Nodegroup.ClusterName)); ok {
+						if edge, ok := eksMembershipRelationship(clusterResource, row.Resource, name, aws.ToString(described.Nodegroup.ClusterName)); ok {
 							row.Relationships = append(row.Relationships, edge)
 						}
 						records = append(records, row)
@@ -324,7 +324,7 @@ func listEKS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 						if mapErr != nil {
 							return nil, mapErr
 						}
-						if edge, ok := eksMembershipRelationship(clusterResource, row.Resource, aws.ToString(described.Addon.ClusterName)); ok {
+						if edge, ok := eksMembershipRelationship(clusterResource, row.Resource, name, aws.ToString(described.Addon.ClusterName)); ok {
 							row.Relationships = append(row.Relationships, edge)
 						}
 						records = append(records, row)
