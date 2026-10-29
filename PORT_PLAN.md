@@ -90,7 +90,7 @@ importable only inside this module, satisfying `boundary_test.go`).
    mechanism; its fixture-only synthetic context is not a live grant.
 4. Complete the typed base envelope (`aws_resource`) in claim-bound collection:
    the first EC2 identity slice is wired with fail-closed missing-ID handling
-   and the legacy rule-ID fallback; VPC and subnet observations carry state,
+   and the legacy rule-ID fallback; VPC, subnet, and volume observations carry state,
    tags, and their describe-response attributes. Other EC2 attributes, relationships,
    other services, real host grant proof, and replacement of placeholder
    conformance fixtures remain.

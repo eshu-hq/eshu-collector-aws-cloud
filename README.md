@@ -55,8 +55,9 @@ not production authorization. The host owns grant issuance and rechecks
 emission at runtime. See [PORT_PLAN.md](PORT_PLAN.md).
 
 The typed `aws_resource` envelope is connected to claim-bound live EC2 reads.
-VPC and subnet observations now also carry the legacy scanner's state, tags,
-and API attributes, including CIDR associations. Other EC2 resource types
+VPC, subnet, and volume observations now carry reported state, tags, and
+Describe response attributes, including CIDR associations and volume attachments.
+Other EC2 resource types
 still carry identity and name only; relationships and other fact kinds
 remain unported. This is staged implementation, not a full parity or live
 host admission claim.
