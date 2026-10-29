@@ -296,3 +296,41 @@ func TestCollectReportCarriesSubnetVPCRelationship(t *testing.T) {
 		t.Fatalf("edge = %#v", edge)
 	}
 }
+
+func TestCollectReportCarriesNetworkInterfaceRelationships(t *testing.T) {
+	c := Collector{
+		LoadConfig: fakeConfig(&[]string{}), VerifyIdentity: func(context.Context, aws.Config) (VerifiedIdentity, error) {
+			return VerifiedIdentity{AccountID: "123456789012", Partition: "aws"}, nil
+		},
+		Loaders: map[string]Loader{"ec2": func(_ context.Context, _ aws.Config, identity VerifiedIdentity) ([]collector.Record, error) {
+			return []collector.Record{networkInterfaceRecord(ec2types.NetworkInterface{
+				NetworkInterfaceId: aws.String("eni-123"), SubnetId: aws.String("subnet-123"),
+				VpcId: aws.String("vpc-123"), Groups: []ec2types.GroupIdentifier{{GroupId: aws.String("sg-123")}},
+				Attachment: &ec2types.NetworkInterfaceAttachment{InstanceId: aws.String("i-123")},
+			}, "us-east-1", identity)}, nil
+		}},
+	}
+	outcome, err := c.CollectReport(context.Background(), Config{
+		AccountID: "123456789012", Regions: []string{"us-east-1"}, Services: []string{"ec2"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outcome.Relationships) != 4 || len(outcome.Resources) != 1 {
+		t.Fatalf("network interface typed observations = %#v / %#v", outcome.Relationships, outcome.Resources)
+	}
+	for _, edge := range outcome.Relationships {
+		if edge.Boundary.AccountID != "123456789012" || edge.Boundary.Region != "us-east-1" || edge.Boundary.ServiceKind != "ec2" || edge.SourceResourceID != "eni-123" {
+			t.Fatalf("unbound network interface edge = %#v", edge)
+		}
+		edge.Boundary.ScopeID = "scope-123"
+		edge.Boundary.GenerationID = "generation-123"
+		edge.Boundary.CollectorInstanceID = "collector-123"
+		edge.Boundary.ClaimToken = "opaque-claim-token"
+		edge.SourceURI = "aws://123456789012"
+		fact, err := collector.NewRelationshipFact(edge)
+		if err != nil || fact.Kind != collector.AWSKindRelationship {
+			t.Fatalf("network interface edge rejected by typed boundary: %#v, %v", fact, err)
+		}
+	}
+}
