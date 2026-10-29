@@ -91,39 +91,49 @@ func (r *eksOIDCReader) enrich(ctx context.Context, row *collector.Record, clust
 		return nil, err
 	}
 	if r.denial != nil {
-		return nil, nil
+		return eksOIDCProviderRow(row, issuer, eksIAMProvider{}), nil
 	}
 	for _, provider := range r.providers {
 		if normalizeEKSOIDCIssuer(provider.issuer) != normalizeEKSOIDCIssuer(issuer) &&
 			normalizeEKSOIDCIssuer(strings.TrimPrefix(provider.arn, "arn:"+identity.Partition+":iam::"+identity.AccountID+":oidc-provider/")) != normalizeEKSOIDCIssuer(issuer) {
 			continue
 		}
-		row.Resource.Attributes["oidc_provider"] = map[string]any{
-			"arn": provider.arn, "client_ids": append([]string(nil), provider.clientIDs...),
-			"issuer_url": issuer, "thumbprints": append([]string(nil), provider.thumbprints...),
-		}
-		resource := collector.LiveResource{
-			Region: r.cfg.Region, ServiceKind: "eks", ResourceType: "aws_eks_oidc_provider",
-			ResourceID: provider.arn, ARN: provider.arn, Name: issuer,
-			Attributes: map[string]any{
-				"cluster_arn": row.Resource.ARN, "cluster_name": row.Resource.Name,
-				"client_ids": append([]string(nil), provider.clientIDs...),
-				"issuer_url": issuer, "thumbprints": append([]string(nil), provider.thumbprints...),
-			},
-			CorrelationAnchors: []string{provider.arn, issuer, row.Resource.Name}, SourceRecordID: provider.arn,
-		}
-		row.Relationships = append(row.Relationships, collector.LiveRelationship{
-			Region: r.cfg.Region, ServiceKind: "eks", RelationshipType: "eks_cluster_has_oidc_provider",
-			SourceResourceID: row.Resource.ResourceID, SourceARN: row.Resource.ARN,
-			TargetResourceID: provider.arn, TargetARN: provider.arn, TargetType: resource.ResourceType,
-			Attributes:     map[string]any{"issuer_url": issuer},
-			SourceRecordID: row.Resource.ResourceID + "#oidc-provider#" + provider.arn,
-		})
-		providerRow := record(provider.arn, "eks", r.cfg.Region, issuer, "oidc-provider")
-		providerRow.Resource = &resource
-		return &providerRow, nil
+		return eksOIDCProviderRow(row, issuer, provider), nil
 	}
-	return nil, nil
+	return eksOIDCProviderRow(row, issuer, eksIAMProvider{}), nil
+}
+
+// eksOIDCProviderRow retains the EKS-reported issuer even when IAM has no
+// matching provider evidence. An IAM ARN is asserted only after a match.
+func eksOIDCProviderRow(cluster *collector.Record, issuer string, provider eksIAMProvider) *collector.Record {
+	providerID := provider.arn
+	if providerID == "" {
+		providerID = issuer
+	}
+	cluster.Resource.Attributes["oidc_provider"] = map[string]any{
+		"arn": provider.arn, "client_ids": append([]string(nil), provider.clientIDs...),
+		"issuer_url": issuer, "thumbprints": append([]string(nil), provider.thumbprints...),
+	}
+	resource := collector.LiveResource{
+		Region: cluster.Resource.Region, ServiceKind: "eks", ResourceType: "aws_eks_oidc_provider",
+		ResourceID: providerID, ARN: provider.arn, Name: issuer,
+		Attributes: map[string]any{
+			"cluster_arn": cluster.Resource.ARN, "cluster_name": cluster.Resource.Name,
+			"client_ids": append([]string(nil), provider.clientIDs...),
+			"issuer_url": issuer, "thumbprints": append([]string(nil), provider.thumbprints...),
+		},
+		CorrelationAnchors: []string{providerID, issuer, cluster.Resource.Name}, SourceRecordID: providerID,
+	}
+	cluster.Relationships = append(cluster.Relationships, collector.LiveRelationship{
+		Region: cluster.Resource.Region, ServiceKind: "eks", RelationshipType: "eks_cluster_has_oidc_provider",
+		SourceResourceID: cluster.Resource.ResourceID, SourceARN: cluster.Resource.ARN,
+		TargetResourceID: providerID, TargetARN: provider.arn, TargetType: resource.ResourceType,
+		Attributes:     map[string]any{"issuer_url": issuer},
+		SourceRecordID: cluster.Resource.ResourceID + "#oidc-provider#" + providerID,
+	})
+	row := record(providerID, "eks", cluster.Resource.Region, issuer, "oidc-provider")
+	row.Resource = &resource
+	return &row
 }
 
 func normalizeEKSOIDCIssuer(issuer string) string {
