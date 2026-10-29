@@ -14,6 +14,8 @@ import (
 	rdstypes "github.com/aws/aws-sdk-go-v2/service/rds/types"
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 	sdk "github.com/eshu-hq/eshu-sdk/collector"
+	"github.com/eshu-hq/eshu-sdk/collector/conformance"
+	"github.com/eshu-hq/eshu-sdk/factschema/fixturepack"
 )
 
 func TestRDSPosturePreservesLegacyDescribeMetadata(t *testing.T) {
@@ -56,6 +58,21 @@ func TestRDSPosturePreservesLegacyDescribeMetadata(t *testing.T) {
 	if fact.Kind != collector.AWSKindRDSInstancePosture || fact.SourceRef.RecordID != row.Resource.ResourceID || fact.Payload["publicly_accessible"] != true || fact.Payload["backup_retention_period"] != int32(7) || fact.Payload["ca_certificate_identifier"] != "rds-ca-rsa2048-g1" {
 		t.Fatalf("instance posture fact = %#v", fact)
 	}
+	for key, want := range map[string]any{
+		"account_id": "123456789012", "region": "us-east-1", "resource_type": "aws_rds_db_instance",
+		"resource_id": row.Resource.ResourceID, "identifier": "sample", "engine": "postgres",
+		"storage_encrypted": true, "kms_key_id": "arn:aws:kms:us-east-1:123456789012:key/k1",
+		"iam_database_authentication_enabled": true, "multi_az": true, "deletion_protection": true,
+		"performance_insights_enabled": true, "performance_insights_retention_days": int32(14),
+		"performance_insights_kms_key_id": "arn:aws:kms:us-east-1:123456789012:key/pi",
+	} {
+		if got := fact.Payload[key]; got != want {
+			t.Fatalf("RDS payload %s = %#v, want %#v", key, got, want)
+		}
+	}
+	if fact.SourceRef.ScopeID != "scope" || fact.SourceRef.GenerationID != "generation" || fact.SourceRef.FactKey != fact.StableKey || fact.SourceRef.URI != "aws://123456789012" {
+		t.Fatalf("RDS posture provenance = %#v", fact.SourceRef)
+	}
 	encoded, err := json.Marshal(fact.Payload)
 	if err != nil {
 		t.Fatal(err)
@@ -79,6 +96,32 @@ func TestRDSPosturePreservesLegacyDescribeMetadata(t *testing.T) {
 	}
 	if clusterRow.RDSPosture.PubliclyAccessible || clusterRow.RDSPosture.BackupRetentionPeriod != 0 || len(clusterRow.RDSPosture.OptionGroups) != 0 {
 		t.Fatalf("missing cluster pointers did not follow legacy zero semantics: %#v", clusterRow.RDSPosture)
+	}
+	clusterPosture := *clusterRow.RDSPosture
+	clusterPosture.Boundary = posture.Boundary
+	clusterPosture.SourceURI = posture.SourceURI
+	clusterFact, err := collector.NewRDSPostureFact(clusterPosture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, ok := fixturepack.SchemaFor("rds_instance_posture")
+	if !ok {
+		t.Fatal("pinned fixture pack lacks RDS posture schema")
+	}
+	if err := conformance.ValidatePayloadSchemas(map[string]json.RawMessage{collector.AWSKindRDSInstancePosture: schema}, sdk.Result{Facts: []sdk.Fact{fact, clusterFact}}); err != nil {
+		t.Fatalf("emitted RDS posture payloads violate pinned schema: %v", err)
+	}
+	if clusterFact.StableKey == fact.StableKey || clusterFact.Payload["resource_type"] != "aws_rds_db_cluster" || clusterFact.Payload["parameter_groups"] == nil || clusterFact.Payload["backup_retention_period"] != int32(0) {
+		t.Fatalf("cluster posture payload = %#v", clusterFact)
+	}
+	clusterEncoded, err := json.Marshal(clusterFact.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{"writer.example", "reader.example", "cluster-secret-user", "cluster-private-database", "security_parameters"} {
+		if strings.Contains(string(clusterEncoded), forbidden) {
+			t.Fatalf("cluster posture leaked %q: %s", forbidden, clusterEncoded)
+		}
 	}
 	group := rdsSubnetGroupRecord(rdstypes.DBSubnetGroup{DBSubnetGroupArn: aws.String("arn:aws:rds:us-east-1:123456789012:subgrp:sample"), DBSubnetGroupName: aws.String("sample"), SubnetGroupStatus: aws.String("Complete")}, "us-east-1")
 	if group.Resource == nil || group.Resource.ResourceType != "aws_rds_db_subnet_group" || group.RDSPosture != nil {
