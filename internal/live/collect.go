@@ -16,9 +16,16 @@ import (
 )
 
 // Loader lists one service's resources in one region as report records. It
-// receives the region-scoped AWS config the Collector loads; fakes replace
+// receives the region-scoped AWS config and verified caller identity; fakes replace
 // the registry entry in tests so collection proves out without a network.
-type Loader func(ctx context.Context, cfg aws.Config) ([]collector.Record, error)
+type Loader func(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]collector.Record, error)
+
+// VerifiedIdentity is the account and AWS partition returned by STS for the
+// credentials used to read a claim. The partition comes from the caller ARN.
+type VerifiedIdentity struct {
+	AccountID string
+	Partition string
+}
 
 // Collector runs one live claim. The zero value is usable: it loads ambient
 // AWS config per region and calls the production service loaders, so tests
@@ -27,8 +34,8 @@ type Collector struct {
 	// LoadConfig resolves region-scoped AWS config; nil selects the ambient
 	// production chain (IRSA, ECS/EKS role, instance profile, environment).
 	LoadConfig func(ctx context.Context, region string) (aws.Config, error)
-	// VerifyAccount resolves the active credentials account; nil calls STS.
-	VerifyAccount func(ctx context.Context, cfg aws.Config) (string, error)
+	// VerifyIdentity resolves the active credentials account and partition; nil calls STS.
+	VerifyIdentity func(ctx context.Context, cfg aws.Config) (VerifiedIdentity, error)
 	// Loaders overrides the production service registry; nil selects it.
 	Loaders map[string]Loader
 	// Now supplies the report timestamp; nil selects time.Now.
@@ -83,16 +90,19 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 			return Outcome{}, fmt.Errorf("live %s: %w", region, err)
 		}
 		cfg.Region = region
-		verify := c.VerifyAccount
+		verify := c.VerifyIdentity
 		if verify == nil {
-			verify = callerAccount
+			verify = callerIdentity
 		}
-		account, err := verify(ctx, cfg)
-		if err != nil || account == "" {
+		identity, err := verify(ctx, cfg)
+		if err != nil || identity.AccountID == "" || identity.Partition == "" {
 			return Outcome{}, fmt.Errorf("live AWS account verification failed for region %s", region)
 		}
-		if account != config.AccountID {
+		if identity.AccountID != config.AccountID {
 			return Outcome{}, fmt.Errorf("live AWS credentials do not match configured account for region %s", region)
+		}
+		if identity.Partition != partitionForRegion(region) {
+			return Outcome{}, fmt.Errorf("live AWS caller partition does not match configured region %s", region)
 		}
 		for _, service := range config.Services {
 			if i > 0 && globalServices[service] {
@@ -102,7 +112,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 			if !ok {
 				return Outcome{}, fmt.Errorf("live service %q has no loader", service)
 			}
-			listed, err := load(ctx, cfg)
+			listed, err := load(ctx, cfg, identity)
 			if err != nil {
 				warnings = append(warnings, fmt.Sprintf("%s/%s: %s", service, region, firstLine(err.Error())))
 				continue
@@ -185,14 +195,34 @@ func firstLine(message string) string {
 	return message
 }
 
-// callerAccount verifies the account of the actual credentials used by service clients.
-func callerAccount(ctx context.Context, cfg aws.Config) (string, error) {
+// callerIdentity verifies the account and partition of the credentials used by service clients.
+func callerIdentity(ctx context.Context, cfg aws.Config) (VerifiedIdentity, error) {
 	output, err := sts.NewFromConfig(cfg).GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
 	if err != nil {
-		return "", err
+		return VerifiedIdentity{}, err
 	}
 	if output == nil {
-		return "", fmt.Errorf("STS returned no caller identity")
+		return VerifiedIdentity{}, fmt.Errorf("STS returned no caller identity")
 	}
-	return aws.ToString(output.Account), nil
+	return identityFromCaller(aws.ToString(output.Account), aws.ToString(output.Arn))
+}
+
+func identityFromCaller(accountID, callerARN string) (VerifiedIdentity, error) {
+	accountID = strings.TrimSpace(accountID)
+	parts := strings.SplitN(strings.TrimSpace(callerARN), ":", 6)
+	if !accountPattern.MatchString(accountID) || len(parts) != 6 || parts[0] != "arn" || parts[4] != accountID || parts[1] == "" {
+		return VerifiedIdentity{}, fmt.Errorf("STS returned an invalid caller identity")
+	}
+	return VerifiedIdentity{AccountID: accountID, Partition: parts[1]}, nil
+}
+
+func partitionForRegion(region string) string {
+	switch {
+	case strings.HasPrefix(region, "us-gov-"):
+		return "aws-us-gov"
+	case strings.HasPrefix(region, "cn-"):
+		return "aws-cn"
+	default:
+		return "aws"
+	}
 }

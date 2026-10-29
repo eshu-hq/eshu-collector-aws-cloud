@@ -61,6 +61,9 @@ state and the launch AMI ID from the same `DescribeInstances` response. Other
 EC2 resource types still carry identity and name only; relationships and other
 fact kinds remain unported. This is staged implementation, not a full parity
 or live host admission claim.
+Instance ARNs use the account and partition verified by STS before EC2 reads;
+the partition must match the configured region, or the claim fails before a
+service read.
 Sensitive-shaped resource attribute keys fail closed.
 See [PORT_PLAN.md](PORT_PLAN.md#resource-envelope-seam-status) for the
 remaining redaction and host-grant boundary.

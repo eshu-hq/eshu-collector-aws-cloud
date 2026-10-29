@@ -13,13 +13,14 @@ import (
 
 // instanceRecord retains the identity observation reported by the legacy EC2
 // scanner from DescribeInstances. Instance posture is a separate fact kind.
-func instanceRecord(instance ec2types.Instance, region string) collector.Record {
+func instanceRecord(instance ec2types.Instance, region string, identity VerifiedIdentity) collector.Record {
 	id := strings.TrimSpace(aws.ToString(instance.InstanceId))
 	result := record(id, "ec2", region, ec2Name(instance.Tags, id), "instance")
 	if result.Resource == nil {
 		return result
 	}
 	resource := result.Resource
+	resource.ARN = "arn:" + identity.Partition + ":ec2:" + region + ":" + identity.AccountID + ":instance/" + id
 	if instance.State != nil {
 		resource.State = strings.TrimSpace(string(instance.State.Name))
 	}

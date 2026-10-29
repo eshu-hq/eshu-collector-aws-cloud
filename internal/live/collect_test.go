@@ -20,8 +20,8 @@ func fakeConfig(regions *[]string) func(context.Context, string) (aws.Config, er
 	}
 }
 
-func verifiedAccount(_ context.Context, _ aws.Config) (string, error) {
-	return "055929692761", nil
+func verifiedIdentity(_ context.Context, _ aws.Config) (VerifiedIdentity, error) {
+	return VerifiedIdentity{AccountID: "055929692761", Partition: "aws"}, nil
 }
 
 // TestCollectReportListsOnlyAllowlistedServices proves the orchestrator calls
@@ -33,14 +33,14 @@ func TestCollectReportListsOnlyAllowlistedServices(t *testing.T) {
 	var regions []string
 	calls := map[string]int{}
 	collector := Collector{
-		LoadConfig:    fakeConfig(&regions),
-		VerifyAccount: verifiedAccount,
+		LoadConfig:     fakeConfig(&regions),
+		VerifyIdentity: verifiedIdentity,
 		Loaders: map[string]Loader{
-			"iam": func(_ context.Context, cfg aws.Config) ([]collector.Record, error) {
+			"iam": func(_ context.Context, cfg aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
 				calls["iam/"+cfg.Region]++
 				return []collector.Record{{ID: "arn:role", Name: "role", Detail: "d"}}, nil
 			},
-			"sqs": func(_ context.Context, cfg aws.Config) ([]collector.Record, error) {
+			"sqs": func(_ context.Context, cfg aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
 				calls["sqs/"+cfg.Region]++
 				return []collector.Record{{ID: "url", Name: "queue", Detail: "d"}}, nil
 			},
@@ -69,10 +69,10 @@ func TestCollectReportSkipsGlobalServicesAfterFirstRegion(t *testing.T) {
 
 	calls := 0
 	collector := Collector{
-		LoadConfig:    fakeConfig(&[]string{}),
-		VerifyAccount: verifiedAccount,
+		LoadConfig:     fakeConfig(&[]string{}),
+		VerifyIdentity: verifiedIdentity,
 		Loaders: map[string]Loader{
-			"iam": func(_ context.Context, _ aws.Config) ([]collector.Record, error) {
+			"iam": func(_ context.Context, _ aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
 				calls++
 				return []collector.Record{{ID: "arn:role", Name: "role"}}, nil
 			},
@@ -94,13 +94,13 @@ func TestCollectReportDegradesPartialServiceFailure(t *testing.T) {
 	t.Parallel()
 
 	collector := Collector{
-		LoadConfig:    fakeConfig(&[]string{}),
-		VerifyAccount: verifiedAccount,
+		LoadConfig:     fakeConfig(&[]string{}),
+		VerifyIdentity: verifiedIdentity,
 		Loaders: map[string]Loader{
-			"iam": func(_ context.Context, _ aws.Config) ([]collector.Record, error) {
+			"iam": func(_ context.Context, _ aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
 				return []collector.Record{{ID: "arn:role", Name: "role"}}, nil
 			},
-			"sqs": func(_ context.Context, _ aws.Config) ([]collector.Record, error) {
+			"sqs": func(_ context.Context, _ aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
 				return nil, errors.New("AccessDenied: GetAttribution is denied")
 			},
 		},
@@ -125,10 +125,10 @@ func TestCollectReportFailsWhenNothingIsReadable(t *testing.T) {
 	t.Parallel()
 
 	collector := Collector{
-		LoadConfig:    fakeConfig(&[]string{}),
-		VerifyAccount: verifiedAccount,
+		LoadConfig:     fakeConfig(&[]string{}),
+		VerifyIdentity: verifiedIdentity,
 		Loaders: map[string]Loader{
-			"sqs": func(_ context.Context, _ aws.Config) ([]collector.Record, error) {
+			"sqs": func(_ context.Context, _ aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
 				return nil, errors.New("AccessDenied")
 			},
 		},
@@ -145,7 +145,7 @@ func TestCollectReportFailsConfigLoad(t *testing.T) {
 	t.Parallel()
 
 	collector := Collector{
-		VerifyAccount: verifiedAccount,
+		VerifyIdentity: verifiedIdentity,
 		LoadConfig: func(_ context.Context, _ string) (aws.Config, error) {
 			return aws.Config{}, errors.New("no credentials")
 		},
@@ -159,10 +159,12 @@ func TestCollectReportFailsConfigLoad(t *testing.T) {
 
 func TestCollectReportRetainsTypedEC2SourceIdentity(t *testing.T) {
 	collector := Collector{
-		LoadConfig:    fakeConfig(&[]string{}),
-		VerifyAccount: func(context.Context, aws.Config) (string, error) { return "123456789012", nil },
+		LoadConfig: fakeConfig(&[]string{}),
+		VerifyIdentity: func(context.Context, aws.Config) (VerifiedIdentity, error) {
+			return VerifiedIdentity{AccountID: "123456789012", Partition: "aws"}, nil
+		},
 		Loaders: map[string]Loader{
-			"ec2": func(_ context.Context, cfg aws.Config) ([]collector.Record, error) {
+			"ec2": func(_ context.Context, cfg aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
 				return []collector.Record{
 					record("vpc-123", "ec2", cfg.Region, "test", "vpc"),
 					record("", "ec2", cfg.Region, "missing", "vpc"),
@@ -189,9 +191,11 @@ func TestCollectReportRetainsTypedEC2SourceIdentity(t *testing.T) {
 func TestCollectReportRejectsWrongAccountBeforeServiceRead(t *testing.T) {
 	calls := 0
 	c := Collector{
-		LoadConfig:    fakeConfig(&[]string{}),
-		VerifyAccount: func(context.Context, aws.Config) (string, error) { return "999999999999", nil },
-		Loaders: map[string]Loader{"ec2": func(context.Context, aws.Config) ([]collector.Record, error) {
+		LoadConfig: fakeConfig(&[]string{}),
+		VerifyIdentity: func(context.Context, aws.Config) (VerifiedIdentity, error) {
+			return VerifiedIdentity{AccountID: "999999999999", Partition: "aws"}, nil
+		},
+		Loaders: map[string]Loader{"ec2": func(context.Context, aws.Config, VerifiedIdentity) ([]collector.Record, error) {
 			calls++
 			return []collector.Record{record("vpc-123", "ec2", "us-east-1", "tag", "vpc")}, nil
 		}},
@@ -205,9 +209,11 @@ func TestCollectReportRejectsWrongAccountBeforeServiceRead(t *testing.T) {
 func TestCollectReportRejectsUnverifiedAccountBeforeServiceRead(t *testing.T) {
 	calls := 0
 	c := Collector{
-		LoadConfig:    fakeConfig(&[]string{}),
-		VerifyAccount: func(context.Context, aws.Config) (string, error) { return "", errors.New("denied") },
-		Loaders: map[string]Loader{"ec2": func(context.Context, aws.Config) ([]collector.Record, error) {
+		LoadConfig: fakeConfig(&[]string{}),
+		VerifyIdentity: func(context.Context, aws.Config) (VerifiedIdentity, error) {
+			return VerifiedIdentity{}, errors.New("denied")
+		},
+		Loaders: map[string]Loader{"ec2": func(context.Context, aws.Config, VerifiedIdentity) ([]collector.Record, error) {
 			calls++
 			return nil, nil
 		}},
@@ -215,6 +221,34 @@ func TestCollectReportRejectsUnverifiedAccountBeforeServiceRead(t *testing.T) {
 	_, err := c.CollectReport(context.Background(), Config{AccountID: "055929692761", Regions: []string{"us-east-1"}, Services: []string{"ec2"}})
 	if err == nil || calls != 0 {
 		t.Fatalf("unverified account err=%v reads=%d, want error before read", err, calls)
+	}
+}
+
+func TestCollectReportRejectsWrongPartitionBeforeServiceRead(t *testing.T) {
+	calls := 0
+	c := Collector{
+		LoadConfig: fakeConfig(&[]string{}),
+		VerifyIdentity: func(context.Context, aws.Config) (VerifiedIdentity, error) {
+			return VerifiedIdentity{AccountID: "055929692761", Partition: "aws"}, nil
+		},
+		Loaders: map[string]Loader{"ec2": func(context.Context, aws.Config, VerifiedIdentity) ([]collector.Record, error) {
+			calls++
+			return nil, nil
+		}},
+	}
+	_, err := c.CollectReport(context.Background(), Config{AccountID: "055929692761", Regions: []string{"us-gov-west-1"}, Services: []string{"ec2"}})
+	if err == nil || calls != 0 {
+		t.Fatalf("wrong partition err=%v reads=%d, want error before read", err, calls)
+	}
+}
+
+func TestIdentityFromCallerValidatesAccountAndARN(t *testing.T) {
+	identity, err := identityFromCaller("123456789012", "arn:aws-us-gov:sts::123456789012:assumed-role/read/session")
+	if err != nil || identity != (VerifiedIdentity{AccountID: "123456789012", Partition: "aws-us-gov"}) {
+		t.Fatalf("caller identity = %+v, %v", identity, err)
+	}
+	if _, err := identityFromCaller("123456789012", "arn:aws:sts::999999999999:assumed-role/read/session"); err == nil {
+		t.Fatal("mismatched STS ARN account accepted")
 	}
 }
 

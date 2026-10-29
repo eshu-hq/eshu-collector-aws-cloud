@@ -92,7 +92,8 @@ importable only inside this module, satisfying `boundary_test.go`).
    the first EC2 identity slice is wired with fail-closed missing-ID handling
    and the legacy rule-ID fallback; VPC and subnet observations carry state,
    tags, and their describe-response attributes. Instance identity observations
-   carry state and launch AMI ID. Other EC2 attributes, relationships,
+   carry state, launch AMI ID, and an ARN from the verified STS account and
+   partition. Other EC2 attributes, relationships,
    other services, real host grant proof, and replacement of placeholder
    conformance fixtures remain.
 5. Remaining envelopes kind by kind; delete transitional kinds last.

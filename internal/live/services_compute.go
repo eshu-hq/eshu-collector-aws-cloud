@@ -22,9 +22,12 @@ import (
 // listEC2 mirrors the in-tree ec2 scanner's read surface (VPCs, subnets,
 // security groups and rules, network interfaces, instances, volumes) as
 // metadata-only records. Instance user data and volume contents stay unread.
-func listEC2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
+func listEC2(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]collector.Record, error) {
 	client := awsec2.NewFromConfig(cfg)
 	region := cfg.Region
+	if !accountPattern.MatchString(identity.AccountID) || identity.Partition != partitionForRegion(region) {
+		return nil, fmt.Errorf("ec2 read requires verified account and region partition")
+	}
 	records := []collector.Record{}
 
 	vpcs := awsec2.NewDescribeVpcsPaginator(client, &awsec2.DescribeVpcsInput{})
@@ -108,7 +111,7 @@ func listEC2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 		}
 		for _, reservation := range page.Reservations {
 			for _, instance := range reservation.Instances {
-				records, err = appendEC2Record(records, instanceRecord(instance, region))
+				records, err = appendEC2Record(records, instanceRecord(instance, region, identity))
 				if err != nil {
 					return nil, err
 				}

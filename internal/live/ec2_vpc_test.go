@@ -45,9 +45,11 @@ func TestVPCRecordRetainsLegacyObservation(t *testing.T) {
 		LoadConfig: func(_ context.Context, region string) (aws.Config, error) {
 			return aws.Config{Region: region}, nil
 		},
-		VerifyAccount: func(context.Context, aws.Config) (string, error) { return "123456789012", nil },
+		VerifyIdentity: func(context.Context, aws.Config) (VerifiedIdentity, error) {
+			return VerifiedIdentity{AccountID: "123456789012", Partition: "aws"}, nil
+		},
 		Loaders: map[string]Loader{
-			"ec2": func(context.Context, aws.Config) ([]collector.Record, error) {
+			"ec2": func(context.Context, aws.Config, VerifiedIdentity) ([]collector.Record, error) {
 				return []collector.Record{got}, nil
 			},
 		},
