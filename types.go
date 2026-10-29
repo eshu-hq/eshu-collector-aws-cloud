@@ -39,6 +39,17 @@ type ResourceObservation struct {
 	SourceRecordID     string
 }
 
+// S3BucketPostureObservation carries only reported replication presence for a bucket.
+// Nil means the control-plane response did not establish presence or absence.
+type S3BucketPostureObservation struct {
+	Boundary           Boundary
+	BucketARN          string
+	BucketName         string
+	ReplicationEnabled *bool
+	SourceURI          string
+	SourceRecordID     string
+}
+
 // RelationshipObservation describes one relationship reported by AWS APIs.
 type RelationshipObservation struct {
 	Boundary         Boundary
