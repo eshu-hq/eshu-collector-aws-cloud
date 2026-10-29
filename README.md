@@ -53,11 +53,12 @@ GetBucketVersioning and GetPublicAccessBlock add the reported bucket-level
 versioning and public-access settings. An absent public-access-block
 configuration leaves its four flags unknown. These reads require the
 corresponding S3 permissions; their live cost and access are not yet verified.
-The explicit missing-configuration response means a known empty configuration.
-AccessDenied leaves those attributes absent, retains the bucket, emits a typed
-warning for that bucket, and makes the SDK result partial. Other S3 errors
-fail the S3 read; the overall claim can still be partial when another service
-returns evidence. Bucket posture remains unported. ECS
+For encryption, the explicit missing-configuration response means a known
+empty configuration. Encryption AccessDenied leaves those attributes absent,
+retains the bucket, emits a typed warning, and makes the SDK result partial.
+Versioning and public-access-block denials fail the S3 read; the overall claim
+can still be partial when another service returns evidence. The separate
+`s3_bucket_posture` fact remains unported. ECS
 DescribeClusters emits cluster identity, tags, status, and
 reported counts. DescribeServices emits service identity, tags, status, counts,
 task-definition binding, and load-balancer metadata. DescribeTasks emits
