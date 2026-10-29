@@ -302,6 +302,9 @@ func parseCredentials(config map[string]any, account string) (string, string, er
 	if scope == nil {
 		return "", "", nil
 	}
+	if _, stale := scope["credentials"]; stale {
+		return "", "", fmt.Errorf("config target_scopes credentials was renamed to assume_role")
+	}
 	raw, ok := scope["assume_role"]
 	if !ok || raw == nil {
 		return "", "", nil

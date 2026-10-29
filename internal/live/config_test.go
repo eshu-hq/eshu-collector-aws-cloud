@@ -161,6 +161,13 @@ func TestParseConfigReadsMapShapeCredentials(t *testing.T) {
 	if _, err := credentialScope(multiScopes); err == nil {
 		t.Fatal("credentialScope(multi-scope credentials) error = nil, want fail-closed")
 	}
+	// The retired credentials key must error, never silently fall back to
+	// ambient reads.
+	stale := hostConfig()
+	stale["target_scopes"] = []any{map[string]any{"account_id": "111122223333", "credentials": creds}}
+	if _, err := ParseConfig(stale); err == nil {
+		t.Fatal("ParseConfig(retired credentials key) error = nil, want explicit rename error")
+	}
 }
 
 // TestParseConfigAcceptsScopeVariants proves liberal scope shapes: a bare
