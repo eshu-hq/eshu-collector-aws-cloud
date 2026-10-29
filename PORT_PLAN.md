@@ -94,7 +94,8 @@ importable only inside this module, satisfying `boundary_test.go`).
    tags, and their describe-response attributes. Instance identity observations
    carry state, launch AMI ID, and an ARN from the verified STS account and
    partition. Security group rules carry the existing fallback identity,
-   metadata attributes, tags, and rule/group anchors. Other EC2 attributes,
+   metadata attributes, tags, and rule/group anchors. Network interfaces carry
+   status, tags, attachment, address, and security-group metadata. Other EC2 attributes,
    relationships, other services, real host grant proof, and replacement of placeholder
    conformance fixtures remain.
 5. Remaining envelopes kind by kind; delete transitional kinds last.

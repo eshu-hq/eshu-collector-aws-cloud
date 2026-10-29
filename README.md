@@ -59,8 +59,10 @@ VPC and subnet observations carry the legacy scanner's state, tags, and API
 attributes, including CIDR associations. Instance identity observations carry
 state and the launch AMI ID from the same `DescribeInstances` response.
 Security group rule observations carry the legacy rule metadata, tags, and
-rule and group correlation anchors. Other EC2 resource types still carry
-identity and name only; relationships and other fact kinds remain unported.
+rule and group correlation anchors. Network interface observations carry
+status, tags, and metadata for attachments, addresses, and security groups.
+Other EC2 resource types still carry identity and name only; relationships
+and other fact kinds remain unported.
 This is staged implementation, not a full parity or live host admission claim.
 Instance ARNs use the account and partition verified by STS before EC2 reads;
 the partition must match the configured region, or the claim fails before a

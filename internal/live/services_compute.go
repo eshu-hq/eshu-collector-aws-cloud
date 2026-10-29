@@ -97,7 +97,7 @@ func listEC2(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]
 			return nil, fmt.Errorf("ec2 describe network interfaces: %w", err)
 		}
 		for _, iface := range page.NetworkInterfaces {
-			records, err = appendEC2Record(records, record(aws.ToString(iface.NetworkInterfaceId), "ec2", region, aws.ToString(iface.NetworkInterfaceId), "network-interface"))
+			records, err = appendEC2Record(records, networkInterfaceRecord(iface, region, identity))
 			if err != nil {
 				return nil, err
 			}
