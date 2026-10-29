@@ -24,6 +24,8 @@ type s3BucketDetailsAPI interface {
 	GetBucketEncryption(context.Context, *awss3.GetBucketEncryptionInput, ...func(*awss3.Options)) (*awss3.GetBucketEncryptionOutput, error)
 	GetBucketVersioning(context.Context, *awss3.GetBucketVersioningInput, ...func(*awss3.Options)) (*awss3.GetBucketVersioningOutput, error)
 	GetPublicAccessBlock(context.Context, *awss3.GetPublicAccessBlockInput, ...func(*awss3.Options)) (*awss3.GetPublicAccessBlockOutput, error)
+	GetBucketPolicyStatus(context.Context, *awss3.GetBucketPolicyStatusInput, ...func(*awss3.Options)) (*awss3.GetBucketPolicyStatusOutput, error)
+	GetBucketOwnershipControls(context.Context, *awss3.GetBucketOwnershipControlsInput, ...func(*awss3.Options)) (*awss3.GetBucketOwnershipControlsOutput, error)
 }
 
 // readS3BucketPosture returns only reported bucket-level settings. An absent

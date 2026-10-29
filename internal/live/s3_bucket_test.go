@@ -25,16 +25,22 @@ type fakeS3BucketDetails struct {
 	encryption      *awss3.GetBucketEncryptionOutput
 	versioning      *awss3.GetBucketVersioningOutput
 	publicAccess    *awss3.GetPublicAccessBlockOutput
+	policyStatus    *awss3.GetBucketPolicyStatusOutput
+	ownership       *awss3.GetBucketOwnershipControlsOutput
 	headErr         error
 	tagsErr         error
 	encryptionErr   error
 	versioningErr   error
 	publicAccessErr error
+	policyErr       error
+	ownershipErr    error
 	headOwner       string
 	tagOwner        string
 	encryptionOwner string
 	versioningOwner string
 	publicOwner     string
+	policyOwner     string
+	ownershipOwner  string
 }
 
 func (f *fakeS3BucketDetails) ListBuckets(_ context.Context, _ *awss3.ListBucketsInput, _ ...func(*awss3.Options)) (*awss3.ListBucketsOutput, error) {
@@ -64,6 +70,44 @@ func (f *fakeS3BucketDetails) GetBucketVersioning(_ context.Context, input *awss
 func (f *fakeS3BucketDetails) GetPublicAccessBlock(_ context.Context, input *awss3.GetPublicAccessBlockInput, _ ...func(*awss3.Options)) (*awss3.GetPublicAccessBlockOutput, error) {
 	f.publicOwner = aws.ToString(input.ExpectedBucketOwner)
 	return f.publicAccess, f.publicAccessErr
+}
+
+func (f *fakeS3BucketDetails) GetBucketPolicyStatus(_ context.Context, input *awss3.GetBucketPolicyStatusInput, _ ...func(*awss3.Options)) (*awss3.GetBucketPolicyStatusOutput, error) {
+	f.policyOwner = aws.ToString(input.ExpectedBucketOwner)
+	return f.policyStatus, f.policyErr
+}
+
+func (f *fakeS3BucketDetails) GetBucketOwnershipControls(_ context.Context, input *awss3.GetBucketOwnershipControlsInput, _ ...func(*awss3.Options)) (*awss3.GetBucketOwnershipControlsOutput, error) {
+	f.ownershipOwner = aws.ToString(input.ExpectedBucketOwner)
+	return f.ownership, f.ownershipErr
+}
+
+func TestS3PolicyAndOwnershipMetadata(t *testing.T) {
+	api := &fakeS3BucketDetails{
+		policyStatus: &awss3.GetBucketPolicyStatusOutput{PolicyStatus: &s3types.PolicyStatus{IsPublic: aws.Bool(false)}},
+		ownership:    &awss3.GetBucketOwnershipControlsOutput{OwnershipControls: &s3types.OwnershipControls{Rules: []s3types.OwnershipControlsRule{{ObjectOwnership: s3types.ObjectOwnershipBucketOwnerEnforced}}}},
+	}
+	attrs, err := readS3PolicyAndOwnership(context.Background(), api, "assets", "123456789012")
+	if err != nil || attrs["policy_is_public"] != false || attrs["ownership_controls"].([]string)[0] != "BucketOwnerEnforced" || api.policyOwner != "123456789012" || api.ownershipOwner != "123456789012" {
+		t.Fatalf("attrs=%v policyOwner=%q ownershipOwner=%q err=%v", attrs, api.policyOwner, api.ownershipOwner, err)
+	}
+	api.policyErr = &smithy.GenericAPIError{Code: "NoSuchBucketPolicy"}
+	api.ownershipErr = &smithy.GenericAPIError{Code: "OwnershipControlsNotFoundError"}
+	attrs, err = readS3PolicyAndOwnership(context.Background(), api, "assets", "123456789012")
+	if err != nil || attrs["policy_is_public"] != nil || len(attrs["ownership_controls"].([]string)) != 0 {
+		t.Fatalf("missing configuration: attrs=%v err=%v", attrs, err)
+	}
+	api.policyErr = &smithy.GenericAPIError{Code: "AccessDenied"}
+	_, err = readS3PolicyAndOwnership(context.Background(), api, "assets", "123456789012")
+	if !errors.Is(err, api.policyErr) {
+		t.Fatalf("policy denial: %v", err)
+	}
+	api.policyErr = nil
+	api.ownershipErr = &smithy.GenericAPIError{Code: "AccessDenied"}
+	_, err = readS3PolicyAndOwnership(context.Background(), api, "assets", "123456789012")
+	if !errors.Is(err, api.ownershipErr) {
+		t.Fatalf("ownership denial: %v", err)
+	}
 }
 
 func TestS3BucketPostureReadsPreserveMissingAndDenial(t *testing.T) {
