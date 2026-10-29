@@ -255,8 +255,8 @@ func listECS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 	return records, nil
 }
 
-// listEKS mirrors the in-tree eks scanner: clusters, nodegroups, and addons
-// as metadata-only records.
+// listEKS reads clusters, nodegroups, and addons for typed resource observations.
+// Cluster role and network identities also produce typed relationships.
 func listEKS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 	client := awseks.NewFromConfig(cfg)
 	region := cfg.Region

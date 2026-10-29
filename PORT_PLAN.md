@@ -12,11 +12,12 @@ GetBucketTagging reads. ECS DescribeClusters emits typed cluster identity,
 tags, status, and reported counts. EKS DescribeCluster emits typed cluster
 identity, status, tags, version, and reported control-plane metadata. EKS
 DescribeNodegroup emits typed managed nodegroup identity, status, tags, version,
-AMI and capacity type, node role, network placement, and scaling counts. IAM
-DescribeAddon emits typed add-on identity, status, tags, version,
-timestamps, and service-account role ARN, excluding configuration values that
-may contain secrets. IAM OIDC provider enrichment and EKS relationships remain
-unported.
+AMI and capacity type, node role, network placement, and scaling counts.
+DescribeAddon emits typed add-on identity, status, tags, version, timestamps,
+and service-account role ARN, excluding configuration values that may contain
+secrets. DescribeCluster emits reported service-role, subnet, and security-group
+relationships. IAM OIDC provider enrichment and the remaining EKS relationships
+remain unported.
 ECS services, tasks, and task definitions, remaining bucket detail and posture
 reads, lifecycle policy facts, and the full scanner port remain unfinished. This plan
 maps the remaining in-tree implementation to standalone locations. No live AWS
