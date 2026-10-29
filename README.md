@@ -24,8 +24,8 @@ review). Keep internal helpers private.
 ## Emission contract
 
 `manifest.yaml` `spec.emittedFacts` declares `aws_resource`,
-`aws_relationship`, `aws_image_reference`, `aws_warning`, and the replication-only
-`s3_bucket_posture` alongside three
+`aws_relationship`, `aws_image_reference`, `aws_warning`, and the staged
+`s3_bucket_posture` (replication presence and derived bucket-policy flags) alongside three
 transitional placeholder kinds (`collector-aws-cloud.snapshot/record/warning`).
 The live EC2 reader emits typed resource identity for VPCs, subnets, security
 groups and rules, network interfaces, instances, AMI identities, and volumes,
