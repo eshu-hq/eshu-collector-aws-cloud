@@ -112,10 +112,11 @@ importable only inside this module, satisfying `boundary_test.go`).
    conformance fixtures remain. ECR repository observations use the existing
    DescribeRepositories pages plus ListTagsForResource per ARN. ECR image
    references emit from existing DescribeImages pages; lifecycle policies
-   still need their typed resource kind. Lambda ListFunctions rows now emit
-   typed function identity and safe configuration metadata. GetFunction tags,
-   resolved image metadata, environment redaction, aliases, event-source
-   mappings, and Lambda relationships remain deferred.
+   still need their typed resource kind. Lambda ListFunctions rows emit typed
+   function identity and safe configuration metadata, including VPC and logging
+   configuration. GetFunction tags, resolved image metadata, environment
+   redaction, aliases, event-source mappings, and Lambda relationships remain
+   deferred.
 5. Remaining envelopes kind by kind; delete transitional kinds last.
 6. `awsruntime` + `service/` scanners service by service.
 7. `recordpolicy` / `freshness` / `catalog` / `checkpoint` integration.

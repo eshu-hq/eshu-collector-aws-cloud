@@ -41,11 +41,12 @@ not cover typed facts or service failures. The ECR reader emits typed
 repository observations from DescribeRepositories and ListTagsForResource while
 retaining its repository placeholder record. Existing DescribeImages pages emit
 one `aws_image_reference` per tag, including an empty tag for untagged images;
-the image placeholder record remains. Lambda ListFunctions rows now emit typed
-`aws_resource` identity and safe configuration metadata. Function environment
-values, tags, and resolved image metadata are deferred with the legacy
-GetFunction and keyed redaction path. ECR lifecycle policies and other AWS
-service readers still lack typed output. The full port removes
+the image placeholder record remains. Lambda ListFunctions rows emit typed
+`aws_resource` identity and safe configuration metadata, including VPC and
+logging configuration. Function environment values, tags, and resolved image
+metadata remain deferred with the legacy GetFunction and keyed redaction path.
+ECR lifecycle policies and other AWS service readers still lack typed output.
+The full port removes
 those placeholders and declares the other core-owned AWS fact kinds at schema
 `1.0.0`, all with
 `reported` confidence (the in-tree AWS envelopes record facts returned by

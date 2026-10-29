@@ -47,12 +47,14 @@ func lambdaFunctionRecord(function lambdatypes.FunctionConfiguration, region str
 			"kms_key_arn":        strings.TrimSpace(aws.ToString(function.KMSKeyArn)),
 			"last_modified":      lambdaLastModified(aws.ToString(function.LastModified)),
 			"last_update_status": strings.TrimSpace(string(function.LastUpdateStatus)),
+			"logging_config":     lambdaLoggingConfig(function.LoggingConfig),
 			"memory_size":        aws.ToInt32(function.MemorySize),
 			"package_type":       strings.TrimSpace(string(function.PackageType)),
 			"role_arn":           strings.TrimSpace(aws.ToString(function.Role)),
 			"runtime":            strings.TrimSpace(string(function.Runtime)),
 			"timeout_seconds":    aws.ToInt32(function.Timeout),
 			"version":            strings.TrimSpace(aws.ToString(function.Version)),
+			"vpc_config":         lambdaVPCConfig(function.VpcConfig),
 		},
 	}
 	return result, nil
@@ -64,9 +66,35 @@ func lambdaArchitectures(values []lambdatypes.Architecture) []string {
 	}
 	result := make([]string, 0, len(values))
 	for _, value := range values {
-		result = append(result, strings.TrimSpace(string(value)))
+		if architecture := strings.TrimSpace(string(value)); architecture != "" {
+			result = append(result, architecture)
+		}
 	}
 	return result
+}
+
+func lambdaVPCConfig(config *lambdatypes.VpcConfigResponse) map[string]any {
+	if config == nil || (aws.ToString(config.VpcId) == "" && len(config.SubnetIds) == 0 && len(config.SecurityGroupIds) == 0) {
+		return nil
+	}
+	return map[string]any{
+		"ipv6_allowed_for_dual_stack": aws.ToBool(config.Ipv6AllowedForDualStack),
+		"security_group_ids":          append([]string(nil), config.SecurityGroupIds...),
+		"subnet_ids":                  append([]string(nil), config.SubnetIds...),
+		"vpc_id":                      strings.TrimSpace(aws.ToString(config.VpcId)),
+	}
+}
+
+func lambdaLoggingConfig(config *lambdatypes.LoggingConfig) map[string]any {
+	if config == nil || (aws.ToString(config.LogGroup) == "" && config.LogFormat == "" && config.ApplicationLogLevel == "" && config.SystemLogLevel == "") {
+		return nil
+	}
+	return map[string]any{
+		"application_log_level": strings.TrimSpace(string(config.ApplicationLogLevel)),
+		"log_format":            strings.TrimSpace(string(config.LogFormat)),
+		"log_group":             strings.TrimSpace(aws.ToString(config.LogGroup)),
+		"system_log_level":      strings.TrimSpace(string(config.SystemLogLevel)),
+	}
 }
 
 func lambdaLastModified(value string) any {
