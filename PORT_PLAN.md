@@ -8,10 +8,11 @@ placeholder-only freshness digest. ECR repository reads now emit typed
 repository observations with reported tags and image-reference facts from
 DescribeImages; the regional S3 ListBuckets reader emits bucket identity,
 reported region and creation time, and tags after HeadBucket and
-GetBucketTagging reads. ECS DescribeClusters emits typed cluster identity,
-tags, status, and reported counts. ECS services, tasks, and task definitions,
-remaining bucket detail and posture reads, lifecycle policy facts, and the
-full scanner port remain unfinished. This plan
+GetBucketTagging reads. ECS DescribeClusters and DescribeServices emit typed
+cluster and service identity, tags, status, counts, task-definition binding,
+and load-balancer metadata. ECS tasks and task definitions, remaining bucket
+detail and posture reads, lifecycle policy facts, and the full scanner port
+remain unfinished. This plan
 maps the remaining in-tree implementation to standalone locations. No live AWS
 core-kind output or host grant has been proved.
 

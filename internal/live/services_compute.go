@@ -214,12 +214,16 @@ func listECS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 					return nil, fmt.Errorf("ecs list services: %w", err)
 				}
 				for _, chunk := range chunks(servicePage.ServiceArns, 10) {
-					described, err := client.DescribeServices(ctx, &awsecs.DescribeServicesInput{Cluster: aws.String(arn), Services: chunk})
+					described, err := client.DescribeServices(ctx, ecsServiceDescribeInput(arn, chunk))
 					if err != nil {
 						return nil, fmt.Errorf("ecs describe services: %w", err)
 					}
 					for _, service := range described.Services {
-						records = append(records, record(aws.ToString(service.ServiceArn), "ecs", region, aws.ToString(service.ServiceName), "service"))
+						row := ecsServiceRecord(service, region)
+						if row.Resource == nil {
+							return nil, fmt.Errorf("ecs described service has no ARN")
+						}
+						records = append(records, row)
 					}
 				}
 			}
