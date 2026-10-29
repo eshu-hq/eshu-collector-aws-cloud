@@ -399,7 +399,11 @@ func listLambda(ctx context.Context, cfg aws.Config) ([]collector.Record, error)
 					return nil, fmt.Errorf("lambda list aliases: %w", err)
 				}
 				for _, alias := range aliasPage.Aliases {
-					records = append(records, record(aws.ToString(alias.AliasArn), "lambda", region, aws.ToString(alias.Name), "alias"))
+					aliasRecord, err := lambdaAliasRecord(functionRecord.Resource.ARN, alias, region)
+					if err != nil {
+						return nil, fmt.Errorf("lambda alias identity: %w", err)
+					}
+					records = append(records, aliasRecord)
 				}
 			}
 			mappings := awslambda.NewListEventSourceMappingsPaginator(client, &awslambda.ListEventSourceMappingsInput{FunctionName: aws.String(functionRecord.Resource.ResourceID)})

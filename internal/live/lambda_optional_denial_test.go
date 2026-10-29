@@ -34,7 +34,8 @@ func TestLambdaMappingDenialKeepsFunctionsAliasesAndOtherMappings(t *testing.T) 
 					functionARN := strings.TrimPrefix(path, "/2015-03-31/functions/")
 					fmt.Fprintf(w, `{"Configuration":{"FunctionName":%q,"FunctionArn":%q}}`, functionARN[strings.LastIndex(functionARN, ":")+1:], functionARN)
 				case strings.HasSuffix(path, "/aliases"):
-					fmt.Fprint(w, `{"Aliases":[{"Name":"live","AliasArn":"arn:aws:lambda:us-east-1:123456789012:function:first:live"}]}`)
+					functionARN := strings.TrimSuffix(strings.TrimPrefix(path, "/2015-03-31/functions/"), "/aliases")
+					fmt.Fprintf(w, `{"Aliases":[{"Name":"live","AliasArn":%q}]}`, functionARN+":live")
 				case path == "/2015-03-31/event-source-mappings" && r.URL.Query().Get("FunctionName") == firstARN:
 					w.Header().Set("X-Amzn-Errortype", code)
 					w.WriteHeader(http.StatusForbidden)
@@ -87,7 +88,7 @@ func TestLambdaMappingDenialKeepsFunctionsAliasesAndOtherMappings(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(outcome.Warnings) != 1 || len(outcome.WarningObservations) != 1 || len(outcome.Resources) != 2 || len(outcome.Report.Records) != 5 {
+			if len(outcome.Warnings) != 1 || len(outcome.WarningObservations) != 1 || len(outcome.Resources) != 4 || len(outcome.Relationships) != 2 || len(outcome.Report.Records) != 5 {
 				t.Fatalf("Lambda outcome: warnings=%v observations=%v resources=%d records=%d", outcome.Warnings, outcome.WarningObservations, len(outcome.Resources), len(outcome.Report.Records))
 			}
 			observedAt := time.Now().UTC()

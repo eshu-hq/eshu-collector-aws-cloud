@@ -148,8 +148,10 @@ importable only inside this module, satisfying `boundary_test.go`).
    and requires `ecr:GetLifecyclePolicy`; its live IAM grant and call cost
    remain unverified. Lambda ListFunctions rows use one GetFunction read per
    function for safe configuration and source KMS key metadata. Validated ECR
-   image URIs emit a function-to-image relationship; aliases and event-source
-   mappings also emit, with reviewed mapping denials marked partial. Environment
+   image URIs emit a function-to-image relationship; ListAliases pages emit typed
+   alias resources and alias-to-function relationships with version and routing
+   weights. Alias descriptions are excluded as user-authored text. Event-source
+   mappings remain transitional, with reviewed mapping denials marked partial. Environment
    values, tags, and presigned package URLs stay excluded. The added read
    requires `lambda:GetFunction`; live IAM access and cost remain unverified.
    S3 buckets emit typed identity, listed region, creation time, and tags after
