@@ -75,3 +75,25 @@ func TestKMSKeyRejectsForeignOrMissingReportedIdentity(t *testing.T) {
 		})
 	}
 }
+
+func TestKMSAlgorithmListsPreserveLegacyEmptyShape(t *testing.T) {
+	tests := []struct {
+		name, expected                    string
+		nilResult, emptyResult, populated []string
+	}{
+		{"encryption", string(kmstypes.EncryptionAlgorithmSpecSymmetricDefault), kmsAlgorithms(nil), kmsAlgorithms([]kmstypes.EncryptionAlgorithmSpec{}), kmsAlgorithms([]kmstypes.EncryptionAlgorithmSpec{kmstypes.EncryptionAlgorithmSpecSymmetricDefault})},
+		{"signing", string(kmstypes.SigningAlgorithmSpecRsassaPssSha256), kmsSigningAlgorithms(nil), kmsSigningAlgorithms([]kmstypes.SigningAlgorithmSpec{}), kmsSigningAlgorithms([]kmstypes.SigningAlgorithmSpec{kmstypes.SigningAlgorithmSpecRsassaPssSha256})},
+		{"MAC", string(kmstypes.MacAlgorithmSpecHmacSha256), kmsMACAlgorithms(nil), kmsMACAlgorithms([]kmstypes.MacAlgorithmSpec{}), kmsMACAlgorithms([]kmstypes.MacAlgorithmSpec{kmstypes.MacAlgorithmSpecHmacSha256})},
+		{"agreement", string(kmstypes.KeyAgreementAlgorithmSpecEcdh), kmsAgreementAlgorithms(nil), kmsAgreementAlgorithms([]kmstypes.KeyAgreementAlgorithmSpec{}), kmsAgreementAlgorithms([]kmstypes.KeyAgreementAlgorithmSpec{kmstypes.KeyAgreementAlgorithmSpecEcdh})},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.nilResult != nil || tc.emptyResult != nil {
+				t.Fatalf("empty lists must be nil: %#v %#v", tc.nilResult, tc.emptyResult)
+			}
+			if len(tc.populated) != 1 || tc.populated[0] != tc.expected {
+				t.Fatalf("populated list = %#v", tc.populated)
+			}
+		})
+	}
+}

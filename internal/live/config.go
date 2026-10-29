@@ -13,8 +13,7 @@ import (
 )
 
 // SupportedServices is the live-read inventory this package implements: the
-// 19 services the ops-qa host allows. Names match the host's
-// allowed_services entries exactly.
+// configured AWS service names. The ops-qa host currently allows a subset.
 var SupportedServices = []string{
 	"apigateway",
 	"cloudfront",
