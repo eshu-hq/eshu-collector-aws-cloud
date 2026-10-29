@@ -43,6 +43,7 @@ func eksNodegroupRecord(nodegroup ekstypes.Nodegroup, region string) (collector.
 		},
 		CorrelationAnchors: []string{id, name, roleARN}, SourceRecordID: id,
 	}
+	result.Relationships = eksNodegroupRelationships(nodegroup, region, id, arn)
 	return result, nil
 }
 

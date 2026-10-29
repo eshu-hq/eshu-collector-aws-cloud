@@ -260,7 +260,7 @@ func listECS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 }
 
 // listEKS reads clusters, nodegroups, and addons for typed resource observations.
-// Cluster role and network identities also produce typed relationships.
+// Reported roles and network placements, plus matched membership, produce edges.
 func listEKS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 	client := awseks.NewFromConfig(cfg)
 	region := cfg.Region
@@ -276,11 +276,13 @@ func listEKS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			if err != nil {
 				return nil, fmt.Errorf("eks describe cluster: %w", err)
 			}
+			var clusterResource *collector.LiveResource
 			if described.Cluster != nil {
 				row, mapErr := eksClusterRecord(*described.Cluster, region)
 				if mapErr != nil {
 					return nil, mapErr
 				}
+				clusterResource = row.Resource
 				records = append(records, row)
 			}
 			nodegroups := awseks.NewListNodegroupsPaginator(client, &awseks.ListNodegroupsInput{ClusterName: aws.String(name)})
@@ -298,6 +300,9 @@ func listEKS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 						row, mapErr := eksNodegroupRecord(*described.Nodegroup, region)
 						if mapErr != nil {
 							return nil, mapErr
+						}
+						if edge, ok := eksMembershipRelationship(clusterResource, row.Resource, aws.ToString(described.Nodegroup.ClusterName)); ok {
+							row.Relationships = append(row.Relationships, edge)
 						}
 						records = append(records, row)
 					}
@@ -318,6 +323,9 @@ func listEKS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 						row, mapErr := eksAddonRecord(*described.Addon, region)
 						if mapErr != nil {
 							return nil, mapErr
+						}
+						if edge, ok := eksMembershipRelationship(clusterResource, row.Resource, aws.ToString(described.Addon.ClusterName)); ok {
+							row.Relationships = append(row.Relationships, edge)
 						}
 						records = append(records, row)
 					}

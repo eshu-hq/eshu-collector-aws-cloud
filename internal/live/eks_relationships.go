@@ -62,3 +62,70 @@ func eksClusterRelationships(cluster ekstypes.Cluster, region, clusterID, cluste
 	}
 	return edges
 }
+
+// eksNodegroupRelationships carries the role and subnet edges reported by DescribeNodegroup.
+func eksNodegroupRelationships(nodegroup ekstypes.Nodegroup, region, nodegroupID, nodegroupARN string) []collector.LiveRelationship {
+	base := collector.LiveRelationship{
+		Region: region, ServiceKind: "eks", SourceResourceID: nodegroupID, SourceARN: nodegroupARN,
+	}
+	var edges []collector.LiveRelationship
+	if roleARN := strings.TrimSpace(aws.ToString(nodegroup.NodeRole)); roleARN != "" {
+		edge := base
+		edge.RelationshipType = "eks_nodegroup_uses_iam_role"
+		edge.TargetResourceID, edge.TargetARN, edge.TargetType = roleARN, roleARN, "aws_iam_role"
+		edge.SourceRecordID = nodegroupID + "#role#" + roleARN
+		edges = append(edges, edge)
+	}
+	for _, candidate := range nodegroup.Subnets {
+		subnetID := strings.TrimSpace(candidate)
+		if subnetID == "" {
+			continue
+		}
+		edge := base
+		edge.RelationshipType, edge.TargetResourceID, edge.TargetType = "eks_nodegroup_uses_subnet", subnetID, "aws_ec2_subnet"
+		edge.SourceRecordID = nodegroupID + "#subnet#" + subnetID
+		edges = append(edges, edge)
+	}
+	return edges
+}
+
+// eksAddonRelationships carries the service account role edge reported by DescribeAddon.
+func eksAddonRelationships(addon ekstypes.Addon, region, addonID, addonARN string) []collector.LiveRelationship {
+	roleARN := strings.TrimSpace(aws.ToString(addon.ServiceAccountRoleArn))
+	if roleARN == "" {
+		return nil
+	}
+	return []collector.LiveRelationship{{
+		Region: region, ServiceKind: "eks", RelationshipType: "eks_addon_uses_iam_role",
+		SourceResourceID: addonID, SourceARN: addonARN,
+		TargetResourceID: roleARN, TargetARN: roleARN, TargetType: "aws_iam_role",
+		SourceRecordID: addonID + "#role#" + roleARN,
+	}}
+}
+
+// eksMembershipRelationship joins an observed child to its observed parent cluster.
+// A missing or conflicting cluster name leaves membership unasserted.
+func eksMembershipRelationship(cluster, child *collector.LiveResource, reportedClusterName string) (collector.LiveRelationship, bool) {
+	if cluster == nil || child == nil || cluster.ResourceType != "aws_eks_cluster" ||
+		cluster.ServiceKind != "eks" || child.ServiceKind != "eks" || cluster.Region != child.Region ||
+		cluster.ResourceID == "" || child.ResourceID == "" ||
+		strings.TrimSpace(cluster.Name) == "" || strings.TrimSpace(cluster.Name) != strings.TrimSpace(reportedClusterName) {
+		return collector.LiveRelationship{}, false
+	}
+	kind := ""
+	member := ""
+	switch child.ResourceType {
+	case "aws_eks_nodegroup":
+		kind, member = "eks_cluster_has_nodegroup", "nodegroup"
+	case "aws_eks_addon":
+		kind, member = "eks_cluster_has_addon", "addon"
+	default:
+		return collector.LiveRelationship{}, false
+	}
+	return collector.LiveRelationship{
+		Region: cluster.Region, ServiceKind: "eks", RelationshipType: kind,
+		SourceResourceID: cluster.ResourceID, SourceARN: cluster.ARN,
+		TargetResourceID: child.ResourceID, TargetARN: child.ARN, TargetType: child.ResourceType,
+		SourceRecordID: cluster.ResourceID + "#" + member + "#" + child.ResourceID,
+	}, true
+}
