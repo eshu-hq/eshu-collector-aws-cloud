@@ -38,3 +38,20 @@ func TestAppendLiveImageReferencesBindsClaimAndDeduplicatesTags(t *testing.T) {
 		t.Fatalf("SDK rejected image reference: %v", err)
 	}
 }
+
+func TestImageReferencePreservesReportedZeroSize(t *testing.T) {
+	claim := testClaim()
+	base := mustCollect(t, "complete.json", claim, testObservedAt(), "")
+	observation := ImageReferenceObservation{
+		Boundary:       Boundary{AccountID: "123456789012", Region: "us-east-1", ServiceKind: "ecr"},
+		RepositoryName: "team/api", ImageDigest: "sha256:abc", ImageSizeInBytes: 0,
+	}
+	result, err := AppendLiveImageReferences(base, []ImageReferenceObservation{observation}, "aws://123456789012", ResourceUse{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fact := result.Facts[len(result.Facts)-1]
+	if got, ok := fact.Payload["image_size_in_bytes"]; !ok || got != int64(0) {
+		t.Fatalf("reported zero image size = %v, present = %v", got, ok)
+	}
+}

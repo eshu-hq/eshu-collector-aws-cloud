@@ -165,6 +165,7 @@ func listECR(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 				}
 			}
 			records = append(records, ecrRepositoryRecord(repository, tags, region))
+			seenImages := make(map[string]struct{})
 			images := awsecr.NewDescribeImagesPaginator(client, &awsecr.DescribeImagesInput{
 				RepositoryName: repository.RepositoryName,
 			})
@@ -174,7 +175,7 @@ func listECR(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 					return nil, fmt.Errorf("ecr describe images: %w", err)
 				}
 				for _, image := range imagePage.ImageDetails {
-					records = append(records, ecrImageRecords(aws.ToString(repository.RepositoryArn), aws.ToString(repository.RepositoryName), image, region)...)
+					records = appendUniqueECRImageRecords(records, seenImages, aws.ToString(repository.RepositoryArn), aws.ToString(repository.RepositoryName), image, region)
 				}
 			}
 		}
