@@ -13,12 +13,13 @@ import (
 
 // sensitiveReadError keeps useful AWS failure classes without forwarding an
 // SDK error message that could contain response data from a sensitive read.
+// Cancellation and deadline errors wrap only their safe context sentinels.
 func sensitiveReadError(operation string, err error) error {
 	if errors.Is(err, context.Canceled) {
-		return fmt.Errorf("%s canceled", operation)
+		return fmt.Errorf("%s: %w", operation, context.Canceled)
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return fmt.Errorf("%s deadline exceeded", operation)
+		return fmt.Errorf("%s: %w", operation, context.DeadlineExceeded)
 	}
 	var apiErr smithy.APIError
 	if errors.As(err, &apiErr) {
