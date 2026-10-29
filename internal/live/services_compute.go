@@ -60,11 +60,7 @@ func listEC2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("ec2 describe security groups: %w", err)
 		}
 		for _, group := range page.SecurityGroups {
-			name := aws.ToString(group.GroupName)
-			if name == "" {
-				name = aws.ToString(group.GroupId)
-			}
-			records, err = appendEC2Record(records, record(aws.ToString(group.GroupId), "ec2", region, name, "security-group"))
+			records, err = appendEC2Record(records, securityGroupRecord(group, region))
 			if err != nil {
 				return nil, err
 			}
