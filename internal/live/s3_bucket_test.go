@@ -164,6 +164,9 @@ func TestS3OptionalEncryptionDenialsKeepBucketsAndDistinctWarnings(t *testing.T)
 		if row.Resource == nil || row.Resource.ResourceID == "" || row.Resource.Attributes["bucket_region"] != "us-east-1" {
 			t.Fatalf("lost core bucket evidence: %+v", row)
 		}
+		if _, present := row.Resource.Attributes["versioning_status"]; !present || row.Resource.Attributes["block_public_acls"] != nil {
+			t.Fatalf("encryption denial lost or invented bucket posture: %+v", row.Resource.Attributes)
+		}
 		if _, present := row.Resource.Attributes["default_encryption_algorithms"]; present {
 			t.Fatalf("denied encryption presented as known: %+v", row.Resource.Attributes)
 		}
