@@ -47,3 +47,31 @@ func TestWarningFactIdentityIncludesOperationResourceEffect(t *testing.T) {
 		t.Fatalf("result = %+v", result)
 	}
 }
+
+func TestEmptyOptionalDenialEmitsSDKPartialAndTypedWarning(t *testing.T) {
+	sourceURI := "aws://123456789012/us-east-1"
+	claim := testClaim()
+	opts := CollectOptions{ObservedAt: testObservedAt(), SourceURI: sourceURI}
+	result, err := CollectPartial(claim, Report{Source: "aws-live:123456789012/us-east-1"}, opts, "ec2/us-east-1: optional rules denied")
+	if err != nil {
+		t.Fatal(err)
+	}
+	warning := WarningObservation{
+		Boundary:    Boundary{AccountID: "123456789012", Region: "us-east-1", ServiceKind: "ec2"},
+		WarningKind: "permission_denied", ErrorClass: "permission_denied",
+		Attributes: map[string]any{"operation": "DescribeSecurityGroupRules", "resource": "region:us-east-1", "effect": "security-group-rules-unavailable"},
+	}
+	result, err = AppendLiveWarnings(result, []WarningObservation{warning}, sourceURI, DefaultResourceUse())
+	if err != nil {
+		t.Fatal(err)
+	}
+	typed := 0
+	for _, fact := range result.Facts {
+		if fact.Kind == AWSKindWarning {
+			typed++
+		}
+	}
+	if result.State != sdk.ResultPartial || typed != 1 || len(result.Statuses) < 2 || result.Statuses[len(result.Statuses)-1].Class != sdk.StatusWarning || !result.Statuses[len(result.Statuses)-1].Partial {
+		t.Fatalf("empty denied SDK result: state=%s typed=%d statuses=%+v", result.State, typed, result.Statuses)
+	}
+}

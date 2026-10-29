@@ -140,6 +140,24 @@ func TestCollectReportRetainsOptionalEC2Denial(t *testing.T) {
 	}
 }
 
+// TestCollectReportKeepsEmptyOptionalDenial proves a reviewed optional read
+// remains a partial scan even when every required read returns an empty set.
+func TestCollectReportKeepsEmptyOptionalDenial(t *testing.T) {
+	reader := Collector{
+		LoadConfig: fakeConfig(&[]string{}), VerifyIdentity: verifiedIdentity,
+		Loaders: map[string]Loader{"ec2": func(_ context.Context, _ aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
+			return nil, &optionalReadDenied{denials: []optionalDenial{{operation: "DescribeSecurityGroupRules", resource: "region:us-east-1", effect: "security-group-rules-unavailable"}}}
+		}},
+	}
+	outcome, err := reader.CollectReport(context.Background(), Config{AccountID: "055929692761", Regions: []string{"us-east-1"}, Services: []string{"ec2"}})
+	if err != nil {
+		t.Fatalf("empty optional denial: %v", err)
+	}
+	if len(outcome.Report.Records) != 0 || len(outcome.Resources) != 0 || len(outcome.Warnings) != 1 || len(outcome.WarningObservations) != 1 {
+		t.Fatalf("empty partial outcome: %+v", outcome)
+	}
+}
+
 // TestCollectReportFailsWhenNothingIsReadable proves a total read failure
 // errors instead of emitting an empty report that would retire good
 // evidence as current.
