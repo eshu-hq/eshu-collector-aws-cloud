@@ -65,7 +65,7 @@ func TestParseConfigReadsScopeCredentials(t *testing.T) {
 	withCreds := hostConfig()
 	withCreds["target_scopes"] = []any{map[string]any{
 		"account_id": "111122223333",
-		"credentials": map[string]any{
+		"assume_role": map[string]any{
 			"mode":        "central_assume_role",
 			"role_arn":    "arn:aws:iam::111122223333:role/irsa-eshu-aws-collector-cross-account-role",
 			"external_id": "eshu-ops-qa-collector",
@@ -90,7 +90,7 @@ func TestParseConfigReadsScopeCredentials(t *testing.T) {
 		t.Fatalf("ParseConfig(host) error = %v", err)
 	}
 	if plain.RoleARN != "" || plain.ExternalID != "" {
-		t.Fatalf("RoleARN/ExternalID = %q/%q, want empty without a credentials block",
+		t.Fatalf("RoleARN/ExternalID = %q/%q, want empty without an assume_role block",
 			plain.RoleARN, plain.ExternalID)
 	}
 
@@ -115,7 +115,7 @@ func TestParseConfigReadsScopeCredentials(t *testing.T) {
 	}
 	for name, creds := range rejects {
 		cfg := hostConfig()
-		cfg["target_scopes"] = []any{map[string]any{"account_id": "111122223333", "credentials": creds}}
+		cfg["target_scopes"] = []any{map[string]any{"account_id": "111122223333", "assume_role": creds}}
 		if _, err := ParseConfig(cfg); err == nil {
 			t.Errorf("ParseConfig(%s) error = nil, want fail-closed", name)
 		}
@@ -135,7 +135,7 @@ func TestParseConfigReadsMapShapeCredentials(t *testing.T) {
 		"external_id": "eshu-ops-qa-collector",
 	}
 	mapShape := hostConfig()
-	mapShape["target_scopes"] = map[string]any{"account_id": "111122223333", "credentials": creds}
+	mapShape["target_scopes"] = map[string]any{"account_id": "111122223333", "assume_role": creds}
 	parsed, err := ParseConfig(mapShape)
 	if err != nil {
 		t.Fatalf("ParseConfig(map credentials) error = %v", err)
@@ -146,7 +146,7 @@ func TestParseConfigReadsMapShapeCredentials(t *testing.T) {
 
 	multi := hostConfig()
 	multi["target_scopes"] = []any{
-		map[string]any{"account_id": "111122223333", "credentials": creds},
+		map[string]any{"account_id": "111122223333", "assume_role": creds},
 		map[string]any{"account_id": "444455556666"},
 	}
 	if _, err := ParseConfig(multi); err == nil {
@@ -155,7 +155,7 @@ func TestParseConfigReadsMapShapeCredentials(t *testing.T) {
 	// The multi-scope credentials check lives in credentialScope itself so
 	// it does not depend on ParseConfig's account-first ordering.
 	multiScopes := map[string]any{"target_scopes": []any{
-		map[string]any{"account_id": "111122223333", "credentials": creds},
+		map[string]any{"account_id": "111122223333", "assume_role": creds},
 		map[string]any{"account_id": "444455556666"},
 	}}
 	if _, err := credentialScope(multiScopes); err == nil {

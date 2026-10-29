@@ -22,12 +22,12 @@ config:
 # collector then lists live AWS resources for the target account across the
 # allowed regions and services (the 19 names in internal/live), using the
 # ambient credential chain only (IRSA, container or instance role), unless
-# the scope carries a credentials block opting in to STS AssumeRole of a
+# the scope carries an assume_role block opting in to STS AssumeRole of a
 # role in the scope account. A present-but-empty source.input behaves as
 # absent.
 #  target_scopes:
 #    account_id: "111122223333"
-#    credentials:
+#    assume_role:
 #      mode: central_assume_role
 #      role_arn: arn:aws:iam::111122223333:role/irsa-eshu-aws-collector-cross-account-role
 #      external_id: eshu-ops-qa-collector

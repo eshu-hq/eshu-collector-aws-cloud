@@ -273,8 +273,8 @@ func credentialScope(config map[string]any) (map[string]any, error) {
 		// first; this guards direct callers and reorderings.)
 		for _, entry := range value {
 			if scope, ok := entry.(map[string]any); ok {
-				if _, has := scope["credentials"]; has {
-					return nil, fmt.Errorf("config target_scopes lists %d scopes with credentials: one account per claim", len(value))
+				if _, has := scope["assume_role"]; has {
+					return nil, fmt.Errorf("config target_scopes lists %d scopes with assume_role: one account per claim", len(value))
 				}
 			}
 		}
@@ -302,33 +302,33 @@ func parseCredentials(config map[string]any, account string) (string, string, er
 	if scope == nil {
 		return "", "", nil
 	}
-	raw, ok := scope["credentials"]
+	raw, ok := scope["assume_role"]
 	if !ok || raw == nil {
 		return "", "", nil
 	}
 	creds, ok := raw.(map[string]any)
 	if !ok {
-		return "", "", fmt.Errorf("config target_scopes credentials must be an object")
+		return "", "", fmt.Errorf("config target_scopes assume_role must be an object")
 	}
 	mode, ok := creds["mode"].(string)
 	if !ok || mode != "central_assume_role" {
-		return "", "", fmt.Errorf("config target_scopes credentials mode %#v is not supported (want central_assume_role)", creds["mode"])
+		return "", "", fmt.Errorf("config target_scopes assume_role mode %#v is not supported (want central_assume_role)", creds["mode"])
 	}
 	roleARN, ok := creds["role_arn"].(string)
 	if !ok {
-		return "", "", fmt.Errorf("config target_scopes credentials role_arn must be a string")
+		return "", "", fmt.Errorf("config target_scopes assume_role role_arn must be a string")
 	}
 	roleARN = strings.TrimSpace(roleARN)
 	match := roleARNPattern.FindStringSubmatch(roleARN)
 	if match == nil || strings.TrimSpace(match[3]) == "" {
-		return "", "", fmt.Errorf("config target_scopes credentials role_arn %q is not an IAM role ARN", roleARN)
+		return "", "", fmt.Errorf("config target_scopes assume_role role_arn %q is not an IAM role ARN", roleARN)
 	}
 	if match[2] != account {
-		return "", "", fmt.Errorf("config target_scopes credentials role_arn account %q does not match scope account %q", match[2], account)
+		return "", "", fmt.Errorf("config target_scopes assume_role role_arn account %q does not match scope account %q", match[2], account)
 	}
 	externalID, ok := creds["external_id"].(string)
 	if !ok || strings.TrimSpace(externalID) == "" {
-		return "", "", fmt.Errorf("config target_scopes credentials external_id is required")
+		return "", "", fmt.Errorf("config target_scopes assume_role external_id is required")
 	}
 	return roleARN, strings.TrimSpace(externalID), nil
 }
