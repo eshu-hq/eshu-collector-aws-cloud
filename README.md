@@ -174,6 +174,16 @@ regional resource, and missing-rule effect, and returns SDK `ResultPartial` with
 a warning status. Other EC2 API errors keep their existing failure behavior.
 The warning does not prove that a security group has no rules.
 
+## Lambda mapping-read denial
+
+An `AccessDenied`, `AccessDeniedException`, or `UnauthorizedOperation` from
+Lambda `ListEventSourceMappings` leaves that function's mappings unknown. The
+collector discards every mapping page already read for that function, retains
+its function and alias facts and facts from other functions, and emits a typed
+`aws_warning` naming the operation, function ARN, and missing-mappings effect.
+The SDK result is `ResultPartial` with a warning status. Other mapping errors,
+and errors from `ListFunctions` or `ListAliases`, fail the Lambda read.
+
 ## Limits
 
 Default bounds live in `health.go` (`DefaultResourceUse`): 5000 records per
