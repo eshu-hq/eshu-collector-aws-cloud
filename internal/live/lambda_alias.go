@@ -5,6 +5,7 @@ package live
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -19,8 +20,8 @@ func lambdaAliasRecord(functionARN string, alias lambdatypes.AliasConfiguration,
 	functionARN = strings.TrimSpace(functionARN)
 	aliasARN := strings.TrimSpace(aws.ToString(alias.AliasArn))
 	name := strings.TrimSpace(aws.ToString(alias.Name))
-	if aliasARN != "" && functionARN != "" && !strings.HasPrefix(aliasARN, functionARN+":") {
-		return collector.Record{}, fmt.Errorf("Lambda alias identity differs from parent function")
+	if aliasARN != "" && (name == "" || functionARN != "" && aliasARN != functionARN+":"+name || functionARN == "" && !strings.HasSuffix(aliasARN, ":"+name)) {
+		return collector.Record{}, fmt.Errorf("Lambda alias identity differs from parent function or name")
 	}
 	resourceID := aliasARN
 	if resourceID == "" && functionARN != "" && name != "" {
@@ -32,8 +33,15 @@ func lambdaAliasRecord(functionARN string, alias lambdatypes.AliasConfiguration,
 	weights := map[string]float64(nil)
 	if alias.RoutingConfig != nil && len(alias.RoutingConfig.AdditionalVersionWeights) != 0 {
 		weights = make(map[string]float64, len(alias.RoutingConfig.AdditionalVersionWeights))
-		for version, weight := range alias.RoutingConfig.AdditionalVersionWeights {
-			weights[version] = weight
+		versions := make([]string, 0, len(alias.RoutingConfig.AdditionalVersionWeights))
+		for version := range alias.RoutingConfig.AdditionalVersionWeights {
+			versions = append(versions, version)
+		}
+		sort.Strings(versions)
+		for _, version := range versions {
+			if trimmed := strings.TrimSpace(version); trimmed != "" {
+				weights[trimmed] = alias.RoutingConfig.AdditionalVersionWeights[version]
+			}
 		}
 	}
 	version := strings.TrimSpace(aws.ToString(alias.FunctionVersion))

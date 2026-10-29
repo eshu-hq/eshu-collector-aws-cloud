@@ -43,10 +43,40 @@ func TestLambdaAliasRecordRejectsWrongParentAndMissingIdentity(t *testing.T) {
 	const functionARN = "arn:aws:lambda:us-east-1:123456789012:function:worker"
 	for _, alias := range []lambdatypes.AliasConfiguration{
 		{AliasArn: aws.String("arn:aws:lambda:us-east-1:123456789012:function:other:live"), Name: aws.String("live")},
+		{AliasArn: aws.String(functionARN + ":prod"), Name: aws.String("live")},
+		{AliasArn: aws.String(functionARN + ":prod")},
 		{},
 	} {
 		if _, err := lambdaAliasRecord(functionARN, alias, "us-east-1"); err == nil {
 			t.Fatalf("unsafe alias accepted: %+v", alias)
 		}
+	}
+}
+
+func TestLambdaAliasRecordNormalizesRoutingWeights(t *testing.T) {
+	const functionARN = "arn:aws:lambda:us-east-1:123456789012:function:worker"
+	base := lambdatypes.AliasConfiguration{AliasArn: aws.String(functionARN + ":live"), Name: aws.String("live")}
+	for _, test := range []struct {
+		name    string
+		weights map[string]float64
+		want    map[string]float64
+	}{
+		{name: "absent", weights: nil, want: nil},
+		{name: "blank keys", weights: map[string]float64{" ": 0.1}, want: map[string]float64{}},
+		{name: "trim and deterministic exact key", weights: map[string]float64{" 13 ": 0.2, "13": 0.1, " ": 0.3}, want: map[string]float64{"13": 0.1}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			alias := base
+			alias.RoutingConfig = &lambdatypes.AliasRoutingConfiguration{AdditionalVersionWeights: test.weights}
+			for range 20 {
+				got, err := lambdaAliasRecord(functionARN, alias, "us-east-1")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(got.Resource.Attributes["routing_weights"], test.want) || !reflect.DeepEqual(got.Relationship.Attributes["routing_weights"], test.want) {
+					t.Fatalf("routing weights resource=%#v relationship=%#v, want %#v", got.Resource.Attributes["routing_weights"], got.Relationship.Attributes["routing_weights"], test.want)
+				}
+			}
+		})
 	}
 }
