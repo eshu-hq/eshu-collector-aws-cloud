@@ -56,7 +56,8 @@ task-definition binding, and load-balancer metadata. DescribeTasks emits
 task identity, status, containers, network-interface attachments, and reported
 runtime metadata. DescribeTaskDefinition emits task-definition identity,
 tags, roles, resource sizing, network mode, compatibilities, revision, and
-registration time. Container definitions, environment values, and secret
+registration time. Services link to reported task definitions and tasks
+link to reported ENIs. Container definitions, environment values, and secret
 references remain excluded until keyed redaction and reference handling land.
 The live read requires `ecs:DescribeTaskDefinition` and makes one describe
 call per distinct listed or service-referenced task definition, including

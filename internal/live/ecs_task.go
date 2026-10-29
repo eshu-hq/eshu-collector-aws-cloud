@@ -39,6 +39,7 @@ func ecsTaskRecord(task awsecstypes.Task, region string) collector.Record {
 		},
 		CorrelationAnchors: append([]string{arn, definitionARN}, interfaceIDs...), SourceRecordID: arn,
 	}
+	row.Relationships = ecsTaskNetworkInterfaceRelationships(arn, region, interfaces, interfaceIDs)
 	return row
 }
 
