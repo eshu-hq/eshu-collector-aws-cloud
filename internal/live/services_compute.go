@@ -86,14 +86,14 @@ func listEC2(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]
 			}
 		}
 	}
-	interfaces := awsec2.NewDescribeNetworkInterfacesPaginator(client, &awsec2.DescribeNetworkInterfacesInput{})
+	interfaces := awsec2.NewDescribeNetworkInterfacesPaginator(client, networkInterfaceDescribeInput())
 	for interfaces.HasMorePages() {
 		page, err := interfaces.NextPage(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("ec2 describe network interfaces: %w", err)
 		}
 		for _, iface := range page.NetworkInterfaces {
-			records, err = appendEC2Record(records, record(aws.ToString(iface.NetworkInterfaceId), "ec2", region, aws.ToString(iface.NetworkInterfaceId), "network-interface"))
+			records, err = appendEC2Record(records, networkInterfaceRecord(iface, region, identity))
 			if err != nil {
 				return nil, err
 			}
@@ -417,4 +417,12 @@ func lastSegment(value, separator string) string {
 		return value[i+1:]
 	}
 	return value
+}
+
+// networkInterfaceDescribeInput includes AWS-managed interfaces in every EC2 page.
+func networkInterfaceDescribeInput() *awsec2.DescribeNetworkInterfacesInput {
+	return &awsec2.DescribeNetworkInterfacesInput{
+		IncludeManagedResources: aws.Bool(true),
+		MaxResults:              aws.Int32(1000),
+	}
 }

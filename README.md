@@ -61,10 +61,11 @@ VPC, subnet, and volume observations carry reported state, tags, and API
 attributes, including CIDR associations and volume attachments. Security-group
 observations carry the reported group name, tags, description, owner, VPC ID,
 and legacy group-ID/name correlation anchors. Security group rule observations
-carry rule metadata, tags, and rule/group correlation anchors. Instance identity
-observations carry state and launch AMI ID from the same `DescribeInstances`
-response. Subnet-to-VPC and volume-to-KMS are the two typed relationships
-currently emitted; network interfaces still carry identity and name only.
+carry rule metadata, tags, and rule/group correlation anchors. Network
+interface observations carry status, tags, attachment, address, and security
+group metadata. Instance identity observations carry state and launch AMI ID
+from the same `DescribeInstances` response. Subnet-to-VPC and volume-to-KMS
+are the two typed relationships currently emitted.
 This is staged implementation, not a full parity or live host admission claim.
 Instance and volume ARNs use the account and partition verified by STS before
 EC2 reads; a partition mismatch fails before a service read.
