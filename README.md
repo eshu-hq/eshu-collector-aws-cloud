@@ -73,8 +73,16 @@ are excluded because they may contain secrets. DescribeCluster also emits
 reported service-role, subnet, and security-group relationships. Reported
 nodegroup and add-on role edges, nodegroup subnet edges, and cluster membership
 edges are also typed. Membership uses the observed parent list request and
-rejects a nonblank conflicting child cluster name. IAM OIDC provider enrichment
-and its relationship remain unported.
+rejects a nonblank conflicting child cluster name. EKS IAM OIDC provider
+enrichment reads the account provider list once per service-region read and
+fetches provider metadata, matching only the EKS-reported issuer. It emits a
+provider resource and cluster relationship for a match. An explicit
+ListOpenIDConnectProviders permission denial retains the cluster, nodegroup,
+and add-on observations with a scoped warning and partial SDK result; other
+list failures and every GetOpenIDConnectProvider failure remain terminal to
+the EKS read. This requires iam:ListOpenIDConnectProviders and
+iam:GetOpenIDConnectProvider for complete enrichment; live IAM permission and
+request cost have not been verified.
 ECR GetLifecyclePolicy now emits typed policy metadata after each repository
 image read. A missing policy emits nothing; a denied read fails the ECR
 service. The policy JSON body is omitted because it can contain user-supplied
