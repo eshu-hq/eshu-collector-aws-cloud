@@ -21,6 +21,59 @@ const s3ListPageLimit int32 = 10000
 type s3BucketDetailsAPI interface {
 	HeadBucket(context.Context, *awss3.HeadBucketInput, ...func(*awss3.Options)) (*awss3.HeadBucketOutput, error)
 	GetBucketTagging(context.Context, *awss3.GetBucketTaggingInput, ...func(*awss3.Options)) (*awss3.GetBucketTaggingOutput, error)
+	GetBucketEncryption(context.Context, *awss3.GetBucketEncryptionInput, ...func(*awss3.Options)) (*awss3.GetBucketEncryptionOutput, error)
+}
+
+type s3BucketAPI interface {
+	s3BucketDetailsAPI
+	ListBuckets(context.Context, *awss3.ListBucketsInput, ...func(*awss3.Options)) (*awss3.ListBucketsOutput, error)
+}
+
+// readS3BucketEncryption retains the legacy known-empty interpretation only
+// for S3's explicit missing-configuration response. A denied read contributes
+// no encryption attributes, so it cannot be mistaken for an unencrypted bucket.
+func readS3BucketEncryption(ctx context.Context, api s3BucketDetailsAPI, name, accountID string) (map[string]any, bool, error) {
+	output, err := api.GetBucketEncryption(ctx, &awss3.GetBucketEncryptionInput{
+		Bucket: aws.String(name), ExpectedBucketOwner: aws.String(accountID),
+	})
+	if err != nil {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) {
+			switch apiErr.ErrorCode() {
+			case "AccessDenied", "AccessDeniedException":
+				return nil, true, nil
+			case "ServerSideEncryptionConfigurationNotFoundError":
+				output = nil
+			default:
+				return nil, false, fmt.Errorf("s3 get bucket encryption %q: %w", name, err)
+			}
+		} else {
+			return nil, false, fmt.Errorf("s3 get bucket encryption %q: %w", name, err)
+		}
+	}
+	var algorithms []string
+	var keyIDs []string
+	bucketKeyEnabled := false
+	if output != nil && output.ServerSideEncryptionConfiguration != nil {
+		for _, rule := range output.ServerSideEncryptionConfiguration.Rules {
+			byDefault := rule.ApplyServerSideEncryptionByDefault
+			if byDefault == nil {
+				continue
+			}
+			if algorithm := strings.TrimSpace(string(byDefault.SSEAlgorithm)); algorithm != "" {
+				algorithms = append(algorithms, algorithm)
+			}
+			if keyID := strings.TrimSpace(aws.ToString(byDefault.KMSMasterKeyID)); keyID != "" {
+				keyIDs = append(keyIDs, keyID)
+			}
+			bucketKeyEnabled = bucketKeyEnabled || aws.ToBool(rule.BucketKeyEnabled)
+		}
+	}
+	return map[string]any{
+		"default_encryption_algorithms": algorithms,
+		"kms_master_key_ids":            keyIDs,
+		"bucket_key_enabled":            bucketKeyEnabled,
+	}, false, nil
 }
 
 // readS3BucketDetails follows the legacy required HeadBucket read and tag

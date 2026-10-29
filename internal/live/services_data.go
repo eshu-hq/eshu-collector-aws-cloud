@@ -86,13 +86,16 @@ func listRDS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 // metadata only. Object contents, policy documents, ACL grants, and
 // notification payloads stay unread.
 func listS3(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]collector.Record, error) {
-	input, err := s3ListInput(cfg.Region)
+	return listS3WithAPI(ctx, awss3.NewFromConfig(cfg), cfg.Region, identity)
+}
+
+func listS3WithAPI(ctx context.Context, client s3BucketAPI, region string, identity VerifiedIdentity) ([]collector.Record, error) {
+	input, err := s3ListInput(region)
 	if err != nil {
 		return nil, err
 	}
-	client := awss3.NewFromConfig(cfg)
-	region := cfg.Region
 	records := []collector.Record{}
+	denials := []optionalDenial{}
 	buckets := awss3.NewListBucketsPaginator(client, input)
 	for buckets.HasMorePages() {
 		page, err := buckets.NextPage(ctx)
@@ -115,8 +118,22 @@ func listS3(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]c
 				return nil, err
 			}
 			row.Resource.Tags = tags
+			encryption, denied, err := readS3BucketEncryption(ctx, client, aws.ToString(bucket.Name), identity.AccountID)
+			if err != nil {
+				return nil, err
+			}
+			if denied {
+				denials = append(denials, optionalDenial{operation: "GetBucketEncryption", resource: "bucket:" + aws.ToString(bucket.Name), effect: "encryption-unknown"})
+			} else {
+				for key, value := range encryption {
+					row.Resource.Attributes[key] = value
+				}
+			}
 			records = append(records, row)
 		}
+	}
+	if len(denials) > 0 {
+		return records, &optionalReadDenied{denials: denials}
 	}
 	return records, nil
 }
