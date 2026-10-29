@@ -274,6 +274,7 @@ func TestInspectAMINameReasons(t *testing.T) {
 		{name: "key=value drops on hygiene", input: "db_password=hunter2", wantCause: amiNameDropHygiene},
 		{name: "spaced key=value drops on hygiene", input: "api_key = sk-live", wantCause: amiNameDropHygiene},
 		{name: "header pair drops on hygiene", input: "Authorization: Bearer abc", wantCause: amiNameDropHygiene},
+		{name: "authorization pair drops on hygiene", input: "authorization=abc123", wantCause: amiNameDropHygiene},
 		{name: "marker word drops on hygiene", input: "my-password-reset-image", wantCause: amiNameDropHygiene},
 		{name: "clean colon drops on charset", input: "image:v2", wantCause: amiNameDropCharset},
 		{name: "semicolon drops on charset", input: "my-image;rm -rf", wantCause: amiNameDropCharset},
