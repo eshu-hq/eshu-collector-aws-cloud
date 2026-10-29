@@ -24,7 +24,7 @@ review). Keep internal helpers private.
 ## Emission contract
 
 `manifest.yaml` `spec.emittedFacts` declares `aws_resource`,
-`aws_relationship`, and `aws_image_reference` alongside three
+`aws_relationship`, `aws_image_reference`, and `aws_warning` alongside three
 transitional placeholder kinds (`collector-aws-cloud.snapshot/record/warning`).
 The live EC2 reader emits typed resource identity for VPCs, subnets, security
 groups and rules, network interfaces, instances, AMI identities, and volumes,
@@ -161,6 +161,16 @@ AWS presigned URL keys such as
 `X-Amz-Credential` and `X-Amz-Signature` (even when the key is percent-encoded).
 Ordinary credential-free HTTPS queries and `aws:` source URIs remain valid.
 
+## EC2 rule-read denial
+
+A permission denial from EC2 `DescribeSecurityGroupRules` makes the live claim
+partial. The collector retains VPC, subnet, security-group, network-interface,
+instance, and volume observations from successful reads. It omits rule records
+if any rule page is denied, emits a typed `aws_warning` naming the operation,
+regional resource, and missing-rule effect, and returns SDK `ResultPartial` with
+a warning status. Other EC2 API errors keep their existing failure behavior.
+The warning does not prove that a security group has no rules.
+
 ## Limits
 
 Default bounds live in `health.go` (`DefaultResourceUse`): 5000 records per
@@ -181,7 +191,7 @@ Core-owned fact kinds require a live #6709 producer grant naming this
 producer, version, kind, schema, and scope; namespaced kinds need none.
 The AWS issuance request set contains thirteen grants, one per core kind at
 schema `1.0.0`. The current manifest declares `aws_resource`,
-`aws_relationship`, and `aws_image_reference` alongside three transitional
+`aws_relationship`, `aws_image_reference`, and `aws_warning` alongside three transitional
 namespaced kinds.
 `TestManifestEmissionsAreAuthorized` fails when a declared kind is
 outside the collector's namespace and has no live grant scoped to a

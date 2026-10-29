@@ -5,6 +5,7 @@ package live
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -16,6 +17,7 @@ import (
 	awseks "github.com/aws/aws-sdk-go-v2/service/eks"
 	awselbv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	awslambda "github.com/aws/aws-sdk-go-v2/service/lambda"
+	"github.com/aws/smithy-go"
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 )
 
@@ -70,9 +72,15 @@ func listEC2(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]
 		}
 	}
 	rules := awsec2.NewDescribeSecurityGroupRulesPaginator(client, &awsec2.DescribeSecurityGroupRulesInput{})
+	ruleRecords := []collector.Record{}
+	var ruleDenial error
 	for rules.HasMorePages() {
 		page, err := rules.NextPage(ctx)
 		if err != nil {
+			if isOptionalEC2RuleDenial(err) {
+				ruleDenial = &optionalReadDenied{denials: []optionalDenial{{operation: "DescribeSecurityGroupRules", resource: "region:" + region, effect: "security-group-rules-unavailable"}}}
+				break
+			}
 			return nil, fmt.Errorf("ec2 describe security group rules: %w", err)
 		}
 		for _, rule := range page.SecurityGroupRules {
@@ -80,11 +88,14 @@ func listEC2(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]
 			if err != nil {
 				return nil, err
 			}
-			records, err = appendEC2Record(records, row)
+			ruleRecords, err = appendEC2Record(ruleRecords, row)
 			if err != nil {
 				return nil, err
 			}
 		}
+	}
+	if ruleDenial == nil {
+		records = append(records, ruleRecords...)
 	}
 	interfaces := awsec2.NewDescribeNetworkInterfacesPaginator(client, networkInterfaceDescribeInput())
 	for interfaces.HasMorePages() {
@@ -128,7 +139,22 @@ func listEC2(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]
 			}
 		}
 	}
-	return records, nil
+	return records, ruleDenial
+}
+
+// isOptionalEC2RuleDenial recognizes the two EC2 authorization errors for the
+// one reviewed optional operation. Other API and transport failures stay fatal.
+func isOptionalEC2RuleDenial(err error) bool {
+	var apiErr smithy.APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	switch apiErr.ErrorCode() {
+	case "UnauthorizedOperation", "AccessDenied", "AccessDeniedException":
+		return true
+	default:
+		return false
+	}
 }
 
 func ec2Name(tags []ec2types.Tag, fallback string) string {

@@ -5,6 +5,7 @@ package live
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -47,8 +48,9 @@ type Collector struct {
 // non-nil error means nothing was readable and the claim must fail instead
 // of emitting an empty report that would retire stale evidence.
 type Outcome struct {
-	Report   collector.Report
-	Warnings []string
+	Report              collector.Report
+	Warnings            []string
+	WarningObservations []collector.WarningObservation
 	// Resources are typed observations retained from successful AWS reads.
 	Resources       []collector.ResourceObservation
 	Relationships   []collector.RelationshipObservation
@@ -88,6 +90,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 	resources := []collector.ResourceObservation{}
 	relationships := []collector.RelationshipObservation{}
 	imageReferences := []collector.ImageReferenceObservation{}
+	warningObservations := []collector.WarningObservation{}
 	for i, region := range config.Regions {
 		cfg, err := c.loadConfig(ctx, region)
 		if err != nil {
@@ -118,8 +121,22 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 			}
 			listed, err := load(ctx, cfg, identity)
 			if err != nil {
-				warnings = append(warnings, fmt.Sprintf("%s/%s: %s", service, region, firstLine(err.Error())))
-				continue
+				var denied *optionalReadDenied
+				if errors.As(err, &denied) && len(denied.denials) > 0 {
+					warnings = append(warnings, fmt.Sprintf("%s/%s: %s", service, region, denied.Error()))
+					for _, entry := range denied.denials {
+						warningObservations = append(warningObservations, collector.WarningObservation{
+							Boundary:    collector.Boundary{AccountID: config.AccountID, Region: region, ServiceKind: service},
+							WarningKind: "permission_denied", ErrorClass: "permission_denied",
+							Message:        entry.operation + " denied for " + entry.resource + "; " + entry.effect,
+							SourceRecordID: entry.operation + ":" + entry.resource,
+							Attributes:     map[string]any{"operation": entry.operation, "resource": entry.resource, "effect": entry.effect},
+						})
+					}
+				} else {
+					warnings = append(warnings, fmt.Sprintf("%s/%s: %s", service, region, firstLine(err.Error())))
+					continue
+				}
 			}
 			for _, item := range listed {
 				if !item.TypedOnly {
@@ -167,11 +184,23 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 			Source:      "aws-live:" + config.AccountID + "/" + strings.Join(config.Regions, ","),
 			Records:     records,
 		},
-		Warnings:        warnings,
-		Resources:       resources,
-		Relationships:   relationships,
-		ImageReferences: imageReferences,
+		Warnings:            warnings,
+		WarningObservations: warningObservations,
+		Resources:           resources,
+		Relationships:       relationships,
+		ImageReferences:     imageReferences,
 	}, nil
+}
+
+// optionalDenial identifies one reviewed API read whose denial leaves the
+// enclosing service's other observations usable.
+type optionalDenial struct{ operation, resource, effect string }
+
+// optionalReadDenied carries one or more optional denials beside surviving records.
+type optionalReadDenied struct{ denials []optionalDenial }
+
+func (e *optionalReadDenied) Error() string {
+	return fmt.Sprintf("%d optional API read(s) denied", len(e.denials))
 }
 
 func relationshipObservation(accountID string, edge collector.LiveRelationship) collector.RelationshipObservation {

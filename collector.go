@@ -168,7 +168,7 @@ type CollectOptions struct {
 	Limits ResourceUse
 }
 
-// Contract returns typed AWS resource, relationship, and image-reference kinds
+// Contract returns typed AWS resource, relationship, image-reference, and warning kinds
 // alongside transitional families still emitted by the scaffold. The host must
 // authorize each core-owned kind with a live grant; synthetic fixture context
 // does not authorize production.
@@ -203,6 +203,11 @@ func Contract() sdk.Contract {
 			},
 			{
 				Kind:             AWSKindImageReference,
+				SchemaVersions:   []string{"1.0.0"},
+				SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceReported},
+			},
+			{
+				Kind:             AWSKindWarning,
 				SchemaVersions:   []string{"1.0.0"},
 				SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceReported},
 			},

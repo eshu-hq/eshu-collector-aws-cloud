@@ -35,6 +35,12 @@ spec:
         - 1.0.0
       sourceConfidence:
         - reported
+    - kind: aws_warning
+      payloadSchemaRef: aws_warning
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
     # TRANSITIONAL placeholder families: emitted by the scaffold pipeline
     # until the AWS logic port lands (PORT_PLAN.md). The port removes these
     # and declares the thirteen bare AWS kinds (schema 1.0.0, reported)
