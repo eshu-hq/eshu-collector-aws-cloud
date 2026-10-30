@@ -33,8 +33,18 @@ func TestIAMRoleRecordUsesVerifiedIdentityAndSafeMetadata(t *testing.T) {
 		t.Fatalf("role attributes = %#v", got.Resource.Attributes)
 	}
 	encoded, err := json.Marshal(got.Resource)
-	if err != nil || strings.Contains(string(encoded), "secret-principal") {
-		t.Fatalf("raw trust content escaped into emitted resource: %s err=%v", encoded, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Wave 1 parity emits derived trust-principal identities as graph
+	// evidence, so the anti-leak invariant now targets raw policy syntax.
+	for _, leaked := range []string{`"Statement"`, `"Principal"`, "AssumeRolePolicyDocument"} {
+		if strings.Contains(string(encoded), leaked) {
+			t.Fatalf("raw trust content escaped into emitted resource: %s", encoded)
+		}
+	}
+	if !strings.Contains(string(encoded), "secret-principal") {
+		t.Fatalf("derived trust principal missing from emitted resource: %s", encoded)
 	}
 	if got.Resource.SourceRecordID != arn || len(got.Resource.CorrelationAnchors) != 2 {
 		t.Fatalf("role provenance = %+v", got.Resource)

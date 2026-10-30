@@ -24,7 +24,19 @@ Live IAM grants and request cost remain unverified.
 
 ## Remaining role gaps
 
-The live typed role resource does not yet emit trust-principal counts or identities, normalized permission statements, role-policy relationships, or `secrets_iam_posture` facts. Those require the legacy policy normalization and envelope/telemetry seams below. IAM role enrichment adds one `GetRole` plus at least one `ListAttachedRolePolicies` and one `ListRolePolicies` call per listed role; pagination can add more calls. Any of those read errors fail the IAM service scan. A successful `GetRole` response without a role object falls back to the listed role, matching the legacy adapter.
+The live typed role resource emits trust-principal counts and identities
+derived from the reported trust document (`internal/live/iam_trust.go`,
+mirroring the in-tree trust parser with no new API reads), plus
+role-trust and attached-policy relationships. Normalized permission
+statements, `aws_iam_permission` facts, and `secrets_iam_posture` facts are
+not emitted: statement normalization needs policy-document reads (a Wave 2
+port gated on the read-grant census), and secrets posture stays core-owned
+until an SDK posture-envelope seam exists. IAM role enrichment adds one
+`GetRole` plus at least one `ListAttachedRolePolicies` and one
+`ListRolePolicies` call per listed role; pagination can add more calls. Any
+of those read errors fail the IAM service scan. A successful `GetRole`
+response without a role object falls back to the listed role, matching the
+legacy adapter.
 
 ## Remaining user gaps
 
