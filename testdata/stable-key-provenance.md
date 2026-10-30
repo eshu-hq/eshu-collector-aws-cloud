@@ -66,6 +66,76 @@ Re-execution on 2026-10-30 returned, in order above:
 each equal to the frozen satellite constant. (Prefixes abbreviated; full keys
 in the per-kind tests.)
 
+## Wave 1 EKS keys (in-tree scan parity pack)
+
+Input fixture: `testdata/wave1-eks-parity.json`
+(`sha256:e7755c553bb27e41d8f435129e127fc586cdb4cd259c9003bca95e3678e60efd`).
+
+Oracle: check out eshu-hq/eshu at commit `6ca3ad9294e2b001583da6f3b50b8161e0a80006`
+(Merge pull request #9613), add a throwaway test in
+`go/internal/collector/awscloud/service/eks/` that unmarshals the fixture
+directly into the scanner-owned types (the rows mirror those structs field for
+field), serves them from a fake `Client` (nodegroups/addons filtered by the
+requested cluster name), and prints `FactKind` + `StableFactKey` per envelope
+from `Scanner.Scan` over boundary account `123456789012`, region `us-east-1`,
+service `eks`, scope `aws:123456789012:us-east-1`, generation
+`aws:123456789012:us-east-1:wave1:1`, instance `aws-parity-wave1`, fencing
+token `7`, observed-at `2026-10-30T12:00:00Z`. Command, from the `go/`
+directory of the pinned commit:
+
+```sh
+go test ./internal/collector/awscloud/service/eks/ \
+  -run 'TestZZWave1EKSOracle' -count=1 -v
+```
+
+The scan emits 24 envelopes: cluster A with matched OIDC provider (resource,
+edge, role, 2 subnet, 2 security-group edges), nodegroup A (resource,
+membership, role, 2 subnet edges), addon A (resource, membership, role edge),
+then cluster B with issuer-only OIDC provider (resource, edge, 1 subnet edge;
+no role), nodegroup B (resource, membership; no role, no subnets), addon B
+(resource, membership; no role). The satellite proves the same 24 keys through
+the full production `listEKS` path over stubbed EKS/IAM APIs
+(`internal/live/eks_wave1_parity_test.go`), so OIDC matching, membership
+guards, and the issuer-only fallback are covered end to end, not just the
+builders:
+
+| # | Kind | Frozen key |
+|---|---|---|
+| 00 | aws_resource (cluster A) | `d93c4756…e2dd2f2` |
+| 01 | aws_resource (OIDC provider, matched) | `a7fdc7bc…6649d6a` |
+| 02 | aws_relationship (cluster->provider) | `505f4fa7…fd235` |
+| 03 | aws_relationship (cluster->role) | `100f93c3…fffe6` |
+| 04 | aws_relationship (cluster->subnet a) | `1015e821…137d` |
+| 05 | aws_relationship (cluster->subnet b) | `f427e368…96973` |
+| 06 | aws_relationship (cluster->security group) | `059886c7…fb47d` |
+| 07 | aws_relationship (cluster->cluster security group) | `dd88a0b2…bc561` |
+| 08 | aws_resource (nodegroup A) | `dd61effe…97ef46` |
+| 09 | aws_relationship (cluster->nodegroup) | `b1855320…d709` |
+| 10 | aws_relationship (nodegroup->role) | `c6c2d00c…9191` |
+| 11 | aws_relationship (nodegroup->subnet a) | `0398d175…954a` |
+| 12 | aws_relationship (nodegroup->subnet b) | `265d7ecd…d60fa` |
+| 13 | aws_resource (addon A) | `0aea8263…e2896` |
+| 14 | aws_relationship (cluster->addon) | `83d10cb7…f47f1` |
+| 15 | aws_relationship (addon->role) | `d73addbe…b2a64` |
+| 16 | aws_resource (cluster B) | `25332298…4626f1` |
+| 17 | aws_resource (OIDC provider, issuer-only) | `2f9c6c1f…83cd0` |
+| 18 | aws_relationship (cluster->provider) | `b9dcddd3…012ca` |
+| 19 | aws_relationship (cluster->subnet) | `03ef69c9…fabc` |
+| 20 | aws_resource (nodegroup B) | `cef21af4…760e34` |
+| 21 | aws_relationship (cluster->nodegroup) | `0e2d87b5…fa04d` |
+| 22 | aws_resource (addon B) | `d2fe2944…17e98a` |
+| 23 | aws_relationship (cluster->addon) | `c5dfc765…1db28` |
+
+(Full keys are frozen in the test; prefixes above are abbreviated.)
+Re-execution on 2026-10-30 returned all 24 keys byte-identical to the frozen
+satellite constants. No production change was needed: the EKS live path
+already emitted the full in-tree fact set, and this pack locks it. Two
+deliberate satellite deviations are out of fixture scope (both documented in
+`internal/service/eks/NOT_PORTED.md`): an IAM list denial degrades to an
+issuer-only provider plus warning where the in-tree scan fails, and
+same-account ARN scoping rejects cross-account provider ARNs the in-tree
+matcher would consider.
+
 ## Why this closes the common-mode gap
 
 Every parity test still compares its builder against a hardcoded constant, but
