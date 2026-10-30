@@ -15,7 +15,12 @@ import (
 
 var (
 	pinnedAction     = regexp.MustCompile(`^[A-Za-z0-9._-]+/[A-Za-z0-9._/-]+@[0-9a-f]{40}$`)
-	secretUsePattern = regexp.MustCompile(`secrets\.([A-Za-z0-9_]+)|secrets\[['"]([A-Za-z0-9_]+)['"]\]`)
+	secretUsePattern = regexp.MustCompile(`secrets\s*\.([A-Za-z0-9_]+)|secrets\s*\[\s*['"]([A-Za-z0-9_]+)['"]\s*\]`)
+	// qualifiedGITHUBToken matches the only allowed secret read, so the
+	// bare-token scan below does not flag it. The trailing boundary keeps
+	// secrets.GITHUB_TOKEN_SUFFIX from stripping down to a bare suffix.
+	qualifiedGITHUBToken = regexp.MustCompile(`secrets\s*\.\s*GITHUB_TOKEN\b|secrets\s*\[\s*['"]GITHUB_TOKEN['"]\s*\]`)
+	bareSecretsToken     = regexp.MustCompile(`\bsecrets\b`)
 )
 
 const (
@@ -39,7 +44,8 @@ type workflowStep struct {
 	Env  map[string]string `yaml:"env"`
 	// If holds the step's `if:` condition; ContinueOnError holds
 	// `continue-on-error:`. Both default to the zero value when absent.
-	// Parsed for forward-compatibility; the release checks ignore them.
+	// contractProblems requires the guard steps to leave both zero: a
+	// skipped or tolerated guard would publish past a failing check.
 	If              string `yaml:"if"`
 	ContinueOnError bool   `yaml:"continue-on-error"`
 }
@@ -164,6 +170,27 @@ func contractProblems(steps []workflowStep) []string {
 			problems = append(problems, fmt.Sprintf("%s input %s = %q, want %q", uses, input, got, sbomFile))
 		}
 	}
+	for _, guard := range []struct {
+		name string
+		idx  int
+	}{
+		{"tag shape check", tagIdx},
+		{"manifest version check", versionIdx},
+		{"main-head check", mainHeadIdx},
+		{"cosign verify", verifyIdx},
+		{"gh attestation verify", attestIdx},
+	} {
+		if guard.idx < 0 {
+			continue
+		}
+		step := steps[guard.idx]
+		if step.If != "" {
+			problems = append(problems, fmt.Sprintf("the %s runs under %q, want it unconditional", guard.name, step.If))
+		}
+		if step.ContinueOnError {
+			problems = append(problems, fmt.Sprintf("the %s sets continue-on-error, want its failure to fail the job", guard.name))
+		}
+	}
 	return problems
 }
 
@@ -223,6 +250,10 @@ func releaseWorkflowProblems(raw []byte) []string {
 			problems = append(problems, "uses secret "+name+", want only GITHUB_TOKEN")
 		}
 	}
+	stripped := qualifiedGITHUBToken.ReplaceAllString(string(raw), "")
+	if bareSecretsToken.MatchString(stripped) {
+		problems = append(problems, "reads secrets outside a qualified GITHUB_TOKEN access, want only GITHUB_TOKEN")
+	}
 	if strings.Contains(string(raw), "pull_request") {
 		problems = append(problems, "mentions pull_request: nothing may publish on a PR")
 	}
@@ -262,6 +293,19 @@ func TestReleaseWorkflowGateRejectsViolations(t *testing.T) {
 		},
 		"extra secret":   func(s string) string { return s + "\n# ${{ secrets.DEPLOY_KEY }}\n" },
 		"bracket secret": func(s string) string { return s + "\n# ${{ secrets['DEPLOY_KEY'] }}\n" },
+		"whitespace bracket secret": func(s string) string {
+			return s + "\n# ${{ secrets ['DEPLOY_KEY'] }}\n"
+		},
+		"toJSON secret store": func(s string) string { return s + "\n# ${{ toJSON(secrets) }}\n" },
+		"GITHUB_TOKEN suffix impersonation": func(s string) string {
+			return s + "\n# ${{ secrets.GITHUB_TOKEN_SUFFIX }}\n"
+		},
+		"continue-on-error on version check": func(s string) string {
+			return strings.Replace(s, "- name: Require the tag to match the manifest version\n", "- name: Require the tag to match the manifest version\n        continue-on-error: true\n", 1)
+		},
+		"if-never on version check": func(s string) string {
+			return strings.Replace(s, "- name: Require the tag to match the manifest version\n", "- name: Require the tag to match the manifest version\n        if: github.event_name == 'never'\n", 1)
+		},
 		"main-head check weakened": func(s string) string {
 			return strings.Replace(s, "git rev-parse origin/main", "git rev-parse HEAD", 1)
 		},
