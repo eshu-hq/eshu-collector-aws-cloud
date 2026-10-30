@@ -127,6 +127,9 @@ func TestS3LoggingRelationshipBuilderGuards(t *testing.T) {
 	if _, ok := s3LoggingRelationship("us-east-1", "arn:aws:s3:::assets", "  ", "logs/", "aws"); ok {
 		t.Fatal("blank target accepted")
 	}
+	if _, ok := s3LoggingRelationship("us-east-1", "arn:aws:s3:::assets", "audit", "logs/", "  "); ok {
+		t.Fatal("blank partition accepted")
+	}
 	edge, ok := s3LoggingRelationship("us-east-1", "arn:aws:s3:::assets", "audit", "logs/", "aws")
 	if !ok || edge.TargetARN != "arn:aws:s3:::audit" || edge.ServiceKind != catalog.ServiceS3 {
 		t.Fatalf("edge = %+v, %t", edge, ok)

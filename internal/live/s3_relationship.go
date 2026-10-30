@@ -33,10 +33,11 @@ func s3StringAttr(attrs map[string]any, key string) string {
 func s3LoggingRelationship(region, sourceARN, targetName, targetPrefix, partition string) (collector.LiveRelationship, bool) {
 	sourceARN = strings.TrimSpace(sourceARN)
 	targetName = strings.TrimSpace(targetName)
-	if sourceARN == "" || targetName == "" {
+	partition = strings.TrimSpace(partition)
+	if sourceARN == "" || targetName == "" || partition == "" {
 		return collector.LiveRelationship{}, false
 	}
-	targetARN := "arn:" + strings.TrimSpace(partition) + ":s3:::" + targetName
+	targetARN := "arn:" + partition + ":s3:::" + targetName
 	return collector.LiveRelationship{
 		Region:           strings.TrimSpace(region),
 		ServiceKind:      catalog.ServiceS3,
