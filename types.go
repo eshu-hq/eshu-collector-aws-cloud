@@ -48,20 +48,27 @@ type S3BucketPostureObservation struct {
 	PolicyPresent            *bool
 	PolicyGrantsPublic       *bool
 	PolicyGrantsCrossAccount *bool
-	ReplicationEnabled       *bool
-	LoggingEnabled           *bool
-	LoggingTargetBucket      string
-	VersioningStatus         *string
-	VersioningEnabled        *bool
-	MFADeleteEnabled         *bool
-	ObjectOwnership          []string
-	ACLDisabled              *bool
-	DefaultEncryptionEnabled *bool
-	EncryptionAlgorithms     []string
-	SSEKMSKeyARN             string
-	BucketKeyEnabled         *bool
-	SourceURI                string
-	SourceRecordID           string
+	// Block Public Access. Nil means the bucket had no public-access-block
+	// configuration for that flag, mirroring the in-tree observation.
+	BlockPublicACLs             *bool
+	IgnorePublicACLs            *bool
+	BlockPublicPolicy           *bool
+	RestrictPublicBuckets       *bool
+	BlockPublicAccessAllEnabled *bool
+	ReplicationEnabled          *bool
+	LoggingEnabled              *bool
+	LoggingTargetBucket         string
+	VersioningStatus            *string
+	VersioningEnabled           *bool
+	MFADeleteEnabled            *bool
+	ObjectOwnership             []string
+	ACLDisabled                 *bool
+	DefaultEncryptionEnabled    *bool
+	EncryptionAlgorithms        []string
+	SSEKMSKeyARN                string
+	BucketKeyEnabled            *bool
+	SourceURI                   string
+	SourceRecordID              string
 }
 
 // RelationshipObservation describes one relationship reported by AWS APIs.
