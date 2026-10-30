@@ -8,12 +8,15 @@ reads in `internal/live/s3_bucket.go`, plus `GetBucketPolicyStatus` and
 `GetBucketOwnershipControls` in `internal/live/s3_policy_ownership.go`.
 The live path also emits a bounded typed `s3_bucket_posture` fact with
 replication presence, confirmed logging/versioning/ownership/encryption
-settings, and policy presence plus conservatively derived public and
+settings, the four block-public-access flags plus their all-enabled summary,
+and policy presence plus conservatively derived public and
 cross-account grant flags. `GetBucketPolicy` is parsed transiently; no policy
 text or principal is emitted. An empty successful policy response leaves its
-flags unknown. Typed public-access-block flags remain unset pending reducer
-graph proof. The legacy S3 scanner, full SDK adapter, and separate policy facts
-remain unported.
+flags unknown. Buckets with a logging target also emit the
+`s3_bucket_logs_to_bucket` relationship (`internal/live/s3_relationship.go`).
+The legacy S3 scanner, full SDK adapter (policy normalization into external
+principal grants and resource-policy statements), and separate policy facts
+remain unported for the Wave 2 specialty-kind lanes.
 
 ## Not ported (class-c)
 

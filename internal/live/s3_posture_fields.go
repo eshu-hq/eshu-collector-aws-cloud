@@ -10,8 +10,17 @@ import (
 )
 
 // applyS3KnownPosture maps only fields established by successful bucket reads.
-// Public-access and policy posture remain unset until policy derivation is ported.
+// The versioning map also carries the public-access-block flags; an absent
+// configuration leaves them unknown rather than four false flags, mirroring
+// the in-tree posture observation.
 func applyS3KnownPosture(out *collector.S3BucketPostureObservation, versioning, ownership, logging map[string]any, loggingObserved bool) {
+	out.BlockPublicACLs = s3PostureFlag(versioning["block_public_acls"])
+	out.IgnorePublicACLs = s3PostureFlag(versioning["ignore_public_acls"])
+	out.BlockPublicPolicy = s3PostureFlag(versioning["block_public_policy"])
+	out.RestrictPublicBuckets = s3PostureFlag(versioning["restrict_public_buckets"])
+	out.BlockPublicAccessAllEnabled = s3BlockPublicAccessAll(
+		out.BlockPublicACLs, out.IgnorePublicACLs, out.BlockPublicPolicy, out.RestrictPublicBuckets,
+	)
 	if status, ok := versioning["versioning_status"].(string); ok && strings.TrimSpace(status) != "" {
 		status = strings.TrimSpace(status)
 		out.VersioningStatus = &status
@@ -43,6 +52,31 @@ func applyS3KnownPosture(out *collector.S3BucketPostureObservation, versioning, 
 			}
 		}
 	}
+}
+
+// s3PostureFlag keeps the unknown state of an absent public-access-block flag.
+// Only a confirmed boolean becomes a posture value; anything else stays nil.
+func s3PostureFlag(value any) *bool {
+	enabled, ok := value.(bool)
+	if !ok {
+		return nil
+	}
+	return &enabled
+}
+
+// s3BlockPublicAccessAll reports whether all four block-public-access flags
+// are explicitly enabled. It returns nil when any flag is absent so an
+// unconfigured bucket stays distinct from one with all four disabled,
+// mirroring the in-tree derivation verbatim.
+func s3BlockPublicAccessAll(flags ...*bool) *bool {
+	all := true
+	for _, flag := range flags {
+		if flag == nil {
+			return nil
+		}
+		all = all && *flag
+	}
+	return &all
 }
 
 // applyS3EncryptionPosture preserves unknown when the encryption read yielded
