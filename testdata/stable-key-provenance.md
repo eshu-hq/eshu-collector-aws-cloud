@@ -167,7 +167,7 @@ keys) and `internal/live/ec2_wave1_gap_test.go` (4 posture keys):
 | # | Kind | Satellite frozen test | Frozen key |
 |---|---|---|---|
 | 00 | aws_resource (vpc) | parity | `17f47113…65a2f8` |
-| 01 | aws_resource (subnet) | parity | `adaa5ade…75fe768` |
+| 01 | aws_resource (subnet) | parity | `adaa5ade…e768de` |
 | 02 | aws_relationship (subnet->vpc) | parity | `c4fed8da…6c4b03e` |
 | 03 | aws_resource (security group) | parity | `28c16004…61cbc9` |
 | 04 | aws_relationship (group->vpc) | parity | `6f8ff0f2…dc400` |
@@ -182,7 +182,7 @@ keys) and `internal/live/ec2_wave1_gap_test.go` (4 posture keys):
 | 13 | aws_security_group_rule (rule 3) | gap | `31dc36fc…7e126` |
 | 14 | aws_resource (network interface) | parity | `3e70715b…49a0c` |
 | 15 | aws_relationship (interface->subnet) | parity | `f4e7f902…dc695678` |
-| 16 | aws_relationship (interface->vpc) | parity | `68e87405…f703fd` |
+| 16 | aws_relationship (interface->vpc) | parity | `68e87405…36b080` |
 | 17 | aws_relationship (interface->group) | parity | `5e4b5ae7…3129800` |
 | 18 | aws_relationship (interface->instance) | parity | `22614ae8…9168` |
 | 19 | ec2_instance_posture | gap | `bccfe99d…72e81b04` |
