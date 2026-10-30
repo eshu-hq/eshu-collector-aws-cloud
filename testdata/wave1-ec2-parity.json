@@ -1,0 +1,189 @@
+{
+  "description": "Wave 1 EC2 parity inputs (eshu-hq/eshu#9296). Rows mirror the in-tree post-mapper scanner types (go/internal/collector/awscloud/service/ec2/types.go) so the in-tree oracle unmarshals them directly; the satellite test bridges the same rows into AWS SDK inputs. The satellite live path must emit the same kind and stable key the in-tree Scanner.Scan derives for these rows; expected keys are frozen in the wave1 tests with provenance in testdata/stable-key-provenance.md. No real identifiers: all values are synthetic (203.0.113.7 is TEST-NET-3, 2001:db8::/32 is documentation space).",
+  "scope_id": "aws:123456789012:us-east-1",
+  "generation_id": "aws:123456789012:us-east-1:wave1:1",
+  "collector_instance_id": "aws-parity-wave1",
+  "vpc": {
+    "ID": "vpc-wave1",
+    "OwnerID": "123456789012",
+    "State": "available",
+    "CIDRBlock": "10.0.0.0/16",
+    "DHCPOptionsID": "dopt-wave1",
+    "InstanceTenancy": "default",
+    "IsDefault": false,
+    "IPv4CIDRBlocks": [
+      {"AssociationID": "vpc-cidr-assoc-wave1", "CIDRBlock": "10.0.0.0/16", "State": "associated"}
+    ],
+    "IPv6CIDRBlocks": [
+      {"AssociationID": "vpc-ipv6-assoc-wave1", "CIDRBlock": "2001:db8::/56", "State": "associated", "IPv6Pool": "", "NetworkBorderGroup": "us-east-1"}
+    ],
+    "Tags": {"Name": "wave1-vpc"}
+  },
+  "subnet": {
+    "ARN": "arn:aws:ec2:us-east-1:123456789012:subnet/subnet-wave1",
+    "ID": "subnet-wave1",
+    "VPCID": "vpc-wave1",
+    "OwnerID": "123456789012",
+    "State": "available",
+    "CIDRBlock": "10.0.1.0/24",
+    "AvailabilityZone": "us-east-1a",
+    "AvailabilityZoneID": "use1-az1",
+    "AvailableIPAddressCount": 251,
+    "DefaultForAZ": false,
+    "MapPublicIPOnLaunch": false,
+    "AssignIPv6AddressOnCreate": false,
+    "IPv6Native": false,
+    "OutpostARN": "",
+    "IPv6CIDRBlocks": [
+      {"AssociationID": "subnet-ipv6-assoc-wave1", "CIDRBlock": "2001:db8:1::/64", "State": "associated"}
+    ],
+    "Tags": {"Name": "wave1-subnet"}
+  },
+  "security_group": {
+    "ID": "sg-wave1",
+    "Name": "wave1-web",
+    "Description": "wave1 parity group",
+    "VPCID": "vpc-wave1",
+    "OwnerID": "123456789012",
+    "Tags": {"Name": "wave1-web"}
+  },
+  "sg_rules": [
+    {
+      "ID": "sgr-wave1a",
+      "GroupID": "sg-wave1",
+      "GroupOwnerID": "123456789012",
+      "IsEgress": false,
+      "Protocol": "tcp",
+      "FromPort": 443,
+      "ToPort": 443,
+      "CIDRIPv4": "0.0.0.0/0",
+      "CIDRIPv6": "",
+      "PrefixListID": "",
+      "ReferencedGroup": null,
+      "Description": "wave1 https",
+      "Tags": {"Name": "wave1-https"}
+    },
+    {
+      "ID": "",
+      "GroupID": "sg-wave1",
+      "GroupOwnerID": "123456789012",
+      "IsEgress": true,
+      "Protocol": "-1",
+      "FromPort": null,
+      "ToPort": null,
+      "CIDRIPv4": "",
+      "CIDRIPv6": "",
+      "PrefixListID": "pl-wave1",
+      "ReferencedGroup": null,
+      "Description": "",
+      "Tags": {}
+    },
+    {
+      "ID": "sgr-wave1c",
+      "GroupID": "sg-wave1",
+      "GroupOwnerID": "123456789012",
+      "IsEgress": false,
+      "Protocol": "tcp",
+      "FromPort": 22,
+      "ToPort": 22,
+      "CIDRIPv4": "",
+      "CIDRIPv6": "",
+      "PrefixListID": "",
+      "ReferencedGroup": {
+        "GroupID": "sg-wave1-peer",
+        "UserID": "123456789012",
+        "VPCID": "vpc-wave1",
+        "PeeringStatus": "active",
+        "VPCPeeringConnectionID": ""
+      },
+      "Description": "wave1 ssh from peer",
+      "Tags": {}
+    }
+  ],
+  "network_interface": {
+    "ID": "eni-wave1",
+    "VPCID": "vpc-wave1",
+    "SubnetID": "subnet-wave1",
+    "OwnerID": "123456789012",
+    "Status": "in-use",
+    "InterfaceType": "interface",
+    "Description": "wave1 primary",
+    "AvailabilityZone": "us-east-1a",
+    "MacAddress": "02:ab:cd:ef:12:34",
+    "PrivateDNSName": "ip-10-0-1-10.ec2.internal",
+    "PrivateIPAddress": "10.0.1.10",
+    "RequesterID": "",
+    "RequesterManaged": false,
+    "SourceDestCheck": true,
+    "SecurityGroups": [
+      {"ID": "sg-wave1", "Name": "wave1-web"}
+    ],
+    "PrivateIPAddresses": [
+      {"Address": "10.0.1.10", "PrivateDNSName": "ip-10-0-1-10.ec2.internal", "Primary": true}
+    ],
+    "IPv6Addresses": [],
+    "Attachment": {
+      "ID": "eni-attach-wave1",
+      "InstanceID": "i-wave1",
+      "InstanceOwnerID": "123456789012",
+      "AttachedResourceARN": "arn:aws:ec2:us-east-1:123456789012:instance/i-wave1",
+      "AttachedResourceType": "aws_ec2_instance",
+      "Status": "attached",
+      "AttachTime": "2026-10-01T00:00:00Z",
+      "DeleteOnTermination": true,
+      "DeviceIndex": 0,
+      "NetworkCardIndex": 0
+    },
+    "Tags": {"Name": "wave1-primary"}
+  },
+  "instance": {
+    "ID": "i-wave1",
+    "ARN": "arn:aws:ec2:us-east-1:123456789012:instance/i-wave1",
+    "State": "running",
+    "OwnerID": "123456789012",
+    "InstanceType": "t3.micro",
+    "SubnetID": "subnet-wave1",
+    "VPCID": "vpc-wave1",
+    "ImageID": "ami-wave1",
+    "IMDSv2Required": true,
+    "HTTPEndpoint": "enabled",
+    "HTTPPutResponseHopLimit": 2,
+    "UserDataPresent": null,
+    "DetailedMonitoring": true,
+    "EBSOptimized": true,
+    "PublicIPAssociated": true,
+    "PublicIPAddress": "203.0.113.7",
+    "InstanceProfileARN": "arn:aws:iam::123456789012:instance-profile/wave1",
+    "Tenancy": "default",
+    "NitroEnclaveEnabled": false,
+    "BlockDevices": [
+      {"DeviceName": "/dev/sda1", "VolumeID": "vol-wave1", "DeleteOnTermination": true, "Status": "attached", "Encrypted": null}
+    ],
+    "Tags": {"Name": "wave1-host"}
+  },
+  "volume": {
+    "ID": "vol-wave1",
+    "ARN": "arn:aws:ec2:us-east-1:123456789012:volume/vol-wave1",
+    "State": "in-use",
+    "AvailabilityZone": "us-east-1a",
+    "AvailabilityZoneID": "use1-az1",
+    "CreateTime": "2026-09-01T00:00:00Z",
+    "Encrypted": true,
+    "FastRestored": null,
+    "IOPS": 3000,
+    "KMSKeyID": "arn:aws:kms:us-east-1:123456789012:key/wave1key",
+    "MultiAttachEnabled": false,
+    "OutpostARN": "",
+    "SizeGiB": 100,
+    "SnapshotID": "snap-wave1",
+    "SourceVolumeID": "",
+    "SSEType": "aws:kms",
+    "ThroughputMiBps": 500,
+    "VolumeInitializationRate": null,
+    "VolumeType": "gp3",
+    "Attachments": [
+      {"AssociatedResource": "", "AttachTime": "2026-10-01T00:00:00Z", "DeleteOnTermination": true, "Device": "/dev/sda1", "EBSCardIndex": null, "InstanceID": "i-wave1", "InstanceOwningService": "", "State": "attached", "VolumeID": "vol-wave1"}
+    ],
+    "Tags": {"Name": "wave1-vol"}
+  }
+}

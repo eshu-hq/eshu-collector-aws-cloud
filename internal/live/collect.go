@@ -60,6 +60,11 @@ type Outcome struct {
 	Relationships   []collector.RelationshipObservation
 	ImageReferences []collector.ImageReferenceObservation
 	S3Postures      []collector.S3BucketPostureObservation
+	// SGPostures carries one aws_security_group_rule posture per
+	// DescribeSecurityGroupRules row; EC2Postures carries one
+	// ec2_instance_posture per DescribeInstances row.
+	SGPostures  []collector.SecurityGroupRuleObservation
+	EC2Postures []collector.EC2InstancePostureObservation
 }
 
 func (c Collector) now() time.Time {
@@ -96,6 +101,8 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 	relationships := []collector.RelationshipObservation{}
 	imageReferences := []collector.ImageReferenceObservation{}
 	s3Postures := []collector.S3BucketPostureObservation{}
+	sgPostures := []collector.SecurityGroupRuleObservation{}
+	ec2Postures := []collector.EC2InstancePostureObservation{}
 	warningObservations := []collector.WarningObservation{}
 	ordinaryFailure := false
 	for i, region := range config.Regions {
@@ -162,6 +169,16 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 					posture.Boundary.AccountID = config.AccountID
 					s3Postures = append(s3Postures, posture)
 				}
+				if item.SGPosture != nil {
+					posture := *item.SGPosture
+					posture.Boundary.AccountID = config.AccountID
+					sgPostures = append(sgPostures, posture)
+				}
+				if item.EC2Posture != nil {
+					posture := *item.EC2Posture
+					posture.Boundary.AccountID = config.AccountID
+					ec2Postures = append(ec2Postures, posture)
+				}
 				if !item.TypedOnly {
 					records = append(records, item)
 				}
@@ -202,6 +219,8 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 		Relationships:       relationships,
 		ImageReferences:     imageReferences,
 		S3Postures:          s3Postures,
+		SGPostures:          sgPostures,
+		EC2Postures:         ec2Postures,
 	}, nil
 }
 

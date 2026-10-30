@@ -73,7 +73,45 @@ func securityGroupRuleRecord(rule ec2types.SecurityGroupRule, region string) (co
 		"referenced_group": referencedSecurityGroupAttributes(rule.ReferencedGroupInfo),
 		"to_port":          optionalEC2Port(rule.ToPort),
 	}
+	if id != "" && groupID != "" {
+		result.Relationship = &collector.LiveRelationship{
+			Region: region, ServiceKind: "ec2", RelationshipType: "ec2_security_group_has_rule",
+			SourceResourceID: groupID, TargetResourceID: id, TargetType: "aws_ec2_security_group_rule",
+			Attributes:     map[string]any{"direction": direction},
+			SourceRecordID: groupID + "#rule#" + id,
+		}
+	}
+	result.SGPosture = securityGroupRulePosture(rule, region)
 	return result, nil
+}
+
+// securityGroupRulePosture maps the DescribeSecurityGroupRules row already
+// fetched for the resource fact into the normalized aws_security_group_rule
+// posture observation. It reuses the in-tree field mapping verbatim: only the
+// referenced-group id is flattened, and the raw AWS rule id (blank when AWS
+// omits it) feeds the posture identity, never the legacy fallback. The source
+// record id stays empty so the seam applies its in-tree-mirrored default. It
+// adds no AWS API call.
+func securityGroupRulePosture(rule ec2types.SecurityGroupRule, region string) *collector.SecurityGroupRuleObservation {
+	var referencedSG string
+	if rule.ReferencedGroupInfo != nil {
+		referencedSG = strings.TrimSpace(aws.ToString(rule.ReferencedGroupInfo.GroupId))
+	}
+	return &collector.SecurityGroupRuleObservation{
+		Boundary:     collector.Boundary{Region: region, ServiceKind: "ec2"},
+		RuleID:       strings.TrimSpace(aws.ToString(rule.SecurityGroupRuleId)),
+		GroupID:      strings.TrimSpace(aws.ToString(rule.GroupId)),
+		GroupOwnerID: strings.TrimSpace(aws.ToString(rule.GroupOwnerId)),
+		IsEgress:     aws.ToBool(rule.IsEgress),
+		IPProtocol:   strings.TrimSpace(aws.ToString(rule.IpProtocol)),
+		FromPort:     rule.FromPort,
+		ToPort:       rule.ToPort,
+		CIDRIPv4:     strings.TrimSpace(aws.ToString(rule.CidrIpv4)),
+		CIDRIPv6:     strings.TrimSpace(aws.ToString(rule.CidrIpv6)),
+		PrefixListID: strings.TrimSpace(aws.ToString(rule.PrefixListId)),
+		ReferencedSG: referencedSG,
+		Description:  strings.TrimSpace(aws.ToString(rule.Description)),
+	}
 }
 
 func referencedSecurityGroupAttributes(group *ec2types.ReferencedSecurityGroup) map[string]any {
