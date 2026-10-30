@@ -1,5 +1,9 @@
 version: "2"
 linters:
+  # No separate gosimple entry: golangci-lint v2 folds the S-class
+  # (gosimple-origin) checks into staticcheck — verified by an S1008 probe
+  # firing with only this set enabled. Adding `gosimple` fails the run
+  # with "unknown linters".
   enable:
     - govet
     - staticcheck

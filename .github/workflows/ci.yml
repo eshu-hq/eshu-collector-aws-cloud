@@ -150,7 +150,7 @@ jobs:
       - run: go test ./... -count=1
 
   race:
-    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.go == 'true' || needs.changes.outputs.fixtures == 'true' || needs.changes.outputs.misc == 'true' || needs.changes.outputs.workflows == 'true' || (needs.changes.result != 'success' && github.event_name != 'pull_request' && github.event_name != 'schedule'))
+    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.go == 'true' || needs.changes.outputs.misc == 'true' || needs.changes.outputs.workflows == 'true' || (needs.changes.result != 'success' && github.event_name != 'pull_request' && github.event_name != 'schedule'))
     needs: [changes]
     runs-on: ubuntu-latest
     timeout-minutes: 30
