@@ -19,7 +19,7 @@ Job names are frozen because branch protection requires `ci-complete`:
 | --- | --- |
 | `lint` | Go sources, `manifest.yaml`, module or lint-config changes, or any unclassified path (see below) |
 | `test` | Above, plus fixtures and config the tests read, or any unclassified path |
-| `race` | Same inputs as `lint` (fixture-only PRs skip it), plus a coverage artifact and floor check |
+| `race` | Same inputs as `test` (fixture-only PRs keep the `-race` and floor signal: fixture changes can move coverage), plus a coverage artifact and floor check |
 | `shell` | Shell script changes |
 | `image` | Go sources (the Dockerfile builds the binary from them), `Dockerfile`, `.dockerignore`, `manifest.yaml`, or module changes (build only, no push) |
 | `govulncheck` | Dependency changes, pushes to `main`, weekly schedule, manual dispatch; a failing scheduled run files or updates an issue |

@@ -155,7 +155,9 @@ func TestUnclassifiedPathsRunFullLanes(t *testing.T) {
 // TestNarrowLanesKeepSkipBehavior guards the other half of issue #6:
 // shell-only PRs still run shell only, and fixture-JSON-only PRs still
 // run test (and race) without lint. The misc catch-all must not leak
-// into the narrow lanes.
+// into the narrow lanes. Race deliberately keeps the fixtures trigger:
+// fixture changes can move statement coverage, so fixture-only PRs keep
+// the -race and COVERAGE_FLOOR signal (see TestFixtureChangesKeepRaceSignal).
 func TestNarrowLanesKeepSkipBehavior(t *testing.T) {
 	t.Parallel()
 
@@ -179,6 +181,33 @@ func TestNarrowLanesKeepSkipBehavior(t *testing.T) {
 	shell := workflow.Jobs["shell"]
 	if !strings.Contains(shell.If, "needs.changes.outputs.shell == 'true'") {
 		t.Errorf("job shell if = %q, want the shell selecting clause", shell.If)
+	}
+}
+
+// TestFixtureChangesKeepRaceSignal pins the lane mapping the coverage floor
+// depends on: fixture-only changes select test and race (never lint), so a
+// fixture PR that moves statement coverage still runs the -race suite and
+// the COVERAGE_FLOOR check. Removing the fixtures clause from the race
+// condition fails this test.
+func TestFixtureChangesKeepRaceSignal(t *testing.T) {
+	t.Parallel()
+
+	workflow := readCIWorkflow(t)
+	for _, lane := range []string{"test", "race"} {
+		job, ok := workflow.Jobs[lane]
+		if !ok {
+			t.Fatalf("ci.yml has no %s job", lane)
+		}
+		if !strings.Contains(job.If, "needs.changes.outputs.fixtures == 'true'") {
+			t.Errorf("job %s if = %q, want the fixtures selecting clause: fixture changes can move coverage", lane, job.If)
+		}
+	}
+	lint, ok := workflow.Jobs["lint"]
+	if !ok {
+		t.Fatal("ci.yml has no lint job")
+	}
+	if strings.Contains(lint.If, "needs.changes.outputs.fixtures") {
+		t.Errorf("job lint if = %q, want no fixtures clause: fixture-only PRs skip lint", lint.If)
 	}
 }
 
