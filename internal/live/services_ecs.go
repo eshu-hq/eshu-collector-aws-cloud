@@ -79,24 +79,22 @@ func listECS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 							return nil, fmt.Errorf("ecs described task has no ARN")
 						}
 						records = append(records, row)
+						// Standalone tasks (run-task one-offs, Batch jobs)
+						// pin revisions no service references; collect them
+						// here so their definitions resolve like services'.
+						records, err = collectECSTaskDefinition(ctx, client, records, aws.ToString(task.TaskDefinitionArn), region, seenDefinitions)
+						if err != nil {
+							return nil, err
+						}
 					}
 				}
 			}
 		}
 	}
-	definitions := awsecs.NewListTaskDefinitionsPaginator(client, &awsecs.ListTaskDefinitionsInput{})
-	for definitions.HasMorePages() {
-		page, err := definitions.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("ecs list task definitions: %w", err)
-		}
-		for _, arn := range page.TaskDefinitionArns {
-			records, err = collectECSTaskDefinition(ctx, client, records, arn, region, seenDefinitions)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
+	// Task definitions stay referenced-only: services and tasks collect the
+	// revisions they pin inline above. Enumerating every registered revision
+	// (thousands in a real account, including deregistered ones) throttles
+	// DescribeTaskDefinition and fails the whole ECS leg with zero facts.
 	return records, nil
 }
 

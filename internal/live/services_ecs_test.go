@@ -87,3 +87,92 @@ func TestListECSIncludesInactiveServiceDefinitionOnce(t *testing.T) {
 		t.Fatalf("DescribeTaskDefinition calls = %+v, want one per distinct ARN", describeCounts)
 	}
 }
+
+// TestListECSDescribesOnlyReferencedTaskDefinitions proves the loader never
+// describes revisions nothing references: enumerating every registered
+// revision (thousands in a real account) throttles DescribeTaskDefinition
+// and fails the whole ECS leg with zero facts (eshu-hq/eshu#9307, bg-qa:
+// ~8.7k revisions, ThrottlingException, 0 ECS facts on completed claims).
+func TestListECSDescribesOnlyReferencedTaskDefinitions(t *testing.T) {
+	const prefix = "arn:aws:ecs:us-east-1:123456789012:"
+	clusterARN := prefix + "cluster/prod"
+	referencedARN := prefix + "task-definition/web:2"
+	taskReferencedARN := prefix + "task-definition/batch:7"
+	unreferencedARN := prefix + "task-definition/batch:99"
+	taskARN := prefix + "task/prod/abc123"
+	describeCounts := map[string]int{}
+	listDefinitionsCalls := 0
+	responses := map[string]any{
+		"ListClusters":     map[string]any{"clusterArns": []string{clusterARN}},
+		"DescribeClusters": map[string]any{"clusters": []map[string]any{{"clusterArn": clusterARN, "clusterName": "prod"}}},
+		"ListServices":     map[string]any{"serviceArns": []string{prefix + "service/prod/current"}},
+		"DescribeServices": map[string]any{"services": []map[string]any{{"serviceArn": prefix + "service/prod/current", "taskDefinition": referencedARN}}},
+		"ListTasks":        map[string]any{"taskArns": []string{taskARN}},
+		"DescribeTasks":    map[string]any{"tasks": []map[string]any{{"taskArn": taskARN, "clusterArn": clusterARN, "taskDefinitionArn": taskReferencedARN, "lastStatus": "RUNNING"}}},
+	}
+	transport := ecsRoundTripFunc(func(request *http.Request) (*http.Response, error) {
+		target := request.Header.Get("X-Amz-Target")
+		operation := target[strings.LastIndex(target, ".")+1:]
+		var payload any
+		switch operation {
+		case "DescribeTaskDefinition":
+			var input struct {
+				ARN string `json:"taskDefinition"`
+			}
+			if err := json.NewDecoder(request.Body).Decode(&input); err != nil {
+				return nil, err
+			}
+			describeCounts[input.ARN]++
+			payload = map[string]any{"taskDefinition": map[string]any{"taskDefinitionArn": input.ARN, "family": "web", "revision": 2, "status": "ACTIVE"}}
+		case "ListTaskDefinitions":
+			listDefinitionsCalls++
+			payload = map[string]any{"taskDefinitionArns": []string{referencedARN, unreferencedARN}}
+		default:
+			var ok bool
+			payload, ok = responses[operation]
+			if !ok {
+				return nil, fmt.Errorf("unexpected ECS operation %q", target)
+			}
+		}
+		body, err := json.Marshal(payload)
+		if err != nil {
+			return nil, err
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/x-amz-json-1.1"}}, Body: io.NopCloser(strings.NewReader(string(body))), Request: request}, nil
+	})
+	cfg := aws.Config{Region: "us-east-1", Credentials: aws.AnonymousCredentials{}, HTTPClient: &http.Client{Transport: transport}, RetryMaxAttempts: 1}
+	records, err := listECS(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if describeCounts[referencedARN] != 1 {
+		t.Fatalf("DescribeTaskDefinition calls = %+v, want exactly one for the service-referenced revision", describeCounts)
+	}
+	if describeCounts[taskReferencedARN] != 1 {
+		t.Fatalf("DescribeTaskDefinition calls = %+v, want exactly one for the task-referenced revision", describeCounts)
+	}
+	if describeCounts[unreferencedARN] != 0 {
+		t.Fatalf("DescribeTaskDefinition calls = %+v, want zero for the unreferenced revision", describeCounts)
+	}
+	if listDefinitionsCalls != 0 {
+		t.Fatalf("ListTaskDefinitions calls = %d, want zero (no enumerate-all sweep)", listDefinitionsCalls)
+	}
+	foundService, foundTask := false, false
+	for _, row := range records {
+		if row.Resource == nil {
+			continue
+		}
+		switch row.Resource.ResourceID {
+		case referencedARN:
+			foundService = true
+		case taskReferencedARN:
+			foundTask = true
+		}
+	}
+	if !foundService {
+		t.Fatal("service-referenced task definition missing from records")
+	}
+	if !foundTask {
+		t.Fatal("task-referenced task definition missing from records")
+	}
+}
