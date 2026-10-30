@@ -15,12 +15,12 @@ import (
 
 // TestWave1EC2PipelineFansOutPostures proves the fan-out wiring the key
 // parity tests cannot see: record posture fields flow through CollectReport
-// into Outcome slices and through the production appender sequence (the same
-// seven calls in the same order as cmd/collector/collectLivePlan) into
-// validated facts. The loader feeds one rule row and one instance row through
-// the real production builders; no network is touched. Omitting an appender
-// from the mirrored sequence fails the outcome assertions here instead of
-// silently dropping the posture kinds in production.
+// into Outcome slices and through AppendOutcomeFacts — the same shared
+// function cmd/collector/collectLivePlan calls — into validated facts. The
+// loader feeds one rule row and one instance row through the real production
+// builders; no network is touched. Omitting an appender from the shared
+// sequence fails the assertions here instead of silently dropping the
+// posture kinds in production.
 func TestWave1EC2PipelineFansOutPostures(t *testing.T) {
 	t.Parallel()
 
@@ -75,28 +75,8 @@ func TestWave1EC2PipelineFansOutPostures(t *testing.T) {
 	}
 	sourceURI := "aws:ec2:us-east-1:wave1-parity"
 	limits := collector.DefaultResourceUse()
-	// Mirror of cmd/collector/collectLivePlan: same appenders, same order.
-	// A production refactor centralizing this sequence is out of scope for
-	// the Wave 1 EC2 lane; this mirror pins the order the lane relies on.
-	if result, err = collector.AppendLiveResources(result, outcome.Resources, sourceURI, limits); err != nil {
-		t.Fatal(err)
-	}
-	if result, err = collector.AppendLiveRelationships(result, outcome.Relationships, sourceURI, limits); err != nil {
-		t.Fatal(err)
-	}
-	if result, err = collector.AppendLiveImageReferences(result, outcome.ImageReferences, sourceURI, limits); err != nil {
-		t.Fatal(err)
-	}
-	if result, err = collector.AppendLiveS3BucketPostures(result, outcome.S3Postures, sourceURI, limits); err != nil {
-		t.Fatal(err)
-	}
-	if result, err = collector.AppendLiveSecurityGroupRulePostures(result, outcome.SGPostures, sourceURI, limits); err != nil {
-		t.Fatal(err)
-	}
-	if result, err = collector.AppendLiveEC2InstancePostures(result, outcome.EC2Postures, sourceURI, limits); err != nil {
-		t.Fatal(err)
-	}
-	if result, err = collector.AppendLiveWarnings(result, outcome.WarningObservations, sourceURI, limits); err != nil {
+	// Production path: the exact shared function collectLivePlan calls.
+	if result, err = AppendOutcomeFacts(result, outcome, sourceURI, limits); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := sdk.NewValidator(collector.Contract()).ValidateResult(result); err != nil {
