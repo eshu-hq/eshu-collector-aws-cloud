@@ -127,13 +127,14 @@ func TestKnowledgeBaseURLDataSources(t *testing.T) {
 		DataSources: []KnowledgeBaseDataSource{
 			{ID: "DS-WEB", Name: "docs", Type: "WEB", URL: "https://example.com/docs"},
 			{ID: "DS-CONF", Name: "wiki", Type: "confluence", URL: "https://wiki.example.com"},
+			{ID: "DS-SP", Name: "site", Type: "SharePoint", URL: "https://example.sharepoint.com/sites/x"},
 			{ID: "DS-UNKNOWN", Name: "mystery", Type: "CUSTOM", URL: "https://custom.example.com"},
 			{ID: "DS-EMPTY", Name: "empty", Type: "WEB"},
 		},
 	}
 	observations := knowledgeBaseRelationships(kb)
-	if len(observations) != 2 {
-		t.Fatalf("URL data-source relationships = %d, want 2 (web, confluence)", len(observations))
+	if len(observations) != 3 {
+		t.Fatalf("URL data-source relationships = %d, want 3 (web, confluence, sharepoint)", len(observations))
 	}
 	if observations[0].RelationshipType != catalog.RelationshipBedrockKnowledgeBaseUsesWebCrawler ||
 		observations[0].TargetResourceID != "https://example.com/docs" ||
@@ -144,6 +145,11 @@ func TestKnowledgeBaseURLDataSources(t *testing.T) {
 		observations[1].TargetResourceID != "https://wiki.example.com" ||
 		observations[1].TargetType != "confluence_data_source" {
 		t.Fatalf("confluence relationship = %#v", observations[1])
+	}
+	if observations[2].RelationshipType != catalog.RelationshipBedrockKnowledgeBaseUsesSharePoint ||
+		observations[2].TargetResourceID != "https://example.sharepoint.com/sites/x" ||
+		observations[2].TargetType != "sharepoint_data_source" {
+		t.Fatalf("sharepoint relationship = %#v", observations[2])
 	}
 	if got := knowledgeBaseRelationships(KnowledgeBase{}); got != nil {
 		t.Fatalf("identity-less knowledge base = %#v, want nil", got)
