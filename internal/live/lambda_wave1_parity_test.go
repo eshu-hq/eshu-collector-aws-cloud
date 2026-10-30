@@ -183,6 +183,93 @@ func TestWave1LambdaPayloadBranches(t *testing.T) {
 	}
 }
 
+// TestWave1LambdaMappingAttributeEquality pins the mapping and placement
+// attribute VALUES the stable-key parity cannot see: keys hash identity
+// only, so a swapped batch_size/maximum_retry_attempts (or a wrong vpc_id)
+// would pass every key gate. Expectations come straight from the fixture
+// rows in testdata/wave1-lambda-parity.json.
+func TestWave1LambdaMappingAttributeEquality(t *testing.T) {
+	t.Parallel()
+
+	fixture := loadWave1LambdaFixture(t)
+	cfg := wave1LambdaStubConfig(t, fixture)
+	records, err := listLambda(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]collector.Record{}
+	for _, record := range records {
+		if record.Resource != nil {
+			byID[record.Resource.ResourceType+"\x00"+record.Resource.ResourceID] = record
+		}
+	}
+
+	mappingA, ok := byID["aws_lambda_event_source_mapping\x00arn:aws:lambda:us-east-1:123456789012:event-source-mapping:11111111-2222-3333-4444-555555555555"]
+	if !ok {
+		t.Fatal("mapping A record missing")
+	}
+	wantMappingA := map[string]any{
+		"batch_size":             int32(10),
+		"event_source_arn":       "arn:aws:sqs:us-east-1:123456789012:wave1-events",
+		"function_arn":           "arn:aws:lambda:us-east-1:123456789012:function:wave1-a",
+		"last_processing_result": "OK",
+		"maximum_retry_attempts": int32(2),
+		"parallelization_factor": int32(1),
+		"starting_position":      "TRIM_HORIZON",
+		"uuid":                   "11111111-2222-3333-4444-555555555555",
+	}
+	if !reflect.DeepEqual(mappingA.Resource.Attributes, wantMappingA) {
+		t.Fatalf("mapping A attributes = %#v, want %#v", mappingA.Resource.Attributes, wantMappingA)
+	}
+	if mappingA.Relationship == nil {
+		t.Fatal("mapping A relationship missing")
+	}
+	wantEdgeA := map[string]any{
+		"event_source_arn": "arn:aws:sqs:us-east-1:123456789012:wave1-events",
+		"state":            "Enabled",
+		"uuid":             "11111111-2222-3333-4444-555555555555",
+	}
+	if !reflect.DeepEqual(mappingA.Relationship.Attributes, wantEdgeA) {
+		t.Fatalf("mapping A edge attributes = %#v, want %#v", mappingA.Relationship.Attributes, wantEdgeA)
+	}
+
+	mappingB, ok := byID["aws_lambda_event_source_mapping\x0022222222-2222-3333-4444-555555555555"]
+	if !ok {
+		t.Fatal("UUID-only mapping record missing")
+	}
+	wantMappingB := map[string]any{
+		"batch_size":             int32(0),
+		"event_source_arn":       "arn:aws:kinesis:us-east-1:123456789012:stream/wave1-events",
+		"function_arn":           "arn:aws:lambda:us-east-1:123456789012:function:wave1-b",
+		"last_processing_result": "",
+		"maximum_retry_attempts": int32(0),
+		"parallelization_factor": int32(0),
+		"starting_position":      "",
+		"uuid":                   "22222222-2222-3333-4444-555555555555",
+	}
+	if !reflect.DeepEqual(mappingB.Resource.Attributes, wantMappingB) {
+		t.Fatalf("mapping B attributes = %#v, want %#v", mappingB.Resource.Attributes, wantMappingB)
+	}
+
+	functionA, ok := byID["aws_lambda_function\x00arn:aws:lambda:us-east-1:123456789012:function:wave1-a"]
+	if !ok {
+		t.Fatal("function A record missing")
+	}
+	placements := map[string]map[string]any{}
+	for _, edge := range functionA.Relationships {
+		placements[edge.RelationshipType+"\x00"+edge.TargetResourceID] = edge.Attributes
+	}
+	wantPlacements := map[string]map[string]any{
+		"lambda_function_uses_execution_role\x00arn:aws:iam::123456789012:role/wave1-lambda-role": nil,
+		"lambda_function_uses_subnet\x00subnet-wave1a": {"vpc_id": "vpc-wave1"},
+		"lambda_function_uses_subnet\x00subnet-wave1b": {"vpc_id": "vpc-wave1"},
+		"lambda_function_uses_security_group\x00sg-wave1": {"vpc_id": "vpc-wave1"},
+	}
+	if !reflect.DeepEqual(placements, wantPlacements) {
+		t.Fatalf("function A placements = %#v, want %#v", placements, wantPlacements)
+	}
+}
+
 // lambdaWave1Resource converts a live resource exactly as CollectReport does:
 // the loader supplies identity, the claim triple is bound here in tests.
 func lambdaWave1Resource(accountID string, resource *collector.LiveResource) collector.ResourceObservation {
