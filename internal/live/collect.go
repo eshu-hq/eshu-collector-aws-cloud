@@ -183,18 +183,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 				if item.Resource == nil {
 					continue
 				}
-				resources = append(resources, collector.ResourceObservation{
-					Boundary: collector.Boundary{
-						AccountID: config.AccountID, Region: item.Resource.Region,
-						ServiceKind: item.Resource.ServiceKind,
-					},
-					ARN: item.Resource.ARN, ResourceID: item.Resource.ResourceID,
-					ResourceType: item.Resource.ResourceType, Name: item.Resource.Name,
-					State: item.Resource.State, Tags: item.Resource.Tags,
-					Attributes:         item.Resource.Attributes,
-					CorrelationAnchors: append([]string(nil), item.Resource.CorrelationAnchors...),
-					SourceRecordID:     item.Resource.SourceRecordID,
-				})
+				resources = append(resources, resourceObservation(config.AccountID, item.Resource))
 			}
 		}
 	}
@@ -267,6 +256,24 @@ type optionalReadDenied struct{ denials []optionalDenial }
 
 func (e *optionalReadDenied) Error() string {
 	return fmt.Sprintf("%d optional API read(s) denied", len(e.denials))
+}
+
+// resourceObservation maps one live resource row into the typed observation
+// the envelope seam facts out. CollectReport and chain tests share it so the
+// tested mapping is the shipped mapping.
+func resourceObservation(accountID string, res *collector.LiveResource) collector.ResourceObservation {
+	return collector.ResourceObservation{
+		Boundary: collector.Boundary{
+			AccountID: accountID, Region: res.Region,
+			ServiceKind: res.ServiceKind,
+		},
+		ARN: res.ARN, ResourceID: res.ResourceID,
+		ResourceType: res.ResourceType, Name: res.Name,
+		State: res.State, Tags: res.Tags,
+		Attributes:         res.Attributes,
+		CorrelationAnchors: append([]string(nil), res.CorrelationAnchors...),
+		SourceRecordID:     res.SourceRecordID,
+	}
 }
 
 func relationshipObservation(accountID string, edge collector.LiveRelationship) collector.RelationshipObservation {
