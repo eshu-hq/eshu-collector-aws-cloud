@@ -395,7 +395,10 @@ Every artifact in `manifest.yaml` is digest-pinned (`@sha256:…`, never
 the all-zero placeholder digest is rejected once the component is renamed —
 so the scaffold release flow pins the real pushed digest with
 `scripts/pin-digest.sh`. Base images in `Dockerfile` are pinned the same
-way; re-pin them when bumping either base.
+way; re-pin them when bumping either base. `version` in `manifest.yaml`
+and the git tag must match (`v0.1.0` for `0.1.0`); pushing a `v*` tag runs
+`release.yml`, which builds, signs, and publishes the image plus SBOM and
+provenance attestations. `release_version_test.go` enforces both directions.
 
 ## Remote proof
 
