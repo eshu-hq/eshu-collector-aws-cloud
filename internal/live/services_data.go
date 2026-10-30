@@ -5,6 +5,7 @@ package live
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -145,7 +146,12 @@ func listS3WithAPI(ctx context.Context, client s3BucketAPI, region string, ident
 			}
 			policyFlags, err := readS3BucketPolicyFlags(ctx, client, aws.ToString(bucket.Name), identity.AccountID)
 			if err != nil {
-				return nil, err
+				if errors.Is(err, errS3PolicyUnparsable) {
+					denials = append(denials, optionalDenial{operation: "GetBucketPolicy", resource: "bucket:" + aws.ToString(bucket.Name), effect: "policy-unknown"})
+					policyFlags = s3PolicyFlags{}
+				} else {
+					return nil, err
+				}
 			}
 			row.S3Posture = &collector.S3BucketPostureObservation{
 				Boundary:  collector.Boundary{Region: region, ServiceKind: "s3"},
