@@ -268,10 +268,11 @@ func NewSSMHostApplicationFact(obs SSMHostApplicationObservation) (sdk.Fact, err
 // The emitter calls it before building platform facts. hasCaptureTime
 // reports whether the observation carries any capture-time value.
 func ValidateSSMHostPlatformProvenance(sourceType string, hasCaptureTime bool) error {
-	if sourceType == "describe_instance_information" && hasCaptureTime {
+	sourceType = strings.TrimSpace(sourceType)
+	if sourceType == SSMHostPlatformSourceDescribeInstanceInformation && hasCaptureTime {
 		return fmt.Errorf("ssm host inventory: capture time with DescribeInstanceInformation provenance")
 	}
-	if sourceType == "ssm_inventory" && !hasCaptureTime {
+	if sourceType == SSMHostPlatformSourceInventory && !hasCaptureTime {
 		return fmt.Errorf("ssm host inventory: inventory provenance without capture time")
 	}
 	return nil
