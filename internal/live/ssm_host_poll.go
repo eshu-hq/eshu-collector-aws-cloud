@@ -53,9 +53,16 @@ func PollSSMHostInventory(ctx context.Context, api SSMInventoryAPI, identity Ver
 	discovered, err := discoverSSMManagedNodes(ctx, api, polled)
 	if err != nil {
 		if isSSMDenial(err) {
-			for _, id := range targets {
+			// A discovery denial marks only the hosts actually
+			// polled: targets beyond the host cap keep their visible
+			// deferred verdict instead of a denial they never met.
+			for _, id := range polled {
 				report.Hosts = append(report.Hosts, SSMHostPollResult{InstanceID: id, Outcome: SSMHostInventoryDenied, Reason: ssmCaptureReasonDenied})
 				report.Aggregates.DeniedHosts++
+			}
+			for _, id := range deferred {
+				report.Hosts = append(report.Hosts, SSMHostPollResult{InstanceID: id, Outcome: SSMHostInventoryPartial, Reason: ssmCaptureReasonDeferred})
+				report.Aggregates.PartialHosts++
 			}
 			report.Aggregates.Outcome = SSMHostInventoryDenied
 			return report, nil
@@ -97,7 +104,10 @@ func PollSSMHostInventory(ctx context.Context, api SSMInventoryAPI, identity Ver
 	if seen {
 		report.Aggregates.Outcome = outcome
 	} else {
-		report.Aggregates.Outcome = SSMHostInventorySuccessful
+		// No host voted: every host was excluded, so the poll managed
+		// nothing and must not read Successful. A fully misconfigured
+		// target list looks green otherwise.
+		report.Aggregates.Outcome = SSMHostInventoryPartial
 	}
 	return report, nil
 }
@@ -233,10 +243,17 @@ func pageSSMInventory(ctx context.Context, api SSMInventoryAPI, id string, limit
 			return pages, nil, false
 		}
 		if strings.TrimSpace(aws.ToString(out.InstanceId)) != "" && strings.TrimSpace(aws.ToString(out.InstanceId)) != id {
+			// A page for another host's stream is incoherent evidence
+			// for the requested host: record it under the requested id
+			// with no capture time, so the assessment verdicts partial
+			// (missing) and the prior generation stands. A single
+			// wrong-instance page must never read as a successful empty
+			// capture: it is self-consistent by construction, so
+			// coherence alone cannot catch it.
 			pages = append(pages, SSMInventoryPage{
-				InstanceID: aws.ToString(out.InstanceId), SourceType: "AWS:Application",
+				InstanceID: id, SourceType: "AWS:Application",
 				SchemaVersion: aws.ToString(out.SchemaVersion),
-				CaptureTime:   aws.ToString(out.CaptureTime),
+				CaptureTime:   "",
 				FetchToken:    aws.ToString(token),
 			})
 			return pages, nil, false

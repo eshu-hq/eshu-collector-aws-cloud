@@ -84,17 +84,27 @@ type SSMHostInventoryLimits struct {
 	// MaxCrossTypeSkew bounds the allowed capture-time difference between
 	// the platform and application evidence admitted as one host view: AWS
 	// does not promise equal capture times across types. Required
-	// positive, at most MaxCaptureAge.
+	// positive, at most MaxCaptureAge. Ownership: Validate enforces the
+	// coherence of the bound at startup; the poll does not verdict skew
+	// (the application read stands on its own capture assessment).
+	// The paired view is assembled downstream, so skew between the two
+	// emitted evidence times is enforced where they pair (reducer/read
+	// path), which sees both facts with their times.
 	MaxCrossTypeSkew time.Duration
 
 	// MaxPlatformObservationAge bounds the age of a
 	// DescribeInstanceInformation platform observation: that source has no
 	// inventory capture time, so this separate evidence rule governs it.
-	// Required positive.
+	// Required positive. Ownership: the collector stamps ObservationTime
+	// at poll time and always emits a fresh one; aging out an older
+	// observation belongs to the read path that holds it, not to the
+	// poll that just took it.
 	MaxPlatformObservationAge time.Duration
 
 	// RetentionDays bounds how long admitted SSM host observations are
-	// retained. Required positive.
+	// retained. Required positive. Ownership: retention pruning lives
+	// with the store, not the poll; the collector emits dated evidence
+	// the pruner can bound.
 	RetentionDays int
 
 	// Targets is the explicit configured host set. Required non-empty:

@@ -79,6 +79,20 @@ func TestSSMHostApplicationKeyIdentity(t *testing.T) {
 	if SSMHostApplicationStableKey(other) == SSMHostApplicationStableKey(base) {
 		t.Fatal("another capture must be a new observation, not a duplicate")
 	}
+	padded := base
+	deref := func(s *string) string {
+		if s == nil {
+			return ""
+		}
+		return *s
+	}
+	pad := func(s string) *string { v := "  " + s + "\t"; return &v }
+	padded.Name, padded.Version, padded.Release = pad(deref(base.Name)), pad(deref(base.Version)), pad(deref(base.Release))
+	padded.Epoch, padded.PackageID, padded.Architecture = pad(deref(base.Epoch)), pad(deref(base.PackageID)), pad(deref(base.Architecture))
+	padded.Partition, padded.Region, padded.InstanceID, padded.CaptureTime = "  "+base.Partition+" ", " "+base.Region, base.InstanceID+"\t", " "+base.CaptureTime+"  "
+	if SSMHostApplicationStableKey(padded) != SSMHostApplicationStableKey(base) {
+		t.Fatal("whitespace-padded fields must share the trimmed stable key")
+	}
 }
 
 func TestNewSSMHostApplicationFact(t *testing.T) {
@@ -228,6 +242,9 @@ func TestValidateSSMHostPlatformProvenance(t *testing.T) {
 	}
 	if err := ValidateSSMHostPlatformProvenance("ssm_inventory", true); err != nil {
 		t.Fatalf("inventory with capture time: error = %v, want nil", err)
+	}
+	if err := ValidateSSMHostPlatformProvenance("ssm_inventory", false); err == nil {
+		t.Fatal("inventory without capture time: error = nil, want rejection")
 	}
 }
 

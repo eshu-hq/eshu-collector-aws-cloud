@@ -105,11 +105,15 @@ type ssmHostApplicationCanonicalRow struct {
 	Architecture string `json:"architecture"`
 }
 
+// derefSSMObservationString trims: the stable key must hash the same
+// identity the payload carries, and the payload trims every value it
+// admits. Untrimmed key material would give whitespace variants different
+// keys with identical payloads.
 func derefSSMObservationString(s *string) string {
 	if s == nil {
 		return ""
 	}
-	return *s
+	return strings.TrimSpace(*s)
 }
 
 // SSMHostApplicationRowHash returns the hex SHA-256 of the canonical
@@ -138,11 +142,11 @@ func SSMHostApplicationRowHash(obs SSMHostApplicationObservation) string {
 func SSMHostApplicationStableKey(obs SSMHostApplicationObservation) string {
 	return strings.Join([]string{
 		AWSKindSSMHostApplication,
-		obs.Partition,
-		obs.AccountID,
-		obs.Region,
-		obs.InstanceID,
-		obs.CaptureTime,
+		strings.TrimSpace(obs.Partition),
+		strings.TrimSpace(obs.AccountID),
+		strings.TrimSpace(obs.Region),
+		strings.TrimSpace(obs.InstanceID),
+		strings.TrimSpace(obs.CaptureTime),
 		SSMHostApplicationRowHash(obs),
 	}, "/")
 }
@@ -153,11 +157,11 @@ func SSMHostApplicationStableKey(obs SSMHostApplicationObservation) string {
 func SSMHostPlatformStableKey(obs SSMHostPlatformObservation) string {
 	return strings.Join([]string{
 		AWSKindSSMHostPlatform,
-		obs.Partition,
-		obs.AccountID,
-		obs.Region,
-		obs.InstanceID,
-		obs.SourceType,
+		strings.TrimSpace(obs.Partition),
+		strings.TrimSpace(obs.AccountID),
+		strings.TrimSpace(obs.Region),
+		strings.TrimSpace(obs.InstanceID),
+		strings.TrimSpace(obs.SourceType),
 	}, "/")
 }
 
@@ -254,15 +258,21 @@ func NewSSMHostApplicationFact(obs SSMHostApplicationObservation) (sdk.Fact, err
 }
 
 // ValidateSSMHostPlatformProvenance rejects a platform observation whose
-// provenance and capture-time pairing is incoherent: a
+// provenance and capture-time pairing is incoherent in either direction: a
 // DescribeInstanceInformation observation carries no inventory capture time,
-// so a value here with that provenance is a contract violation. It mirrors
-// ValidateSSMHostPlatformProvenance in the #9556 contracts; the emitter
-// calls it before building platform facts. hasCaptureTime reports whether
-// the observation carries any capture-time value.
+// so a value here with that provenance is a contract violation; and an
+// inventory observation without one has no dated capture to supersede on,
+// so it is rejected here instead of failing later in fact building. This is
+// deliberately stricter than ValidateSSMHostPlatformProvenance in the #9556
+// contracts, which rejects only the DescribeInstanceInformation direction.
+// The emitter calls it before building platform facts. hasCaptureTime
+// reports whether the observation carries any capture-time value.
 func ValidateSSMHostPlatformProvenance(sourceType string, hasCaptureTime bool) error {
 	if sourceType == "describe_instance_information" && hasCaptureTime {
 		return fmt.Errorf("ssm host inventory: capture time with DescribeInstanceInformation provenance")
+	}
+	if sourceType == "ssm_inventory" && !hasCaptureTime {
+		return fmt.Errorf("ssm host inventory: inventory provenance without capture time")
 	}
 	return nil
 }

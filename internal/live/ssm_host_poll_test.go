@@ -25,6 +25,10 @@ type fakeSSMInventoryAPI struct {
 	// foreignType forces the listed hosts to answer a non-application
 	// inventory type, proving foreign rows never become observations.
 	foreignType map[string]bool
+	// wrongInstance forces the listed hosts to answer inventory pages
+	// keyed by another host's id, proving a wrong-instance stream is
+	// partial and never a successful empty capture.
+	wrongInstance map[string]string
 }
 
 type fakeInventoryStream struct {
@@ -80,8 +84,12 @@ func (f *fakeSSMInventoryAPI) ListInventoryEntries(ctx context.Context, params *
 	if f.foreignType[id] {
 		typeName = aws.String("AWS:File")
 	}
+	instanceID := params.InstanceId
+	if wrong, ok := f.wrongInstance[id]; ok {
+		instanceID = aws.String(wrong)
+	}
 	out := &awsssm.ListInventoryEntriesOutput{
-		InstanceId: params.InstanceId, TypeName: typeName,
+		InstanceId: instanceID, TypeName: typeName,
 		CaptureTime: captureOrNil(stream.capture), SchemaVersion: aws.String(stream.schema),
 		Entries: stream.pages[index],
 	}
@@ -310,6 +318,9 @@ func TestPollSSMHostInventoryPartialVectors(t *testing.T) {
 		if report.Aggregates.Excluded != 3 || len(report.Applications) != 0 {
 			t.Fatalf("exclusion miscounted: %+v", report.Aggregates)
 		}
+		if report.Aggregates.Outcome != SSMHostInventoryPartial {
+			t.Fatalf("all-excluded poll outcome = %q, want partial: %+v", report.Aggregates.Outcome, report.Aggregates)
+		}
 	})
 	t.Run("stale capture displays stale", func(t *testing.T) {
 		t.Parallel()
@@ -398,6 +409,53 @@ func TestPollSSMHostInventoryPartialVectors(t *testing.T) {
 		}
 		if len(report.Hosts) != 1 || report.Hosts[0].Reason != ssmCaptureReasonSourceNotAllowlisted {
 			t.Fatalf("foreign stream reason = %+v, want the allowlist verdict", report.Hosts)
+		}
+	})
+	t.Run("wrong-instance page is partial, never successful", func(t *testing.T) {
+		t.Parallel()
+		tracker := NewSSMCaptureTracker()
+		api := &fakeSSMInventoryAPI{
+			instances:     map[string]ssmtypes.InstanceInformation{"i-w": ssmFakeInstance("i-w")},
+			streams:       map[string]*fakeInventoryStream{"i-w": {capture: capture, schema: "1.0", pages: ssmFakePages("w", 10, capture)}},
+			wrongInstance: map[string]string{"i-w": "i-other"},
+		}
+		report, err := PollSSMHostInventory(context.Background(), api, ssmTestIdentity(), "us-east-1", freshLimits("i-w"), tracker, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(report.Applications) != 0 || len(report.Platforms) != 0 {
+			t.Fatalf("wrong-instance stream emitted: %+v", report.Aggregates)
+		}
+		if report.Aggregates.PartialHosts != 1 || report.Aggregates.SuccessfulHosts != 0 || report.Aggregates.Outcome != SSMHostInventoryPartial {
+			t.Fatalf("wrong-instance stream misclassified: %+v", report.Aggregates)
+		}
+		if len(report.Hosts) != 1 || report.Hosts[0].Reason != ssmCaptureReasonMissing {
+			t.Fatalf("wrong-instance reason = %+v, want the missing-capture verdict", report.Hosts)
+		}
+		if tracker.IsRepeat("i-w", capture) {
+			t.Fatal("wrong-instance stream marked the tracker")
+		}
+	})
+	t.Run("denied discovery with host cap denies polled, defers remainder", func(t *testing.T) {
+		t.Parallel()
+		limits := freshLimits("i-a", "i-b")
+		limits.MaxHostsPerPoll = 1
+		api := &fakeSSMInventoryAPI{denyDII: true}
+		report, err := PollSSMHostInventory(context.Background(), api, ssmTestIdentity(), "us-east-1", limits, NewSSMCaptureTracker(), now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if report.Aggregates.DeniedHosts != 1 || report.Aggregates.PartialHosts != 1 {
+			t.Fatalf("denial with deferral miscounted: %+v", report.Aggregates)
+		}
+		if len(report.Hosts) != 2 || report.Hosts[0].InstanceID != "i-a" || report.Hosts[1].InstanceID != "i-b" {
+			t.Fatalf("denial with deferral misordered: %+v", report.Hosts)
+		}
+		if report.Hosts[0].Outcome != SSMHostInventoryDenied || report.Hosts[1].Outcome != SSMHostInventoryPartial || report.Hosts[1].Reason != ssmCaptureReasonDeferred {
+			t.Fatalf("denial with deferral misclassified: %+v", report.Hosts)
+		}
+		if report.Aggregates.Outcome != SSMHostInventoryDenied {
+			t.Fatalf("denial with deferral outcome = %q, want denied: %+v", report.Aggregates.Outcome, report.Aggregates)
 		}
 	})
 	t.Run("missing limits fail closed", func(t *testing.T) {
