@@ -15,8 +15,10 @@ import (
 // aws_relationship fact the in-tree Scanner.Scan derives for the shared
 // fixture (testdata/wave1-ec2-parity.json) has a satellite twin with the
 // identical stable key. Oracle keys come from the in-tree scan; the
-// re-derivation recipe is in testdata/stable-key-provenance.md. The companion
-// gap test covers the four posture facts.
+// re-derivation recipe is in testdata/stable-key-provenance.md, the vendored
+// oracle output is testdata/wave1-ec2-oracle.txt, and
+// TestWave1EC2OracleOutputMatchesFrozenKeys pins the 21 keys below to it.
+// The companion gap test covers the four posture facts.
 func TestWave1EC2ExistingParityAgainstInTreeOracle(t *testing.T) {
 	t.Parallel()
 
