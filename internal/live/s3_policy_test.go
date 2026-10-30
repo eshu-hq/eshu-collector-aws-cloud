@@ -5,6 +5,7 @@ package live
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -39,9 +40,17 @@ func TestS3PolicyPostureDerivesOnlySafeFlags(t *testing.T) {
 	if err != nil || rows[0].S3Posture.PolicyGrantsPublic == nil || !*rows[0].S3Posture.PolicyGrantsPublic {
 		t.Fatal("public wildcard was not derived")
 	}
+	// An unmodelable principal no longer aborts the inventory (proven live:
+	// one malformed document stopped every bucket record). The bucket is
+	// kept with unknown policy evidence and a warning instead.
 	api.bucketPolicy.Policy = aws.String(`{"Statement":{"Effect":"Allow","Principal":{"Unexpected":"*"},"Condition":{"StringEquals":{"aws:SourceVpce":"` + secret + `"}}}}`)
-	if _, err = listS3WithAPI(context.Background(), api, "us-east-1", identity); err == nil || strings.Contains(err.Error(), secret) {
-		t.Fatal("ambiguous policy accepted or raw content leaked")
+	rows, err = listS3WithAPI(context.Background(), api, "us-east-1", identity)
+	var ambiguousDenied *optionalReadDenied
+	if !errors.As(err, &ambiguousDenied) || len(rows) != 1 || len(ambiguousDenied.denials) != 1 {
+		t.Fatalf("ambiguous policy aborted the inventory: rows=%d err=%v", len(rows), err)
+	}
+	if ambiguousDenied.denials[0].effect != "policy-unknown" || strings.Contains(fmt.Sprint(rows), secret) {
+		t.Fatalf("ambiguous policy warning identity or leak: %+v", ambiguousDenied.denials)
 	}
 	api.bucketPolicy = &awss3.GetBucketPolicyOutput{}
 	rows, err = listS3WithAPI(context.Background(), api, "us-east-1", identity)
@@ -57,5 +66,30 @@ func TestS3PolicyPostureDerivesOnlySafeFlags(t *testing.T) {
 	api.bucketPolicyErr = &smithy.GenericAPIError{Code: "AccessDenied"}
 	if _, err = listS3WithAPI(context.Background(), api, "us-east-1", identity); err == nil {
 		t.Fatal("denied required policy read was accepted")
+	}
+}
+
+func TestS3UnparsablePolicyKeepsBucketWithWarning(t *testing.T) {
+	api := &fakeS3BucketDetails{
+		buckets:      &awss3.ListBucketsOutput{Buckets: []s3types.Bucket{{Name: aws.String("assets"), BucketRegion: aws.String("us-east-1")}}},
+		head:         &awss3.HeadBucketOutput{BucketRegion: aws.String("us-east-1")},
+		bucketPolicy: &awss3.GetBucketPolicyOutput{Policy: aws.String(`not-json{{{`)},
+	}
+	identity := VerifiedIdentity{AccountID: "123456789012", Partition: "aws"}
+	records, err := listS3WithAPI(context.Background(), api, "us-east-1", identity)
+	var denied *optionalReadDenied
+	if !errors.As(err, &denied) || len(records) != 1 || len(denied.denials) != 1 {
+		t.Fatalf("records=%d denials=%+v err=%v", len(records), denied, err)
+	}
+	entry := denied.denials[0]
+	if entry.operation != "GetBucketPolicy" || entry.resource != "bucket:assets" || entry.effect != "policy-unknown" {
+		t.Fatalf("warning identity: %+v", entry)
+	}
+	posture := records[0].S3Posture
+	if posture == nil || posture.PolicyPresent != nil || posture.PolicyGrantsPublic != nil || posture.PolicyGrantsCrossAccount != nil {
+		t.Fatalf("unparsable policy presented as known: %+v", posture)
+	}
+	if strings.Contains(fmt.Sprint(records), "not-json") {
+		t.Fatal("raw policy leaked into observation")
 	}
 }

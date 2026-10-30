@@ -22,9 +22,16 @@ type s3PolicyFlags struct {
 	crossAccount *bool
 }
 
+// errS3PolicyUnparsable marks a successfully-read policy document whose shape
+// the flag parser cannot model. Callers keep the bucket with unknown policy
+// evidence instead of failing the read: one malformed document must not blind
+// the whole bucket inventory.
+var errS3PolicyUnparsable = errors.New("s3 bucket policy document unparsable")
+
 // readS3BucketPolicyFlags derives only metadata from a transient policy body.
 // Missing policy is known absent, while an empty successful response is unknown.
-// Unexpected errors stop the S3 read without exposing AWS response contents.
+// Transport and authorization errors stop the S3 read without exposing AWS
+// response contents; an unparsable document wraps errS3PolicyUnparsable.
 func readS3BucketPolicyFlags(ctx context.Context, api s3BucketDetailsAPI, name, accountID string) (s3PolicyFlags, error) {
 	output, err := api.GetBucketPolicy(ctx, &awss3.GetBucketPolicyInput{
 		Bucket: aws.String(name), ExpectedBucketOwner: aws.String(accountID),
@@ -50,7 +57,7 @@ func readS3BucketPolicyFlags(ctx context.Context, api s3BucketDetailsAPI, name, 
 	}
 	public, crossAccount, ok := deriveS3PolicyFlags(aws.ToString(output.Policy), accountID)
 	if !ok {
-		return s3PolicyFlags{}, fmt.Errorf("s3 get bucket policy %q: invalid policy document", name)
+		return s3PolicyFlags{}, fmt.Errorf("s3 get bucket policy %q: invalid policy document: %w", name, errS3PolicyUnparsable)
 	}
 	present := true
 	return s3PolicyFlags{present: &present, public: &public, crossAccount: &crossAccount}, nil
