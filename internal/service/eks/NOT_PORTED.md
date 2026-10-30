@@ -27,7 +27,7 @@ replacement), but the live path (`internal/live/eks_*.go` through the root
 `NewResourceFact` / `NewRelationshipFact` seams) already emits the scanner's
 full fact set with in-tree-identical stable keys, proven on the shared
 fixture `testdata/wave1-eks-parity.json` (24/24 keys, provenance in
-`testdata/stable-key-provenance.md`, Q4(a) in `eks_wave1_conformance_test.go`):
+`testdata/stable-key-provenance.md`, Q4(a) in `internal/live/eks_wave1_conformance_test.go` (`TestWave1EKSLiveConformance` over real builder output; root `eks_wave1_conformance_test.go` is the schema-admission companion)):
 
 | In-tree file | Live-path coverage |
 |---|---|

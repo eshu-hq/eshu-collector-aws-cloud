@@ -10,10 +10,13 @@ import (
 	"github.com/eshu-hq/eshu-sdk/collector/conformance"
 )
 
-// TestWave1EKSConformance is the Wave 1 EKS Q4(a) gate: every kind the
-// completed EKS live path emits validates against its checked-in JSON Schema
-// through the public fixture harness, using only the published SDK modules.
-// The vectors below mirror the shared wave1 fixture rows
+// TestWave1EKSConformance is a schema-admission companion, not the full
+// Wave 1 EKS Q4(a) gate: hand-built vectors validate per-kind admission
+// against the checked-in JSON Schemas through the public fixture harness,
+// using only the published SDK modules. Full Q4(a) proof is
+// TestWave1EKSLiveConformance (internal/live/eks_wave1_conformance_test.go),
+// which runs real production-listEKS builder output through the same
+// harness. The vectors below mirror the shared wave1 fixture rows
 // (testdata/wave1-eks-parity.json); the live parity test proves the same
 // builders emit in-tree-identical stable keys (Q4(b)).
 func TestWave1EKSConformance(t *testing.T) {
