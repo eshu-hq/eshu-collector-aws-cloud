@@ -225,7 +225,7 @@ func TestNewSSMHostPlatformFact(t *testing.T) {
 			o.SourceURI = "https://example.com/collector?token=opaque"
 			return o
 		}(),
-		"unknown provenance":        mk("custom", "2026-10-29T22:31:19Z"),
+		"unknown provenance": mk("custom", "2026-10-29T22:31:19Z"),
 		"missing observation time": func() SSMHostPlatformObservation {
 			o := mk("ssm_inventory", "2026-10-29T22:31:19Z")
 			o.ObservationTime = ""

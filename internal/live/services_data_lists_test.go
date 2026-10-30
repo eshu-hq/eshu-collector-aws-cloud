@@ -48,7 +48,12 @@ func TestListDynamoDBListsTables(t *testing.T) {
 		case strings.HasSuffix(target, "ListTables"):
 			serveJSON(t, `{"TableNames": ["orders", "ghost"]}`)(w, r)
 		case strings.HasSuffix(target, "DescribeTable"):
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Errorf("read stub request: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
 			if strings.Contains(string(body), "ghost") {
 				serveJSON(t, `{}`)(w, r)
 				return

@@ -10,6 +10,16 @@ import (
 	"testing"
 )
 
+func serveXML(t *testing.T, body string) http.HandlerFunc {
+	t.Helper()
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/xml")
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Errorf("write stub response: %v", err)
+		}
+	}
+}
+
 func TestListAPIGatewayListsRestAndHTTPAPIs(t *testing.T) {
 	t.Parallel()
 
@@ -17,17 +27,13 @@ func TestListAPIGatewayListsRestAndHTTPAPIs(t *testing.T) {
 		path := r.URL.Path
 		switch {
 		case strings.HasSuffix(path, "/restapis"):
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"items": [{"id": "a1b2c3", "name": "orders-api"}]}`))
+			serveJSON(t, `{"items": [{"id": "a1b2c3", "name": "orders-api"}]}`)(w, r)
 		case strings.HasSuffix(path, "/domainnames") && !strings.Contains(path, "/v2/"):
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"items": [{"domainName": "api.example.com"}]}`))
+			serveJSON(t, `{"items": [{"domainName": "api.example.com"}]}`)(w, r)
 		case strings.HasSuffix(path, "/v2/apis"):
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"Items": [{"ApiId": "h1", "Name": "orders-http"}]}`))
+			serveJSON(t, `{"Items": [{"ApiId": "h1", "Name": "orders-http"}]}`)(w, r)
 		case strings.HasSuffix(path, "/v2/domainnames"):
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"Items": [{"DomainName": "http.example.com", "DomainNameArn": "arn:aws:apigateway:us-east-1::/domainnames/http.example.com"}]}`))
+			serveJSON(t, `{"Items": [{"DomainName": "http.example.com", "DomainNameArn": "arn:aws:apigateway:us-east-1::/domainnames/http.example.com"}]}`)(w, r)
 		default:
 			t.Errorf("unexpected API Gateway path %q", path)
 			w.WriteHeader(http.StatusBadRequest)
@@ -73,8 +79,7 @@ func TestListCloudFrontListsDistributions(t *testing.T) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		w.Header().Set("Content-Type", "text/xml")
-		_, _ = w.Write([]byte(`<DistributionList xmlns="http://cloudfront.amazonaws.com/doc/2020-05-31/"><Marker></Marker><MaxItems>100</MaxItems><IsTruncated>false</IsTruncated><Quantity>2</Quantity><Items><DistributionSummary><Id>E123</Id><ARN>arn:aws:cloudfront::123456789012:distribution/E123</ARN><DomainName>d123.cloudfront.net</DomainName><Status>Deployed</Status></DistributionSummary><DistributionSummary><Id>E456</Id><ARN>arn:aws:cloudfront::123456789012:distribution/E456</ARN><Status>Deployed</Status></DistributionSummary></Items></DistributionList>`))
+		serveXML(t, `<DistributionList xmlns="http://cloudfront.amazonaws.com/doc/2020-05-31/"><Marker></Marker><MaxItems>100</MaxItems><IsTruncated>false</IsTruncated><Quantity>2</Quantity><Items><DistributionSummary><Id>E123</Id><ARN>arn:aws:cloudfront::123456789012:distribution/E123</ARN><DomainName>d123.cloudfront.net</DomainName><Status>Deployed</Status></DistributionSummary><DistributionSummary><Id>E456</Id><ARN>arn:aws:cloudfront::123456789012:distribution/E456</ARN><Status>Deployed</Status></DistributionSummary></Items></DistributionList>`)(w, r)
 	}))
 
 	records, err := listCloudFront(context.Background(), cfg)
@@ -147,9 +152,8 @@ func TestListRoute53ListsZonesAndRecordSets(t *testing.T) {
 	t.Parallel()
 
 	cfg := stubAWSConfig(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/xml")
 		if strings.HasSuffix(r.URL.Path, "/rrset") {
-			_, _ = w.Write([]byte(`<ListResourceRecordSetsResponse xmlns="https://route53.amazonaws.com/doc/2013-04-01/"><ResourceRecordSets><ResourceRecordSet><Name>example.com.</Name><Type>A</Type><TTL>300</TTL></ResourceRecordSet></ResourceRecordSets><IsTruncated>false</IsTruncated><MaxItems>100</MaxItems></ListResourceRecordSetsResponse>`))
+			serveXML(t, `<ListResourceRecordSetsResponse xmlns="https://route53.amazonaws.com/doc/2013-04-01/"><ResourceRecordSets><ResourceRecordSet><Name>example.com.</Name><Type>A</Type><TTL>300</TTL></ResourceRecordSet></ResourceRecordSets><IsTruncated>false</IsTruncated><MaxItems>100</MaxItems></ListResourceRecordSetsResponse>`)(w, r)
 			return
 		}
 		if !strings.Contains(r.URL.Path, "hostedzone") {
@@ -157,7 +161,7 @@ func TestListRoute53ListsZonesAndRecordSets(t *testing.T) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		_, _ = w.Write([]byte(`<ListHostedZonesResponse xmlns="https://route53.amazonaws.com/doc/2013-04-01/"><HostedZones><HostedZone><Id>/hostedzone/Z123</Id><Name>example.com.</Name><CallerReference>ref</CallerReference></HostedZone></HostedZones><IsTruncated>false</IsTruncated><Marker></Marker><MaxItems>100</MaxItems></ListHostedZonesResponse>`))
+		serveXML(t, `<ListHostedZonesResponse xmlns="https://route53.amazonaws.com/doc/2013-04-01/"><HostedZones><HostedZone><Id>/hostedzone/Z123</Id><Name>example.com.</Name><CallerReference>ref</CallerReference></HostedZone></HostedZones><IsTruncated>false</IsTruncated><Marker></Marker><MaxItems>100</MaxItems></ListHostedZonesResponse>`)(w, r)
 	}))
 
 	records, err := listRoute53(context.Background(), cfg)
