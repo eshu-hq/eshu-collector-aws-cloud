@@ -136,6 +136,69 @@ issuer-only provider plus warning where the in-tree scan fails, and
 same-account ARN scoping rejects cross-account provider ARNs the in-tree
 matcher would consider.
 
+## Wave 1 EC2 keys (in-tree scan parity pack)
+
+Input fixture: `testdata/wave1-ec2-parity.json`
+(`sha256:b996ce9ba05937e784ce66e5865ba3dec3327d1d5fd6090d5940e556eab2ed0b`).
+
+Oracle: check out eshu-hq/eshu at commit `6ca3ad9294e2b001583da6f3b50b8161e0a80006`
+(Merge pull request #9613), add a throwaway test in
+`go/internal/collector/awscloud/service/ec2/` that unmarshals the fixture
+directly into the scanner-owned types (the rows mirror those structs field for
+field), serves them from a fake `Client`, and prints `FactKind` +
+`StableFactKey` per envelope from `Scanner.Scan` over boundary account
+`123456789012`, region `us-east-1`, service `ec2`, scope
+`aws:123456789012:us-east-1`, generation
+`aws:123456789012:us-east-1:wave1:1`, instance `aws-parity-wave1`, fencing
+token `7`, observed-at `2026-10-30T12:00:00Z`. Command, from the `go/`
+directory of the pinned commit:
+
+```sh
+go test ./internal/collector/awscloud/service/ec2/ \
+  -run 'TestZZWave1Oracle' -count=1 -v
+```
+
+The scan emits 25 envelopes in call order (VPC; subnet + edge; group + edge;
+3 x (rule + edge + posture); interface + 4 edges; instance posture, identity,
+AMI edge, AMI; volume + KMS edge). The satellite freezes the same 25 keys
+across `internal/live/ec2_wave1_parity_test.go` (21 resource/relationship
+keys) and `internal/live/ec2_wave1_gap_test.go` (4 posture keys):
+
+| # | Kind | Satellite frozen test | Frozen key |
+|---|---|---|---|
+| 00 | aws_resource (vpc) | parity | `17f47113…65a2f8` |
+| 01 | aws_resource (subnet) | parity | `adaa5ade…75fe768` |
+| 02 | aws_relationship (subnet->vpc) | parity | `c4fed8da…6c4b03e` |
+| 03 | aws_resource (security group) | parity | `28c16004…61cbc9` |
+| 04 | aws_relationship (group->vpc) | parity | `6f8ff0f2…dc400` |
+| 05 | aws_resource (rule, with id) | parity | `b621175c…45945` |
+| 06 | aws_relationship (rule->group) | parity | `9fc14398…703fd` |
+| 07 | aws_security_group_rule (rule 1) | gap | `d4373b5d…88c8b` |
+| 08 | aws_resource (rule, legacy fallback id) | parity | `a99604f4…3bc6a480` |
+| 09 | aws_relationship (rule->group) | parity | `6e8c480b…5a9b6979` |
+| 10 | aws_security_group_rule (rule 2, no id) | gap | `828bdb8d…5e2e3dd` |
+| 11 | aws_resource (rule, referenced group) | parity | `5b84b35d…84f3bb5` |
+| 12 | aws_relationship (rule->group) | parity | `f4b077ab…959e9779f` |
+| 13 | aws_security_group_rule (rule 3) | gap | `31dc36fc…7e126` |
+| 14 | aws_resource (network interface) | parity | `3e70715b…49a0c` |
+| 15 | aws_relationship (interface->subnet) | parity | `f4e7f902…dc695678` |
+| 16 | aws_relationship (interface->vpc) | parity | `68e87405…f703fd` |
+| 17 | aws_relationship (interface->group) | parity | `5e4b5ae7…3129800` |
+| 18 | aws_relationship (interface->instance) | parity | `22614ae8…9168` |
+| 19 | ec2_instance_posture | gap | `bccfe99d…72e81b04` |
+| 20 | aws_resource (instance identity) | parity | `b3467e6d…2fec5ad` |
+| 21 | aws_relationship (instance->AMI) | parity | `32b57dbc…a3531e5f` |
+| 22 | aws_resource (AMI) | parity | `83cdc1f7…ffbdb52` |
+| 23 | aws_resource (volume) | parity | `347ea629…dfd905` |
+| 24 | aws_relationship (volume->KMS key) | parity | `36648f19…2abf20` |
+
+(Full keys are frozen in the two tests; prefixes above are abbreviated.)
+Re-execution on 2026-10-30 returned all 25 keys byte-identical to the frozen
+satellite constants, including the legacy no-id rule fallback (proving the
+satellite's un-normalized fallback hash equals `facts.StableID` for this
+identity shape) and the synthesized attachment ARN (proving the satellite's
+caller-identity ARN synthesis equals the in-tree mapper's).
+
 ## Why this closes the common-mode gap
 
 Every parity test still compares its builder against a hardcoded constant, but

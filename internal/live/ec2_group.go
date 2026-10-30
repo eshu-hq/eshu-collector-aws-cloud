@@ -33,5 +33,12 @@ func securityGroupRecord(group ec2types.SecurityGroup, region string) collector.
 		"owner_id":    strings.TrimSpace(aws.ToString(group.OwnerId)),
 		"vpc_id":      strings.TrimSpace(aws.ToString(group.VpcId)),
 	}
+	if vpcID := strings.TrimSpace(aws.ToString(group.VpcId)); id != "" && vpcID != "" {
+		result.Relationship = &collector.LiveRelationship{
+			Region: region, ServiceKind: "ec2", RelationshipType: "ec2_security_group_in_vpc",
+			SourceResourceID: id, TargetResourceID: vpcID, TargetType: "aws_ec2_vpc",
+			SourceRecordID: id + "#vpc#" + vpcID,
+		}
+	}
 	return result
 }

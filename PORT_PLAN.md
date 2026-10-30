@@ -152,9 +152,18 @@ importable only inside this module, satisfying `boundary_test.go`).
    are also emitted. The instance-to-AMI link uses the DescribeInstances row,
    with one typed AMI identity per distinct ID in each regional EC2 scan.
    AMI targets do not add transitional record facts; typed facts still count
-   toward the claim's record limit. Remaining EC2 attributes and relationships,
-   other services, real host grant proof, and replacement of placeholder
-   conformance fixtures remain. ECR repository observations use the existing
+   toward the claim's record limit. Wave 1 (eshu-hq/eshu#9296) completes the
+   EC2 surface: every DescribeInstances row also emits a metadata-only
+   ec2_instance_posture fact (IMDS, presence-only user-data flag, monitoring,
+   EBS-optimized, public IP, instance profile, tenancy, enclave, block
+   devices; user-data content never read), every DescribeSecurityGroupRules
+   row emits an aws_security_group_rule posture fact plus the rule->group
+   edge, and every security group emits the group->VPC edge. The full EC2
+   fact set holds 25/25 stable-key parity against the in-tree scanner on the
+   shared fixture testdata/wave1-ec2-parity.json (provenance in
+   testdata/stable-key-provenance.md; Q4(a) in ec2_wave1_conformance_test.go).
+   Remaining: other services, real host grant proof, and replacement of
+   placeholder conformance fixtures. ECR repository observations use the existing
    DescribeRepositories pages plus ListTagsForResource per ARN. ECR image
    references emit from existing DescribeImages pages. Lifecycle policy metadata
    emits a typed resource after GetLifecyclePolicy; policy JSON text is omitted

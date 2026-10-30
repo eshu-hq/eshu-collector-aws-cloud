@@ -103,6 +103,14 @@ type Record struct {
 	Resource *LiveResource `json:"-"`
 	// S3Posture carries confirmed bucket settings and derived policy flags.
 	S3Posture *S3BucketPostureObservation `json:"-"`
+	// SGPosture carries one normalized security-group rule posture from a
+	// DescribeSecurityGroupRules row. The live EC2 reader sets it; Collect
+	// fans it out through AppendLiveSecurityGroupRulePostures.
+	SGPosture *SecurityGroupRuleObservation `json:"-"`
+	// EC2Posture carries one derived instance posture from a DescribeInstances
+	// row. The live EC2 reader sets it; Collect fans it out through
+	// AppendLiveEC2InstancePostures.
+	EC2Posture *EC2InstancePostureObservation `json:"-"`
 	// ImageReference carries a typed image digest and tag from DescribeImages.
 	ImageReference *LiveImageReference `json:"-"`
 	// Relationship carries one typed edge from a live AWS read.
