@@ -47,6 +47,51 @@ spec:
         - 1.0.0
       sourceConfidence:
         - reported
+    # Wave 0 specialty seam (eshu-hq/eshu#9296): envelope builders with
+    # stable-key parity vs in-tree. Live scanner reads land per kind in
+    # later waves; aws_tag_observation stays undeclared (no SDK schema).
+    - kind: aws_dns_record
+      payloadSchemaRef: aws_dns_record
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: aws_security_group_rule
+      payloadSchemaRef: aws_security_group_rule
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: aws_iam_permission
+      payloadSchemaRef: aws_iam_permission
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: aws_resource_policy_permission
+      payloadSchemaRef: aws_resource_policy_permission
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: ec2_instance_posture
+      payloadSchemaRef: ec2_instance_posture
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: rds_instance_posture
+      payloadSchemaRef: rds_instance_posture
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: s3_external_principal_grant
+      payloadSchemaRef: s3_external_principal_grant
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
     # TRANSITIONAL placeholder families: emitted by the scaffold pipeline
     # until the AWS logic port lands (PORT_PLAN.md). The port removes these
     # and declares the thirteen bare AWS kinds (schema 1.0.0, reported)

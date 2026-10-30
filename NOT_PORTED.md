@@ -7,24 +7,32 @@ unblock it mechanically.
 
 ## Envelopes (facts/cloud + facts, no SDK replacement)
 
+Wave 0 seam (eshu-hq/eshu#9296) is IN PLACE: every specialty envelope below
+has a satellite-side `New*Fact` builder emitting through the same factschema
+encoders with byte-identical stable keys (proven per kind against the shared
+fixtures). What stays core-owned is the `facts.Envelope` host shape and the
+134 service scanners that call the in-tree builders — the seam carries no
+live reads. Scanner ports land per kind in later waves.
+
 | In-tree file | Blocked on | Seam |
 |---|---|---|
-| `envelope.go` | `facts.Envelope`, `facts/cloud` builders | SDK `collector` Envelope + observation-builder surface |
-| `dns_envelope.go` | same | same |
-| `ec2_posture_envelope.go` | same (+ `catalog`) | same |
-| `iam_permission_envelope.go` | same (`factschema/iam/v1` path rewrites cleanly) | same |
-| `resource_policy_permission_envelope.go` | same (+ `catalog`) | same |
-| `posture_envelope.go` (RDS) | same | same |
-| `s3_posture_envelope.go` | same | same |
-| `s3_external_principal_grant_envelope.go` | same | same |
-| `security_group_rule_envelope.go` | same | same |
+| `envelope.go` | `facts.Envelope`, `facts/cloud` builders | `NewResourceFact`, `NewRelationshipFact`, `NewImageReferenceFact`, `NewWarningFact` (ported earlier) |
+| `dns_envelope.go` | same | `NewDNSRecordFact` (`dns_envelope.go`, Wave 0) |
+| `ec2_posture_envelope.go` | same (+ `catalog`) | `NewEC2InstancePostureFact` (`ec2_posture_envelope.go`, Wave 0) |
+| `iam_permission_envelope.go` | same (`factschema/iam/v1` path rewrites cleanly) | `NewIAMPermissionFact` (`iam_permission_envelope.go`, Wave 0) |
+| `resource_policy_permission_envelope.go` | same (+ `catalog`) | `NewResourcePolicyPermissionFact` (`resource_policy_permission_envelope.go`, Wave 0) |
+| `posture_envelope.go` (RDS) | same | `NewRDSInstancePostureFact` (`rds_posture_envelope.go`, Wave 0) |
+| `s3_posture_envelope.go` | same | `NewS3BucketPostureFact` (`s3_posture.go`, ported earlier; Wave 0 parity lock) |
+| `s3_external_principal_grant_envelope.go` | same | `NewS3ExternalPrincipalGrantFact` (`s3_grant_envelope.go`, Wave 0) |
+| `security_group_rule_envelope.go` | same | `NewSecurityGroupRuleFact` (`security_group_rule_envelope.go`, Wave 0) |
 
 The SDK (`eshu-sdk/collector v0.1.0-rc.4`) ships `Fact`/`Result`, not the
 `facts.Envelope` shape (stable ID, confidence, boundary binding) the 134
-service scanners emit through these builders. Porting the envelopes without
-the scanners would strand the only callers; porting the scanners without
-`facts` would invent a new envelope contract. Both stay core-owned until the
-SDK gains the surface.
+service scanners emit through these builders. Porting the scanners without
+`facts` would invent a new envelope contract; they stay core-owned until the
+SDK gains the surface. `aws_tag_observation` has no envelope and no SDK
+encoder (schema-less registry-only kind); Wave 2 decides between a seam and
+a retirement census for it.
 
 ## Redaction (`redact`, partial SDK cover)
 
@@ -46,6 +54,8 @@ core-owned.
 ## What did port
 
 `partition.go`, `types.go` (minus `CollectorKind`, which lives in
-`collector.go`), `condition_identity.go`, `scan_status.go`, `apicall.go`,
-`extractor.go`, `awscloud_doc.go` (from in-tree `doc.go`), plus the ported
-in-tree tests and `port_parity_test.go`.
+`collector.go`), `condition_identity.go`, `scan_status.go` (plus the Wave 0
+`WarningNetworkTimeout` taxonomy addition), `apicall.go`,
+`extractor.go`, `awscloud_doc.go` (from in-tree `doc.go`), the specialty
+envelope seam (`specialty_envelope.go` plus per-kind `New*Fact` builders),
+plus the ported in-tree tests and `port_parity_test.go`.

@@ -31,3 +31,23 @@ func TestSanitizeScanStatusMessageRedactsAndBounds(t *testing.T) {
 		t.Fatalf("SanitizeScanStatusMessage() length = %d, want <= %d", len(got), MaxScanStatusMessageLength)
 	}
 }
+
+// TestWarningTaxonomyMatchesInTree pins the Wave 0 warning-kind taxonomy
+// against the in-tree values: a scanner-side string drift would fork warning
+// identity between the two pipelines and break the Q4(d) warning-class
+// mapping at deletion time.
+func TestWarningTaxonomyMatchesInTree(t *testing.T) {
+	t.Parallel()
+
+	for name, pair := range map[string][2]string{
+		"budget_exhausted":   {WarningBudgetExhausted, "budget_exhausted"},
+		"throttle_sustained": {WarningThrottleSustained, "throttle_sustained"},
+		"network_timeout":    {WarningNetworkTimeout, "network_timeout"},
+		"assumerole_failed":  {WarningAssumeRoleFailed, "assumerole_failed"},
+		"org_access_skipped": {WarningOrganizationsOrgAccessSkipped, "organizations_org_access_skipped"},
+	} {
+		if pair[0] != pair[1] {
+			t.Errorf("%s = %q, want in-tree %q", name, pair[0], pair[1])
+		}
+	}
+}

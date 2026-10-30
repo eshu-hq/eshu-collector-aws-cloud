@@ -170,10 +170,12 @@ type CollectOptions struct {
 	Limits ResourceUse
 }
 
-// Contract returns typed AWS resource, relationship, image-reference, and warning kinds
-// alongside transitional families still emitted by the scaffold. The host must
-// authorize each core-owned kind with a live grant; synthetic fixture context
-// does not authorize production.
+// Contract returns the Wave 0 emission contract: typed AWS resource,
+// relationship, image-reference, warning, and specialty kinds (DNS record,
+// security-group rule, IAM and resource-policy permissions, EC2/RDS/S3
+// posture, S3 external-principal grant) alongside transitional families still
+// emitted by the scaffold. The host must authorize each core-owned kind with
+// a live grant; synthetic fixture context does not authorize production.
 func Contract() sdk.Contract {
 	return sdk.Contract{
 		ProtocolVersion: sdk.ProtocolVersionV1Alpha1,
@@ -213,7 +215,7 @@ func Contract() sdk.Contract {
 				SchemaVersions:   []string{"1.0.0"},
 				SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceReported},
 			},
-		}, s3BucketPostureDeclaration()),
+		}, append([]sdk.FactDeclaration{s3BucketPostureDeclaration()}, specialtyContractDeclarations()...)...),
 	}
 }
 

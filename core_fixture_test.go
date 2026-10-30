@@ -14,17 +14,20 @@ import (
 
 // coreFixtureRequest supplies synthetic authorization for local conformance.
 // Production authorization comes only from the host's live grant snapshot.
+// The reserved inventory tracks the Wave 0 emission contract (see
+// wave0CoreKinds): every manifest-declared core kind needs coverage here or
+// the conformance harness flags the manifest as claiming a host-owned kind.
 func coreFixtureRequest(t *testing.T, manifest conformance.Manifest, fixtures []sdk.Result) conformance.Request {
 	t.Helper()
 	request := conformance.Request{
 		Manifest: manifest, Fixtures: fixtures, Mode: conformance.ModeFixture,
 		PayloadSchemas:    map[string]json.RawMessage{},
-		ReservedFactKinds: []string{AWSKindResource, AWSKindRelationship, AWSKindImageReference, AWSKindWarning, AWSKindS3BucketPosture},
+		ReservedFactKinds: append([]string(nil), wave0CoreKinds...),
 		CoreFacts: &conformance.CoreFactContext{
 			ComponentID: manifest.Metadata.ID, ComponentVersion: manifest.Metadata.Version,
 		},
 	}
-	for _, kind := range []string{AWSKindResource, AWSKindRelationship, AWSKindImageReference, AWSKindWarning, AWSKindS3BucketPosture} {
+	for _, kind := range wave0CoreKinds {
 		schema, ok := fixturepack.SchemaFor(kind)
 		if !ok {
 			t.Fatalf("pinned fixture pack has no %s schema", kind)

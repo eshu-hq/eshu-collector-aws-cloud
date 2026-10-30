@@ -57,14 +57,21 @@ Source of truth for paths: `go/internal/collector/awscloud/` in
 | Producer `collector-aws-cloud`, `AuthorityMode: core_issued_grant` | 13 core-issued grants, one per kind × schema `1.0.0` (`grant.example.json`) |
 | SDK pair `collector v0.1.0-rc.4 / factschema v0.1.0-rc.7`, protocol `collector-sdk/v1alpha1` | `go.mod` pins, manifest `spec.runtime` |
 
-## Emission contract (planned AWS kinds)
+## Emission contract (Wave 0 seamed kinds)
 
 `Contract()` and `manifest.yaml` declare `aws_resource`,
-`aws_relationship`, `aws_image_reference`, and 3 transitional placeholder kinds
-(`collector-aws-cloud.snapshot/record/warning`). The port will declare the
-remaining AWS kinds at `1.0.0` `reported` and:
+`aws_relationship`, `aws_image_reference`, `aws_warning`,
+`s3_bucket_posture`, the seven Wave 0 specialty kinds (`aws_dns_record`,
+`aws_security_group_rule`, `aws_iam_permission`,
+`aws_resource_policy_permission`, `ec2_instance_posture`,
+`rds_instance_posture`, `s3_external_principal_grant`), and 3 transitional
+placeholder kinds (`collector-aws-cloud.snapshot/record/warning`), all at
+`1.0.0` `reported` (locked by `contract_manifest_test.go`,
+eshu-hq/eshu#9296 Wave 0). `aws_tag_observation` stays undeclared: no SDK
+encoder and no checked-in schema exist for it. The remaining port work:
 
-1. Ports the envelopes below so `Collect` emits the 13 AWS kinds.
+1. Ports the scanners below so `Collect` emits the seamed kinds from live
+   reads (Wave 1 deployed partials first, then Wave 2 specialty kinds).
 2. Deletes the 3 transitional kinds from `Contract()`, `manifest.yaml`,
    `collector.go` constants, and every test that references them.
 3. Replaces `testdata/*.json` + `Report`/`LoadReport` with the AWS source
