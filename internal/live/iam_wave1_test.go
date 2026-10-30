@@ -8,10 +8,13 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
+	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 	"github.com/eshu-hq/eshu-collector-aws-cloud/catalog"
+	sdk "github.com/eshu-hq/eshu-sdk/collector"
 )
 
 const wave1TrustDocument = `{"Version":"2012-10-17","Statement":[` +
@@ -129,6 +132,136 @@ func TestIAMTrustDerivationShapes(t *testing.T) {
 	}
 	if _, _, err = parseIAMTrustPolicy("not-json{"); err == nil || strings.Contains(err.Error(), "not-json") {
 		t.Fatalf("malformed trust must fail without raw value: %v", err)
+	}
+}
+
+func TestIAMTrustMultiKeyPrincipalOrderIsDeterministic(t *testing.T) {
+	t.Parallel()
+
+	// One statement carrying two principal keys must not depend on Go map
+	// iteration order: trust_principals attribute order and trust-edge
+	// emission order feed frozen payloads.
+	document := `{"Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com","AWS":"arn:aws:iam::123456789012:role/parity-trusted"}}]}`
+	for range 50 {
+		_, principals, err := parseIAMTrustPolicy(document)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(principals) != 2 ||
+			principals[0].Type != "AWS" ||
+			principals[0].Identifier != "arn:aws:iam::123456789012:role/parity-trusted" ||
+			principals[1].Type != "Service" ||
+			principals[1].Identifier != "ec2.amazonaws.com" {
+			t.Fatalf("multi-key principals = %+v, want AWS before Service", principals)
+		}
+	}
+}
+
+// Frozen wave-1 pins duplicated from iam_wave1_parity_test.go: root-package
+// test files are not importable, so the live chain test carries its own copy.
+// If the root pins move, this test fails loudly by design — two witnesses,
+// one truth.
+const (
+	chainWave1IAMRoleKey      = "d9f27e386caa06c5591ddd597332a11bcdce7c4b5950bb3a563aef09cac35fc8"
+	chainWave1IAMTrust0Key    = "aea1a0181480ebf46a05c0595b3aa523ee1368b6edbb3974f176919a16d68080"
+	chainWave1IAMTrust1Key    = "61e5dac793ee3e1d568430f5d57f46740fbae8df86377b1e5b920148a21b2b3f"
+	chainWave1IAMPolicyRelKey = "6f04584135ff1b2ceb754bdabd7f2bc406b3297ec986fa3dff3ff94f715181eb"
+)
+
+const (
+	chainWave1IAMTrust0Payload    = `{"account_id":"123456789012","attributes":{"principal_type":"AWS"},"collector_instance_id":"aws-parity-8852","region":"aws-global","relationship_type":"iam_role_trusts_principal","service_kind":"iam","source_arn":"arn:aws:iam::123456789012:role/parity-runtime","source_resource_id":"arn:aws:iam::123456789012:role/parity-runtime","target_arn":"","target_resource_id":"AWS:arn:aws:iam::123456789012:role/parity-trusted","target_type":"aws_iam_principal"}`
+	chainWave1IAMTrust1Payload    = `{"account_id":"123456789012","attributes":{"principal_type":"Service"},"collector_instance_id":"aws-parity-8852","region":"aws-global","relationship_type":"iam_role_trusts_principal","service_kind":"iam","source_arn":"arn:aws:iam::123456789012:role/parity-runtime","source_resource_id":"arn:aws:iam::123456789012:role/parity-runtime","target_arn":"","target_resource_id":"Service:ec2.amazonaws.com","target_type":"aws_iam_principal"}`
+	chainWave1IAMPolicyRelPayload = `{"account_id":"123456789012","attributes":null,"collector_instance_id":"aws-parity-8852","region":"aws-global","relationship_type":"iam_role_attached_policy","service_kind":"iam","source_arn":"arn:aws:iam::123456789012:role/parity-runtime","source_resource_id":"arn:aws:iam::123456789012:role/parity-runtime","target_arn":"arn:aws:iam::aws:policy/parity-managed","target_resource_id":"arn:aws:iam::aws:policy/parity-managed","target_type":"aws_iam_policy"}`
+	chainWave1IAMTrustPrincipals  = `[{"identifier":"arn:aws:iam::123456789012:role/parity-trusted","type":"AWS"},{"identifier":"ec2.amazonaws.com","type":"Service"}]`
+)
+
+// TestIAMRoleRecordMatchesFrozenEnvelope chains the production live path end
+// to end: the fixture trust document through iamRoleRecord, the shipped
+// collect-path mapping (resourceObservation/relationshipObservation), and the
+// shipped claim stamping (AppendLiveResources/AppendLiveRelationships), then
+// compares every emitted fact against the frozen in-tree pins. A swap of the
+// two trust-principal values fails here: the resource attributes JSON moves
+// and both trust-edge keys change identity.
+func TestIAMRoleRecordMatchesFrozenEnvelope(t *testing.T) {
+	t.Parallel()
+
+	arn := "arn:aws:iam::123456789012:role/parity-runtime"
+	listed := iamtypes.Role{Arn: aws.String(arn), RoleName: aws.String("parity-runtime"), Path: aws.String("/parity/")}
+	detail := listed
+	detail.AssumeRolePolicyDocument = aws.String(wave1TrustDocument)
+	detail.PermissionsBoundary = &iamtypes.AttachedPermissionsBoundary{
+		PermissionsBoundaryArn:  aws.String("arn:aws:iam::123456789012:policy/parity-boundary"),
+		PermissionsBoundaryType: iamtypes.PermissionsBoundaryAttachmentType("PermissionsBoundary"),
+	}
+	identity := VerifiedIdentity{AccountID: "123456789012", Partition: "aws"}
+	row, err := iamRoleRecord(listed, &detail,
+		[]string{"arn:aws:iam::aws:policy/parity-managed"}, []string{"parity-inline"},
+		"us-east-1", identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resources := []collector.ResourceObservation{resourceObservation(identity.AccountID, row.Resource)}
+	relationships := make([]collector.RelationshipObservation, 0, len(row.Relationships))
+	for _, edge := range row.Relationships {
+		relationships = append(relationships, relationshipObservation(identity.AccountID, edge))
+	}
+	base := sdk.Result{
+		State: sdk.ResultComplete,
+		Claim: sdk.Claim{
+			Scope:        sdk.Scope{ID: "aws:123456789012:us-east-1"},
+			GenerationID: "aws:123456789012:us-east-1:parity:1",
+			InstanceID:   "aws-parity-8852",
+			FencingToken: "fence-parity",
+		},
+		Generation: sdk.Generation{ObservedAt: time.Date(2026, 10, 20, 13, 0, 0, 0, time.UTC)},
+	}
+	stamped, err := collector.AppendLiveResources(base, resources, "aws:iam:role/parity-runtime", collector.ResourceUse{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stamped, err = collector.AppendLiveRelationships(stamped, relationships, "aws:iam:role/parity-runtime", collector.ResourceUse{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stamped.Facts) != 4 {
+		t.Fatalf("facts = %d, want 1 role + 2 trust + 1 policy", len(stamped.Facts))
+	}
+	byKey := make(map[string]sdk.Fact, len(stamped.Facts))
+	for _, fact := range stamped.Facts {
+		byKey[fact.Kind+"\x00"+fact.StableKey] = fact
+	}
+	role, ok := byKey[collector.AWSKindResource+"\x00"+chainWave1IAMRoleKey]
+	if !ok {
+		t.Fatalf("role fact with frozen key %q missing", chainWave1IAMRoleKey)
+	}
+	attrs, ok := role.Payload["attributes"].(map[string]any)
+	if !ok {
+		t.Fatalf("role payload attributes = %#v", role.Payload["attributes"])
+	}
+	encoded, err := json.Marshal(attrs["trust_principals"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(encoded) != chainWave1IAMTrustPrincipals {
+		t.Fatalf("trust_principals = %s, want %s", encoded, chainWave1IAMTrustPrincipals)
+	}
+	for key, payload := range map[string]string{
+		chainWave1IAMTrust0Key:    chainWave1IAMTrust0Payload,
+		chainWave1IAMTrust1Key:    chainWave1IAMTrust1Payload,
+		chainWave1IAMPolicyRelKey: chainWave1IAMPolicyRelPayload,
+	} {
+		fact, ok := byKey[collector.AWSKindRelationship+"\x00"+key]
+		if !ok {
+			t.Fatalf("relationship fact with frozen key %q missing", key)
+		}
+		raw, err := json.Marshal(fact.Payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(raw) != payload {
+			t.Fatalf("payload = %s, want in-tree %s", raw, payload)
+		}
 	}
 }
 

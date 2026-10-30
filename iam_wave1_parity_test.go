@@ -38,6 +38,14 @@ const (
 // payload for the fixture role's first trust edge.
 const frozenWave1IAMTrust0Payload = `{"account_id":"123456789012","attributes":{"principal_type":"AWS"},"collector_instance_id":"aws-parity-8852","region":"aws-global","relationship_type":"iam_role_trusts_principal","service_kind":"iam","source_arn":"arn:aws:iam::123456789012:role/parity-runtime","source_resource_id":"arn:aws:iam::123456789012:role/parity-runtime","target_arn":"","target_resource_id":"AWS:arn:aws:iam::123456789012:role/parity-trusted","target_type":"aws_iam_principal"}`
 
+// frozenWave1IAMTrust1Payload is the in-tree canonical aws_relationship
+// payload for the fixture role's second trust edge (Service,
+// ec2.amazonaws.com). Key and payload corroborated independently: the key is
+// the sha256 of the edge identity the envelope code hashes (see the probe
+// note in the review thread), and the payload follows the Trust0 shape with
+// only principal_type and target_resource_id changed.
+const frozenWave1IAMTrust1Payload = `{"account_id":"123456789012","attributes":{"principal_type":"Service"},"collector_instance_id":"aws-parity-8852","region":"aws-global","relationship_type":"iam_role_trusts_principal","service_kind":"iam","source_arn":"arn:aws:iam::123456789012:role/parity-runtime","source_resource_id":"arn:aws:iam::123456789012:role/parity-runtime","target_arn":"","target_resource_id":"Service:ec2.amazonaws.com","target_type":"aws_iam_principal"}`
+
 // frozenWave1IAMPolicyRelPayload is the in-tree canonical aws_relationship
 // payload for the fixture role's attached-policy edge.
 const frozenWave1IAMPolicyRelPayload = `{"account_id":"123456789012","attributes":null,"collector_instance_id":"aws-parity-8852","region":"aws-global","relationship_type":"iam_role_attached_policy","service_kind":"iam","source_arn":"arn:aws:iam::123456789012:role/parity-runtime","source_resource_id":"arn:aws:iam::123456789012:role/parity-runtime","target_arn":"arn:aws:iam::aws:policy/parity-managed","target_resource_id":"arn:aws:iam::aws:policy/parity-managed","target_type":"aws_iam_policy"}`
@@ -225,6 +233,14 @@ func TestWave1IAMTrustRelationshipParity(t *testing.T) {
 	checkWave1IAMRelationship(t,
 		wave1IAMTrustObservation(t, "AWS", "arn:aws:iam::123456789012:role/parity-trusted"),
 		frozenWave1IAMTrust0Key, frozenWave1IAMTrust0Payload,
+		catalog.RelationshipIAMRoleTrustsPrincipal)
+}
+
+func TestWave1IAMTrust1RelationshipParity(t *testing.T) {
+	t.Parallel()
+	checkWave1IAMRelationship(t,
+		wave1IAMTrustObservation(t, "Service", "ec2.amazonaws.com"),
+		frozenWave1IAMTrust1Key, frozenWave1IAMTrust1Payload,
 		catalog.RelationshipIAMRoleTrustsPrincipal)
 }
 

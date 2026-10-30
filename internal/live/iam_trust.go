@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
@@ -24,8 +25,9 @@ type iamTrustPrincipal struct {
 // parseIAMTrustPolicy derives trust presence and principals from a role's
 // reported trust document. It mirrors the in-tree trust parser verbatim: URL
 // decoding with raw fallback, an error on malformed JSON that never carries
-// the raw value, principals from the Principal key only, and statement-order
-// preservation. A bare-string principal normalizes to an AWS-typed entry.
+// the raw value, principals from the Principal key only, statement-order
+// preservation across statements, and sorted principal-type order within one
+// statement. A bare-string principal normalizes to an AWS-typed entry.
 func parseIAMTrustPolicy(raw string) (bool, []iamTrustPrincipal, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -75,9 +77,18 @@ func iamTrustPrincipalEntries(value any) []iamTrustPrincipal {
 		}
 		return principals
 	case map[string]any:
+		// Range over sorted principal-type keys: Go map iteration is
+		// random, and the trust_principals attribute plus trust-edge
+		// emission order must be deterministic. Statement order is still
+		// preserved by the caller; single-key statements are unaffected.
+		keys := make([]string, 0, len(typed))
+		for principalType := range typed {
+			keys = append(keys, principalType)
+		}
+		sort.Strings(keys)
 		var principals []iamTrustPrincipal
-		for principalType, candidate := range typed {
-			for _, identifier := range iamPrincipalIdentifiers(candidate) {
+		for _, principalType := range keys {
+			for _, identifier := range iamPrincipalIdentifiers(typed[principalType]) {
 				principals = append(principals, iamTrustPrincipal{
 					Type:       principalType,
 					Identifier: identifier,
