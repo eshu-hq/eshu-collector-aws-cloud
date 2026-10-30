@@ -52,7 +52,7 @@ func TestReleaseVersionStepComparesTagWithManifest(t *testing.T) {
 		want     bool
 	}{
 		"exact match":                      {manifest("0.1.0"), "v0.1.0", true},
-		"pre-release of the manifest":      {manifest("0.1.0"), "v0.1.0-rc.1", true},
+		"pre-release tag, stable manifest": {manifest("0.1.0"), "v0.1.0-rc.1", false},
 		"quoted manifest version":          {manifest(`"0.1.0"`), "v0.1.0", true},
 		"manifest version with a comment":  {manifest("0.1.0 # next"), "v0.1.0", true},
 		"manifest with CRLF line endings":  {"metadata:\r\n  version: 0.1.0\r\n", "v0.1.0", true},

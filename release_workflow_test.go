@@ -15,7 +15,7 @@ import (
 
 var (
 	pinnedAction     = regexp.MustCompile(`^[A-Za-z0-9._-]+/[A-Za-z0-9._/-]+@[0-9a-f]{40}$`)
-	secretUsePattern = regexp.MustCompile(`secrets\.([A-Za-z0-9_]+)`)
+	secretUsePattern = regexp.MustCompile(`secrets\.([A-Za-z0-9_]+)|secrets\[['"]([A-Za-z0-9_]+)['"]\]`)
 )
 
 const (
@@ -39,8 +39,7 @@ type workflowStep struct {
 	Env  map[string]string `yaml:"env"`
 	// If holds the step's `if:` condition; ContinueOnError holds
 	// `continue-on-error:`. Both default to the zero value when absent.
-	// The govulncheck/gosec reachability tests read them; other tests
-	// ignore them.
+	// Parsed for forward-compatibility; the release checks ignore them.
 	If              string `yaml:"if"`
 	ContinueOnError bool   `yaml:"continue-on-error"`
 }
@@ -117,6 +116,14 @@ func contractProblems(steps []workflowStep) []string {
 		if got := fmt.Sprint(steps[publishIdx].With["platforms"]); got != "linux/amd64" {
 			problems = append(problems, fmt.Sprintf("build platforms = %q, want exactly linux/amd64", got))
 		}
+	}
+	mainHeadIdx := stepIndex(steps, func(s workflowStep) bool {
+		return strings.Contains(s.Run, "git rev-parse origin/main") && strings.Contains(s.Run, "exit 1")
+	})
+	if mainHeadIdx < 0 {
+		problems = append(problems, "no step requires the tag to point at the protected main head")
+	} else if publishIdx >= 0 && mainHeadIdx > publishIdx {
+		problems = append(problems, "the main-head check runs after the image is pushed")
 	}
 	verifyIdx := stepIndex(steps, func(s workflowStep) bool { return strings.Contains(s.Run, "cosign verify") })
 	if verifyIdx < 0 {
@@ -208,8 +215,12 @@ func releaseWorkflowProblems(raw []byte) []string {
 	}
 	problems = append(problems, contractProblems(image.Steps)...)
 	for _, match := range secretUsePattern.FindAllStringSubmatch(string(raw), -1) {
-		if match[1] != "GITHUB_TOKEN" {
-			problems = append(problems, "uses secret "+match[1]+", want only GITHUB_TOKEN")
+		name := match[1]
+		if name == "" {
+			name = match[2]
+		}
+		if name != "GITHUB_TOKEN" {
+			problems = append(problems, "uses secret "+name+", want only GITHUB_TOKEN")
 		}
 	}
 	if strings.Contains(string(raw), "pull_request") {
@@ -249,7 +260,11 @@ func TestReleaseWorkflowGateRejectsViolations(t *testing.T) {
 		"tag-pinned action": func(s string) string {
 			return strings.Replace(s, "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", "actions/checkout@v5", 1)
 		},
-		"extra secret": func(s string) string { return s + "\n# ${{ secrets.DEPLOY_KEY }}\n" },
+		"extra secret":   func(s string) string { return s + "\n# ${{ secrets.DEPLOY_KEY }}\n" },
+		"bracket secret": func(s string) string { return s + "\n# ${{ secrets['DEPLOY_KEY'] }}\n" },
+		"main-head check weakened": func(s string) string {
+			return strings.Replace(s, "git rev-parse origin/main", "git rev-parse HEAD", 1)
+		},
 		"extra permission": func(s string) string {
 			return strings.Replace(s, "      attestations: write\n", "      attestations: write\n      actions: write\n", 1)
 		},
