@@ -128,3 +128,18 @@ func TestIAMPermissionFactRejectsHostileInput(t *testing.T) {
 		t.Fatal("blank policy_source accepted")
 	}
 }
+
+// TestIAMPermissionSourceIDJoinsParts pins the deterministic derived
+// permission id: an empty policy ARN falls back to the policy name so the
+// same statement maps to one durable fact within a generation.
+func TestIAMPermissionSourceIDJoinsParts(t *testing.T) {
+	t.Parallel()
+	withARN := iamPermissionSourceID("arn:aws:iam::123456789012:role/r", "attached", "arn:aws:iam::aws:policy/P", "", "S1", "Allow", []string{"s3:GetObject", "s3:PutObject"})
+	if withARN != "arn:aws:iam::123456789012:role/r#attached#arn:aws:iam::aws:policy/P#S1#Allow#s3:GetObject,s3:PutObject" {
+		t.Fatalf("iamPermissionSourceID() = %q", withARN)
+	}
+	withName := iamPermissionSourceID("arn:aws:iam::123456789012:role/r", "inline", "", "inline-pol", "S1", "Deny", nil)
+	if withName != "arn:aws:iam::123456789012:role/r#inline#inline-pol#S1#Deny#" {
+		t.Fatalf("iamPermissionSourceID(name fallback) = %q", withName)
+	}
+}

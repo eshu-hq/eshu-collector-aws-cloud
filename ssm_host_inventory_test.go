@@ -147,8 +147,12 @@ func TestNewSSMHostApplicationFactRejects(t *testing.T) {
 		{"empty source type", func(o *SSMHostApplicationObservation) { o.SourceType = "" }},
 		{"non-ec2 resource", func(o *SSMHostApplicationObservation) { o.ResourceType = "AWS::SSM::ManagedInstance" }},
 		{"empty instance", func(o *SSMHostApplicationObservation) { o.InstanceID = "  " }},
+		{"empty partition", func(o *SSMHostApplicationObservation) { o.Partition = "" }},
+		{"empty region", func(o *SSMHostApplicationObservation) { o.Region = "" }},
 		{"missing account", func(o *SSMHostApplicationObservation) { o.Boundary.AccountID = "" }},
+		{"missing schema", func(o *SSMHostApplicationObservation) { o.SchemaVersion = "" }},
 		{"missing uri", func(o *SSMHostApplicationObservation) { o.SourceURI = "" }},
+		{"opaque uri", func(o *SSMHostApplicationObservation) { o.SourceURI = "https://example.com/collector?token=opaque" }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -210,6 +214,17 @@ func TestNewSSMHostPlatformFact(t *testing.T) {
 	rejects := map[string]SSMHostPlatformObservation{
 		"dii with capture time":     mk("describe_instance_information", "2026-10-29T22:31:19Z"),
 		"inventory without capture": mk("ssm_inventory", ""),
+		"inventory invalid capture": mk("ssm_inventory", "yesterday"),
+		"empty partition": func() SSMHostPlatformObservation {
+			o := mk("ssm_inventory", "2026-10-29T22:31:19Z")
+			o.Partition = ""
+			return o
+		}(),
+		"opaque source uri": func() SSMHostPlatformObservation {
+			o := mk("ssm_inventory", "2026-10-29T22:31:19Z")
+			o.SourceURI = "https://example.com/collector?token=opaque"
+			return o
+		}(),
 		"unknown provenance":        mk("custom", "2026-10-29T22:31:19Z"),
 		"missing observation time": func() SSMHostPlatformObservation {
 			o := mk("ssm_inventory", "2026-10-29T22:31:19Z")

@@ -131,4 +131,46 @@ func TestPortParity_RouteAndGatewayInMesh(t *testing.T) {
 	if len(grels) != 1 || grels[0].TargetType != catalog.ResourceTypeAppMeshMesh {
 		t.Fatalf("virtualGatewayRelationships() = %#v", grels)
 	}
+	if got := virtualGatewayRelationships(testBoundary(), Mesh{}, gw); got != nil {
+		t.Fatalf("empty mesh ARN = %#v, want nil", got)
+	}
+	if got := routeRelationships(testBoundary(), Route{}); got != nil {
+		t.Fatalf("empty route ARNs = %#v, want nil", got)
+	}
+}
+
+// TestPortParity_ServiceDiscoveryKinds freezes the discovery branches Cloud
+// Map and DNS share through virtualNodeRelationships: a complete Cloud Map
+// reference emits its edge, an incomplete one is dropped, and a node whose
+// ARN is not a mesh child emits nothing for an unresolvable backend.
+func TestPortParity_ServiceDiscoveryKinds(t *testing.T) {
+	t.Parallel()
+	nodeARN := "arn:aws:appmesh:us-east-1:123456789012:mesh/m/virtualNode/n"
+	cloudMap := VirtualNode{
+		ARN: nodeARN, ServiceDiscoveryKind: "aws_cloud_map",
+		CloudMapNamespaceName: "apps.local", CloudMapServiceName: "n",
+	}
+	got := virtualNodeRelationships(testBoundary(), cloudMap)
+	if len(got) != 1 || got[0].TargetResourceID != "apps.local/n" ||
+		got[0].RelationshipType != catalog.RelationshipAppMeshVirtualNodeUsesCloudMapService {
+		t.Fatalf("cloud map edge = %#v", got)
+	}
+	bare := VirtualNode{ARN: nodeARN, ServiceDiscoveryKind: "aws_cloud_map"}
+	if got := virtualNodeRelationships(testBoundary(), bare); len(got) != 0 {
+		t.Fatalf("incomplete cloud map = %#v, want no edges", got)
+	}
+	unknown := VirtualNode{ARN: nodeARN, ServiceDiscoveryKind: "consul"}
+	if got := virtualNodeRelationships(testBoundary(), unknown); len(got) != 0 {
+		t.Fatalf("unknown discovery kind = %#v, want no edges", got)
+	}
+	nonMesh := VirtualNode{
+		ARN:                        "arn:aws:ec2:us-east-1:123456789012:vpc/vpc-1",
+		BackendVirtualServiceNames: []string{"s.apps.local"},
+	}
+	if got := virtualNodeRelationships(testBoundary(), nonMesh); len(got) != 0 {
+		t.Fatalf("non-mesh backend = %#v, want no edges", got)
+	}
+	if got := siblingResourceARN("arn:aws:appmesh:us-east-1:123456789012:mesh/", "virtualService", "s"); got != "" {
+		t.Fatalf("siblingResourceARN(nameless mesh) = %q, want empty", got)
+	}
 }

@@ -113,3 +113,39 @@ func TestKnowledgeBaseS3SourceWithEmptyBucketEmitsNoRelationship(t *testing.T) {
 		}
 	}
 }
+
+// TestKnowledgeBaseURLDataSources pins the URL-addressed connector mapping:
+// Confluence, SharePoint, and web-crawler sources emit kind-typed edges to
+// their URL, while unknown connector types and empty URLs are dropped, and a
+// knowledge base with no addressable identity yields nothing.
+func TestKnowledgeBaseURLDataSources(t *testing.T) {
+	t.Parallel()
+	kb := KnowledgeBase{
+		ARN:  "arn:aws:bedrock:us-east-1:123456789012:knowledge-base/KB1",
+		ID:   "KB1",
+		Name: "kb-one",
+		DataSources: []KnowledgeBaseDataSource{
+			{ID: "DS-WEB", Name: "docs", Type: "WEB", URL: "https://example.com/docs"},
+			{ID: "DS-CONF", Name: "wiki", Type: "confluence", URL: "https://wiki.example.com"},
+			{ID: "DS-UNKNOWN", Name: "mystery", Type: "CUSTOM", URL: "https://custom.example.com"},
+			{ID: "DS-EMPTY", Name: "empty", Type: "WEB"},
+		},
+	}
+	observations := knowledgeBaseRelationships(kb)
+	if len(observations) != 2 {
+		t.Fatalf("URL data-source relationships = %d, want 2 (web, confluence)", len(observations))
+	}
+	if observations[0].RelationshipType != catalog.RelationshipBedrockKnowledgeBaseUsesWebCrawler ||
+		observations[0].TargetResourceID != "https://example.com/docs" ||
+		observations[0].TargetType != "web_data_source" {
+		t.Fatalf("web relationship = %#v", observations[0])
+	}
+	if observations[1].RelationshipType != catalog.RelationshipBedrockKnowledgeBaseUsesConfluence ||
+		observations[1].TargetResourceID != "https://wiki.example.com" ||
+		observations[1].TargetType != "confluence_data_source" {
+		t.Fatalf("confluence relationship = %#v", observations[1])
+	}
+	if got := knowledgeBaseRelationships(KnowledgeBase{}); got != nil {
+		t.Fatalf("identity-less knowledge base = %#v, want nil", got)
+	}
+}
