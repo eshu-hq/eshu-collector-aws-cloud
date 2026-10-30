@@ -215,6 +215,22 @@ func TestNewSSMHostPlatformFact(t *testing.T) {
 	}
 }
 
+// TestValidateSSMHostPlatformProvenance mirrors the #9556 pairing check:
+// a DescribeInstanceInformation observation carrying a capture time is
+// rejected, while both valid pairings pass.
+func TestValidateSSMHostPlatformProvenance(t *testing.T) {
+	t.Parallel()
+	if err := ValidateSSMHostPlatformProvenance("describe_instance_information", true); err == nil {
+		t.Fatal("DII with capture time: error = nil, want rejection")
+	}
+	if err := ValidateSSMHostPlatformProvenance("describe_instance_information", false); err != nil {
+		t.Fatalf("DII without capture time: error = %v, want nil", err)
+	}
+	if err := ValidateSSMHostPlatformProvenance("ssm_inventory", true); err != nil {
+		t.Fatalf("inventory with capture time: error = %v, want nil", err)
+	}
+}
+
 func TestAppendLiveSSMHostInventory(t *testing.T) {
 	t.Parallel()
 	claim := testClaim()

@@ -25,6 +25,7 @@ func ssmTestLimits() SSMHostInventoryLimits {
 		MaxPlatformObservationAge:     time.Hour,
 		RetentionDays:                 30,
 		Targets:                       []string{"i-00000000000000001"},
+		AllowedSourceTypes:            []string{"AWS:Application"},
 	}
 }
 
@@ -56,6 +57,7 @@ func TestSSMHostInventoryLimitsValidate(t *testing.T) {
 		{"no retention", func(l *SSMHostInventoryLimits) { l.RetentionDays = 0 }},
 		{"no targets", func(l *SSMHostInventoryLimits) { l.Targets = nil }},
 		{"blank target", func(l *SSMHostInventoryLimits) { l.Targets = []string{"  "} }},
+		{"no allowlist", func(l *SSMHostInventoryLimits) { l.AllowedSourceTypes = nil }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

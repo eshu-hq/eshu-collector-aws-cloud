@@ -37,23 +37,24 @@ const ssmHostDiscoveryMaxPages = 10
 // tokens, capture times, and instance identities never flow into
 // operator-visible text through the verdict path.
 const (
-	ssmCaptureReasonComplete    = "complete coherent capture within budgets"
-	ssmCaptureReasonTruncated   = "pagination stopped with a pending next token"
-	ssmCaptureReasonTokenRepeat = "repeating pagination token"
-	ssmCaptureReasonTokenChain  = "broken pagination token chain"
-	ssmCaptureReasonIncoherent  = "incoherent stream identity or capture time"
-	ssmCaptureReasonMissing     = "missing or invalid capture time"
-	ssmCaptureReasonNoPages     = "no pages read"
-	ssmCaptureReasonEntries     = "entry volume exceeds the per-host capture ceiling"
-	ssmCaptureReasonPages       = "page volume exceeds the per-host per-type poll ceiling"
-	ssmCaptureReasonEntryBytes  = "entry bytes exceed the per-entry planning budget"
-	ssmCaptureReasonPageBytes   = "page bytes exceed the per-page planning budget"
-	ssmCaptureReasonStale       = "capture past the stale-age bound"
-	ssmCaptureReasonDenied      = "inventory read denied"
-	ssmCaptureReasonUnmanaged   = "host not SSM-managed"
-	ssmCaptureReasonNonEC2      = "host is not an EC2 managed node"
-	ssmCaptureReasonOffline     = "host is not online"
-	ssmCaptureReasonDeferred    = "host deferred beyond the per-poll host cap"
+	ssmCaptureReasonComplete             = "complete coherent capture within budgets"
+	ssmCaptureReasonTruncated            = "pagination stopped with a pending next token"
+	ssmCaptureReasonTokenRepeat          = "repeating pagination token"
+	ssmCaptureReasonTokenChain           = "broken pagination token chain"
+	ssmCaptureReasonIncoherent           = "incoherent stream identity or capture time"
+	ssmCaptureReasonMissing              = "missing or invalid capture time"
+	ssmCaptureReasonNoPages              = "no pages read"
+	ssmCaptureReasonEntries              = "entry volume exceeds the per-host capture ceiling"
+	ssmCaptureReasonPages                = "page volume exceeds the per-host per-type poll ceiling"
+	ssmCaptureReasonEntryBytes           = "entry bytes exceed the per-entry planning budget"
+	ssmCaptureReasonPageBytes            = "page bytes exceed the per-page planning budget"
+	ssmCaptureReasonStale                = "capture past the stale-age bound"
+	ssmCaptureReasonDenied               = "inventory read denied"
+	ssmCaptureReasonSourceNotAllowlisted = "source type outside the poll allowlist"
+	ssmCaptureReasonUnmanaged            = "host not SSM-managed"
+	ssmCaptureReasonNonEC2               = "host is not an EC2 managed node"
+	ssmCaptureReasonOffline              = "host is not online"
+	ssmCaptureReasonDeferred             = "host deferred beyond the per-poll host cap"
 )
 
 // SSMInventoryPage is one ListInventoryEntries response for one host and
@@ -121,6 +122,19 @@ func AssessSSMHostCapture(pages []SSMInventoryPage, limits SSMHostInventoryLimit
 		return preserve(SSMHostInventoryPartial, ssmCaptureReasonNoPages)
 	}
 	first := pages[0]
+	// The poll allowlist is enforced before any coherence or budget verdict:
+	// a stream outside it is never admissible, whatever else it carries. It
+	// mirrors AssessSSMHostCapture in the #9556 contracts.
+	allowlisted := false
+	for _, allowed := range limits.AllowedSourceTypes {
+		if first.SourceType == allowed {
+			allowlisted = true
+			break
+		}
+	}
+	if !allowlisted {
+		return preserve(SSMHostInventoryPartial, ssmCaptureReasonSourceNotAllowlisted)
+	}
 	if first.CaptureTime == "" {
 		return preserve(SSMHostInventoryPartial, ssmCaptureReasonMissing)
 	}

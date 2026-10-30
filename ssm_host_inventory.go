@@ -253,6 +253,20 @@ func NewSSMHostApplicationFact(obs SSMHostApplicationObservation) (sdk.Fact, err
 	}, nil
 }
 
+// ValidateSSMHostPlatformProvenance rejects a platform observation whose
+// provenance and capture-time pairing is incoherent: a
+// DescribeInstanceInformation observation carries no inventory capture time,
+// so a value here with that provenance is a contract violation. It mirrors
+// ValidateSSMHostPlatformProvenance in the #9556 contracts; the emitter
+// calls it before building platform facts. hasCaptureTime reports whether
+// the observation carries any capture-time value.
+func ValidateSSMHostPlatformProvenance(sourceType string, hasCaptureTime bool) error {
+	if sourceType == "describe_instance_information" && hasCaptureTime {
+		return fmt.Errorf("ssm host inventory: capture time with DescribeInstanceInformation provenance")
+	}
+	return nil
+}
+
 // NewSSMHostPlatformFact builds one typed aws_ssm_host_platform fact.
 // Inventory-sourced evidence requires the capture time;
 // DescribeInstanceInformation evidence must not carry one.
@@ -261,6 +275,9 @@ func NewSSMHostPlatformFact(obs SSMHostPlatformObservation) (sdk.Fact, error) {
 		return sdk.Fact{}, err
 	}
 	if err := validateSSMHostTuple(obs.Partition, obs.AccountID, obs.Region, obs.InstanceID, obs.ResourceType); err != nil {
+		return sdk.Fact{}, err
+	}
+	if err := ValidateSSMHostPlatformProvenance(strings.TrimSpace(obs.SourceType), obs.CaptureTime != nil); err != nil {
 		return sdk.Fact{}, err
 	}
 	source := strings.TrimSpace(obs.SourceType)

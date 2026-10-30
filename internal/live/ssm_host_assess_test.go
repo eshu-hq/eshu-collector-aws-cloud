@@ -112,6 +112,13 @@ func TestAssessSSMHostCapture(t *testing.T) {
 			p.NextToken = ""
 		}), SSMHostInventoryPartial},
 		{"stale", ssmCoherentPages(now.Add(-3 * time.Hour).Format(time.RFC3339)), SSMHostInventoryStale},
+		{"non-allowlisted type", func() []SSMInventoryPage {
+			pages := ssmCoherentPages(fresh)
+			for i := range pages {
+				pages[i].SourceType = "AWS:File"
+			}
+			return pages
+		}(), SSMHostInventoryPartial},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -128,6 +135,9 @@ func TestAssessSSMHostCapture(t *testing.T) {
 			}
 			if tc.name == "page ceiling" && got.Reason != ssmCaptureReasonPages {
 				t.Fatalf("page ceiling reason = %q", got.Reason)
+			}
+			if tc.name == "non-allowlisted type" && got.Reason != ssmCaptureReasonSourceNotAllowlisted {
+				t.Fatalf("non-allowlisted type reason = %q, want the allowlist verdict", got.Reason)
 			}
 			if got.Reason == "" {
 				t.Fatal("verdict carries no reason")

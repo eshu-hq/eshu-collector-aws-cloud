@@ -22,6 +22,9 @@ type fakeSSMInventoryAPI struct {
 	streams   map[string]*fakeInventoryStream
 	denyList  map[string]bool
 	denyDII   bool
+	// foreignType forces the listed hosts to answer a non-application
+	// inventory type, proving foreign rows never become observations.
+	foreignType map[string]bool
 }
 
 type fakeInventoryStream struct {
@@ -73,8 +76,12 @@ func (f *fakeSSMInventoryAPI) ListInventoryEntries(ctx context.Context, params *
 			return nil, fmt.Errorf("unknown pagination token")
 		}
 	}
+	typeName := params.TypeName
+	if f.foreignType[id] {
+		typeName = aws.String("AWS:File")
+	}
 	out := &awsssm.ListInventoryEntriesOutput{
-		InstanceId: params.InstanceId, TypeName: params.TypeName,
+		InstanceId: params.InstanceId, TypeName: typeName,
 		CaptureTime: captureOrNil(stream.capture), SchemaVersion: aws.String(stream.schema),
 		Entries: stream.pages[index],
 	}
@@ -373,6 +380,24 @@ func TestPollSSMHostInventoryPartialVectors(t *testing.T) {
 		}
 		if report.Aggregates.DeniedHosts != 1 || len(report.Applications) != 0 {
 			t.Fatalf("discovery denial misclassified: %+v", report.Aggregates)
+		}
+	})
+	t.Run("foreign inventory type never becomes observations", func(t *testing.T) {
+		t.Parallel()
+		api := &fakeSSMInventoryAPI{
+			instances:   map[string]ssmtypes.InstanceInformation{"i-f": ssmFakeInstance("i-f")},
+			streams:     map[string]*fakeInventoryStream{"i-f": {capture: capture, schema: "1.0", pages: ssmFakePages("f", 10, capture)}},
+			foreignType: map[string]bool{"i-f": true},
+		}
+		report, err := PollSSMHostInventory(context.Background(), api, ssmTestIdentity(), "us-east-1", freshLimits("i-f"), NewSSMCaptureTracker(), now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(report.Applications) != 0 || report.Aggregates.PartialHosts != 1 || report.Aggregates.Outcome != SSMHostInventoryPartial {
+			t.Fatalf("foreign stream emitted observations: %+v", report.Aggregates)
+		}
+		if len(report.Hosts) != 1 || report.Hosts[0].Reason != ssmCaptureReasonSourceNotAllowlisted {
+			t.Fatalf("foreign stream reason = %+v, want the allowlist verdict", report.Hosts)
 		}
 	})
 	t.Run("missing limits fail closed", func(t *testing.T) {

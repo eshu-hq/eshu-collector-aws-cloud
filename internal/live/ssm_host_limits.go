@@ -100,6 +100,16 @@ type SSMHostInventoryLimits struct {
 	// Targets is the explicit configured host set. Required non-empty:
 	// there is no unlimited default. Blank entries fail closed.
 	Targets []string
+
+	// AllowedSourceTypes is the explicit inventory-type allowlist for one
+	// poll (for example ["AWS:Application"] for an application poll).
+	// Required non-empty: a stream whose type sits outside this set is
+	// partial and never supersedes, so foreign rows cannot become
+	// observations of this poll's kind. There is no permissive default.
+	// It mirrors SSMHostInventoryLimits.AllowedSourceTypes in the #9556
+	// contracts; reconcile against the collector SDK release when it
+	// ships those helpers instead of vendoring a second copy.
+	AllowedSourceTypes []string
 }
 
 // Validate fails closed unless every limit is explicitly configured,
@@ -167,6 +177,9 @@ func (l SSMHostInventoryLimits) Validate() error {
 		if strings.TrimSpace(target) == "" {
 			return fmt.Errorf("ssm host inventory: target list carries a blank entry")
 		}
+	}
+	if len(l.AllowedSourceTypes) == 0 {
+		return fmt.Errorf("ssm host inventory: explicit source-type allowlist is required (no permissive default)")
 	}
 	return nil
 }
