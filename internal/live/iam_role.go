@@ -5,9 +5,7 @@ package live
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -128,7 +126,7 @@ func iamRoleRecord(listed iamtypes.Role, detail *iamtypes.Role, attached, inline
 	if path == "" {
 		path = strings.TrimSpace(aws.ToString(listed.Path))
 	}
-	trustPresent, err := iamTrustPolicyPresent(aws.ToString(role.AssumeRolePolicyDocument))
+	trustPresent, trustPrincipals, err := parseIAMTrustPolicy(aws.ToString(role.AssumeRolePolicyDocument))
 	if err != nil {
 		return collector.Record{}, err
 	}
@@ -139,6 +137,8 @@ func iamRoleRecord(listed iamtypes.Role, detail *iamtypes.Role, attached, inline
 		"permission_boundary_arn":  "",
 		"permission_boundary_type": "",
 		"trust_policy_present":     trustPresent,
+		"trust_principal_count":    len(trustPrincipals),
+		"trust_principals":         iamTrustPrincipalAttrMaps(trustPrincipals),
 	}
 	if role.PermissionsBoundary != nil {
 		attrs["permission_boundary_arn"] = strings.TrimSpace(aws.ToString(role.PermissionsBoundary.PermissionsBoundaryArn))
@@ -151,23 +151,7 @@ func iamRoleRecord(listed iamtypes.Role, detail *iamtypes.Role, attached, inline
 		Region: "aws-global", ServiceKind: "iam", ResourceType: "aws_iam_role", ResourceID: arn, ARN: arn, Name: name,
 		Attributes: attrs, CorrelationAnchors: []string{arn, name}, SourceRecordID: arn,
 	}
+	row.Relationships = append(row.Relationships, iamTrustRelationships(arn, trustPrincipals)...)
+	row.Relationships = append(row.Relationships, iamAttachedPolicyRelationships(arn, attached)...)
 	return row, nil
-}
-
-// iamTrustPolicyPresent follows the legacy adapter's URL decode and JSON map
-// semantics. The document and parser error never enter facts or status.
-func iamTrustPolicyPresent(raw string) (bool, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return false, nil
-	}
-	decoded, err := url.QueryUnescape(raw)
-	if err != nil {
-		decoded = raw
-	}
-	var document map[string]any
-	if err := json.Unmarshal([]byte(decoded), &document); err != nil {
-		return false, fmt.Errorf("invalid IAM role trust policy document")
-	}
-	return len(document) > 0, nil
 }
