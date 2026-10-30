@@ -261,9 +261,9 @@ func TestWave1LambdaMappingAttributeEquality(t *testing.T) {
 	}
 	wantPlacements := map[string]map[string]any{
 		"lambda_function_uses_execution_role\x00arn:aws:iam::123456789012:role/wave1-lambda-role": nil,
-		"lambda_function_uses_subnet\x00subnet-wave1a": {"vpc_id": "vpc-wave1"},
-		"lambda_function_uses_subnet\x00subnet-wave1b": {"vpc_id": "vpc-wave1"},
-		"lambda_function_uses_security_group\x00sg-wave1": {"vpc_id": "vpc-wave1"},
+		"lambda_function_uses_subnet\x00subnet-wave1a":                                            {"vpc_id": "vpc-wave1"},
+		"lambda_function_uses_subnet\x00subnet-wave1b":                                            {"vpc_id": "vpc-wave1"},
+		"lambda_function_uses_security_group\x00sg-wave1":                                         {"vpc_id": "vpc-wave1"},
 	}
 	if !reflect.DeepEqual(placements, wantPlacements) {
 		t.Fatalf("function A placements = %#v, want %#v", placements, wantPlacements)
