@@ -6,6 +6,7 @@ package collector
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,8 +16,9 @@ import (
 
 // frozenSecurityGroupRuleKey is the in-tree stable key for the Wave 0 fixture
 // rule (testdata/wave0-specialty-parity.json, sg_rule section), executed
-// through the in-tree NewSecurityGroupRuleEnvelope. Provenance for the frozen
-// value is recorded on eshu-hq/eshu#9296 with the oracle run.
+// through the in-tree NewSecurityGroupRuleEnvelope. Re-derivation recipe
+// (oracle commit, builder, fixture hash):
+// testdata/stable-key-provenance.md.
 const frozenSecurityGroupRuleKey = "c4c4e0196ba9f6f2e22f4b67ee67affe0cb5b6839cfdeababa301cff33d80626"
 
 type wave0Fixture struct {
@@ -214,5 +216,24 @@ func TestSecurityGroupRuleFactRejectsHostileInput(t *testing.T) {
 	}
 	if got, want := fact.SourceRef.RecordID, "sg-123#ingress#tcp#443#443#unknown#"; got != want {
 		t.Fatalf("RecordID = %q, want %q", got, want)
+	}
+
+	// A nil port range (all-protocols rules omit it) renders as empty
+	// segments, never as the Go "<nil>" token, in the durable id.
+	observation = sgRuleParityObservation(t)
+	observation.CIDRIPv4 = ""
+	observation.RuleID = ""
+	observation.SourceRecordID = ""
+	observation.FromPort = nil
+	observation.ToPort = nil
+	fact, err = NewSecurityGroupRuleFact(observation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := fact.SourceRef.RecordID, "sg-123#ingress#tcp###unknown#"; got != want {
+		t.Fatalf("RecordID = %q, want %q", got, want)
+	}
+	if strings.Contains(fact.SourceRef.RecordID, "<nil>") {
+		t.Fatalf("RecordID = %q, contains Go <nil> token", fact.SourceRef.RecordID)
 	}
 }

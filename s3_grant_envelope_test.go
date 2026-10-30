@@ -13,8 +13,8 @@ import (
 // frozenS3ExternalPrincipalGrantKey is the in-tree stable key for the Wave 0
 // fixture grant (testdata/wave0-specialty-parity.json, s3_grant section),
 // executed through the in-tree NewS3ExternalPrincipalGrantEnvelope.
-// Provenance for the frozen value is recorded on eshu-hq/eshu#9296 with the
-// oracle run.
+// Re-derivation recipe (oracle commit, builder, fixture hash):
+// testdata/stable-key-provenance.md.
 const frozenS3ExternalPrincipalGrantKey = "57587047141fa905775f6adc563cd54d35cd4df4a8e74dada0cacfa8417fc3eb"
 
 func s3GrantParityObservation(t *testing.T) S3ExternalPrincipalGrantObservation {

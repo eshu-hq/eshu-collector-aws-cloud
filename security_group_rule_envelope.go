@@ -5,6 +5,7 @@ package collector
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	sdk "github.com/eshu-hq/eshu-sdk/collector"
@@ -203,6 +204,18 @@ func securityGroupPortValue(port *int32) any {
 	return *port
 }
 
+// securityGroupPortString renders an optional port for the source record id.
+// A nil port (all-protocols rules omit the range) renders as "" rather than
+// collapsing to 0, which is a real port, and never as the Go %v "<nil>"
+// token, which must not leak into a durable id. This matches the stable key's
+// null rendering for the same absent port.
+func securityGroupPortString(port *int32) string {
+	if port == nil {
+		return ""
+	}
+	return strconv.Itoa(int(*port))
+}
+
 func securityGroupRuleAnchors(ruleID, groupID, sourceKind, sourceValue string) []string {
 	anchors := []string{groupID}
 	if ruleID != "" {
@@ -226,8 +239,8 @@ func securityGroupRuleSourceID(groupID, direction, ipProtocol, sourceKind, sourc
 		groupID,
 		direction,
 		ipProtocol,
-		fmt.Sprintf("%v", securityGroupPortValue(observation.FromPort)),
-		fmt.Sprintf("%v", securityGroupPortValue(observation.ToPort)),
+		securityGroupPortString(observation.FromPort),
+		securityGroupPortString(observation.ToPort),
 		sourceKind,
 		sourceValue,
 	}

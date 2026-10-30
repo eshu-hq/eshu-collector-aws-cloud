@@ -15,8 +15,8 @@ import (
 // frozenResourcePolicyPermissionKey is the in-tree stable key for the Wave 0
 // fixture statement (testdata/wave0-specialty-parity.json, resource_policy
 // section), executed through the in-tree
-// NewResourcePolicyPermissionEnvelope. Provenance for the frozen value is
-// recorded on eshu-hq/eshu#9296 with the oracle run.
+// NewResourcePolicyPermissionEnvelope. Re-derivation recipe (oracle commit,
+// builder, fixture hash): testdata/stable-key-provenance.md.
 const frozenResourcePolicyPermissionKey = "6c5e4d83954ab445f141894167859aea185d9d46e930072f0912355aa4ba820c"
 
 func resourcePolicyParityObservation(t *testing.T) ResourcePolicyPermissionObservation {

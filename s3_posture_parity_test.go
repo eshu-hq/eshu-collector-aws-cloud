@@ -15,7 +15,9 @@ import (
 // frozenS3BucketPostureKey is the in-tree stable key for the shared-fixture
 // bucket (go/internal/collector/awscloud/source_parity_8852_test.go,
 // parity8852S3PostureKey). The already-ported satellite builder must
-// reproduce it byte for byte from the same fixture section.
+// reproduce it byte for byte from the same fixture section. Re-derivation
+// recipe (oracle commit, command, fixture hash):
+// testdata/stable-key-provenance.md.
 const frozenS3BucketPostureKey = "97ae4a36aa7fd60adc765e7c66a0dbd17321d6f5f17a7c537010d860ac6f8815"
 
 func TestS3BucketPostureFactSharedFixtureParity(t *testing.T) {

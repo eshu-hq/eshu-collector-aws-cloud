@@ -16,7 +16,8 @@ import (
 // frozenIAMPermissionKey is the in-tree stable key for the shared-fixture IAM
 // statement (go/internal/collector/awscloud/source_parity_8852_test.go,
 // parity8852IAMPermissionKey). The satellite seam must reproduce it byte for
-// byte from the same fixture section.
+// byte from the same fixture section. Re-derivation recipe (oracle commit,
+// command, fixture hash): testdata/stable-key-provenance.md.
 const frozenIAMPermissionKey = "147e19d094eb81dd4587b18c1e86bb1358ab5d6d7f8367fd75982bf6aac291ab"
 
 type iamParityFixture struct {

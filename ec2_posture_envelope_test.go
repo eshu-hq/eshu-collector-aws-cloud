@@ -13,8 +13,8 @@ import (
 // frozenEC2InstancePostureKey is the in-tree stable key for the Wave 0
 // fixture instance (testdata/wave0-specialty-parity.json, ec2_posture
 // section), executed through the in-tree NewEC2InstancePostureEnvelope.
-// Provenance for the frozen value is recorded on eshu-hq/eshu#9296 with the
-// oracle run.
+// Re-derivation recipe (oracle commit, builder, fixture hash):
+// testdata/stable-key-provenance.md.
 const frozenEC2InstancePostureKey = "1d55bc572f6f73fa02e8c9ae08da14dec300825d4a8c52dbbcfe8bc894a86786"
 
 func ec2PostureParityObservation(t *testing.T) EC2InstancePostureObservation {

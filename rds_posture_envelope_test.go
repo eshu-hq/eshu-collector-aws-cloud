@@ -13,8 +13,8 @@ import (
 // frozenRDSInstancePostureKey is the in-tree stable key for the Wave 0
 // fixture database (testdata/wave0-specialty-parity.json, rds_posture
 // section), executed through the in-tree NewRDSInstancePostureEnvelope.
-// Provenance for the frozen value is recorded on eshu-hq/eshu#9296 with the
-// oracle run.
+// Re-derivation recipe (oracle commit, builder, fixture hash):
+// testdata/stable-key-provenance.md.
 const frozenRDSInstancePostureKey = "99c0f021f1f7c26cd2598a915047ead7c55b72245cdee807b67f75d71c537d6d"
 
 func rdsPostureParityObservation(t *testing.T) RDSPostureObservation {

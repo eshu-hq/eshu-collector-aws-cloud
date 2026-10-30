@@ -16,7 +16,8 @@ import (
 // frozenDNSRecordKey is the in-tree stable key for the shared-fixture DNS
 // record (go/internal/collector/awscloud/source_parity_8852_test.go,
 // parity8852DNSRecordKey). The satellite seam must reproduce it byte for
-// byte from the same fixture section.
+// byte from the same fixture section. Re-derivation recipe (oracle commit,
+// command, fixture hash): testdata/stable-key-provenance.md.
 const frozenDNSRecordKey = "5bd39ab9188007203e5eed1bd57eac7bfcc6cfb8ee5a86b6cdea2a64e09983e6"
 
 type dnsParityFixture struct {
