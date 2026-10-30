@@ -32,7 +32,12 @@ request and rejects a nonblank conflicting child cluster name. IAM OIDC provider
 metadata and the cluster relationship are ported. An unmatched or denied
 IAM list retains an issuer-only provider and edge. An explicit
 ListOpenIDConnectProviders denial leaves EKS observations partial; a
-GetOpenIDConnectProvider failure remains terminal. The live KMS reader now
+GetOpenIDConnectProvider failure remains terminal. Wave 1 (eshu-hq/eshu#9296)
+locks the EKS surface at full in-tree fixture parity: 24/24 stable keys match
+the in-tree Scanner.Scan on the shared fixture
+testdata/wave1-eks-parity.json (provenance in
+testdata/stable-key-provenance.md; Q4(a) in internal/live/eks_wave1_conformance_test.go (TestWave1EKSLiveConformance over real builder output; eks_wave1_conformance_test.go is the schema-admission companion).
+No production change was needed. The live KMS reader now
 emits verified key metadata, and the IAM reader emits verified role and
 user metadata at the legacy `aws-global` fact boundary without raw trust
 documents, policy documents, or credential material. Their live IAM and

@@ -1,0 +1,116 @@
+{
+  "description": "Wave 1 EKS parity inputs (eshu-hq/eshu#9296). Rows mirror the in-tree post-mapper scanner types (go/internal/collector/awscloud/service/eks/types.go) so the in-tree oracle unmarshals them directly; the satellite test serves the same rows through a stubbed EKS/IAM API. The satellite live path must emit the same kind and stable key the in-tree Scanner.Scan derives for these rows; expected keys are frozen in the eks parity test with provenance in testdata/stable-key-provenance.md. No real identifiers: all values are synthetic (example.invalid hostnames, TEST-NET-free ids).",
+  "scope_id": "aws:123456789012:us-east-1",
+  "generation_id": "aws:123456789012:us-east-1:wave1:1",
+  "collector_instance_id": "aws-parity-wave1",
+  "clusters": [
+    {
+      "ARN": "arn:aws:eks:us-east-1:123456789012:cluster/wave1-a",
+      "Name": "wave1-a",
+      "Version": "1.29",
+      "PlatformVersion": "eks.1",
+      "Status": "ACTIVE",
+      "Endpoint": "https://wave1-a.sk1.us-east-1.eks.example.invalid",
+      "RoleARN": "arn:aws:iam::123456789012:role/wave1-eks-role",
+      "CreatedAt": "2026-09-15T00:00:00Z",
+      "OIDCProvider": {
+        "ARN": "arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/WAVE1AAA",
+        "IssuerURL": "https://oidc.eks.us-east-1.amazonaws.com/id/WAVE1AAA",
+        "Thumbprints": ["9e99a48a9960b14926bb7f3b02e22da2b0ab728"],
+        "ClientIDs": ["sts.amazonaws.com"]
+      },
+      "VPCConfig": {
+        "VPCID": "vpc-wave1",
+        "SubnetIDs": ["subnet-wave1a", "subnet-wave1b"],
+        "SecurityGroupIDs": ["sg-wave1"],
+        "ClusterSecurityGroupID": "sg-wave1-cluster",
+        "EndpointPublicAccess": true,
+        "EndpointPrivateAccess": false,
+        "PublicAccessCIDRs": ["0.0.0.0/0"]
+      },
+      "Tags": {"env": "wave1"}
+    },
+    {
+      "ARN": "arn:aws:eks:us-east-1:123456789012:cluster/wave1-b",
+      "Name": "wave1-b",
+      "Version": "1.28",
+      "PlatformVersion": "eks.2",
+      "Status": "ACTIVE",
+      "Endpoint": "https://wave1-b.sk1.us-east-1.eks.example.invalid",
+      "RoleARN": "",
+      "CreatedAt": "0001-01-01T00:00:00Z",
+      "OIDCProvider": {
+        "ARN": "",
+        "IssuerURL": "https://oidc.eks.us-east-1.amazonaws.com/id/WAVE1BBB",
+        "Thumbprints": null,
+        "ClientIDs": null
+      },
+      "VPCConfig": {
+        "VPCID": "",
+        "SubnetIDs": ["subnet-wave1a"],
+        "SecurityGroupIDs": [],
+        "ClusterSecurityGroupID": "",
+        "EndpointPublicAccess": true,
+        "EndpointPrivateAccess": false,
+        "PublicAccessCIDRs": []
+      },
+      "Tags": {}
+    }
+  ],
+  "nodegroups": [
+    {
+      "ARN": "arn:aws:eks:us-east-1:123456789012:nodegroup/wave1-a/ng-a1/11111111-2222-3333-4444-555555555555",
+      "Name": "ng-a1",
+      "ClusterName": "wave1-a",
+      "Version": "1.29",
+      "ReleaseVersion": "1.29.0-20240101",
+      "Status": "ACTIVE",
+      "NodeRoleARN": "arn:aws:iam::123456789012:role/wave1-node-role",
+      "CapacityType": "ON_DEMAND",
+      "AMIType": "AL2_x86_64",
+      "InstanceTypes": ["m5.large", "m5.xlarge"],
+      "Subnets": ["subnet-wave1a", "subnet-wave1b"],
+      "ScalingConfig": {"DesiredSize": 2, "MinSize": 1, "MaxSize": 4},
+      "Tags": {"env": "wave1"}
+    },
+    {
+      "ARN": "arn:aws:eks:us-east-1:123456789012:nodegroup/wave1-b/ng-b1/66666666-7777-8888-9999-000000000000",
+      "Name": "ng-b1",
+      "ClusterName": "wave1-b",
+      "Version": "1.28",
+      "ReleaseVersion": "",
+      "Status": "ACTIVE",
+      "NodeRoleARN": "",
+      "CapacityType": "SPOT",
+      "AMIType": "AL2_x86_64",
+      "InstanceTypes": [],
+      "Subnets": [],
+      "ScalingConfig": {"DesiredSize": 0, "MinSize": 0, "MaxSize": 0},
+      "Tags": {}
+    }
+  ],
+  "addons": [
+    {
+      "ARN": "arn:aws:eks:us-east-1:123456789012:addon/wave1-a/vpc-cni/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      "Name": "vpc-cni",
+      "ClusterName": "wave1-a",
+      "Version": "v1.12.6-eksbuild.2",
+      "Status": "ACTIVE",
+      "ServiceAccountRoleARN": "arn:aws:iam::123456789012:role/wave1-addon-role",
+      "CreatedAt": "2026-09-16T00:00:00Z",
+      "ModifiedAt": "2026-10-01T00:00:00Z",
+      "Tags": {"env": "wave1"}
+    },
+    {
+      "ARN": "arn:aws:eks:us-east-1:123456789012:addon/wave1-b/coredns/ffffffff-0000-1111-2222-333333333333",
+      "Name": "coredns",
+      "ClusterName": "wave1-b",
+      "Version": "v1.10.1-eksbuild.1",
+      "Status": "ACTIVE",
+      "ServiceAccountRoleARN": "",
+      "CreatedAt": "0001-01-01T00:00:00Z",
+      "ModifiedAt": "0001-01-01T00:00:00Z",
+      "Tags": {}
+    }
+  ]
+}
