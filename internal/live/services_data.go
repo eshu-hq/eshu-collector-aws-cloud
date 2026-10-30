@@ -140,6 +140,15 @@ func listS3WithAPI(ctx context.Context, client s3BucketAPI, region string, ident
 			for key, value := range websiteLogging {
 				row.Resource.Attributes[key] = value
 			}
+			if edge, ok := s3LoggingRelationship(
+				region,
+				row.Resource.ARN,
+				s3StringAttr(websiteLogging, "logging_target_bucket"),
+				s3StringAttr(websiteLogging, "logging_target_prefix"),
+				identity.Partition,
+			); ok {
+				row.Relationships = append(row.Relationships, edge)
+			}
 			replication, err := readS3Replication(ctx, client, aws.ToString(bucket.Name), identity.AccountID)
 			if err != nil {
 				return nil, err
