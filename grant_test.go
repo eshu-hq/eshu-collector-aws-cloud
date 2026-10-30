@@ -336,9 +336,16 @@ func normalizeVersion(version string) string {
 func namespacedManifest(t *testing.T) conformance.Manifest {
 	t.Helper()
 	manifest := loadManifest(t)
+	// Drop every Wave 0 core kind (each carries an example grant in
+	// grant.example.json), keeping the template's own namespaced families
+	// plus anything unexpected the exemption tests then catch.
+	granted := make(map[string]bool, len(wave0CoreKinds))
+	for _, kind := range wave0CoreKinds {
+		granted[kind] = true
+	}
 	families := manifest.Spec.EmittedFacts[:0:0]
 	for _, family := range manifest.Spec.EmittedFacts {
-		if family.Kind != AWSKindResource && family.Kind != AWSKindRelationship && family.Kind != AWSKindImageReference && family.Kind != AWSKindWarning && family.Kind != AWSKindS3BucketPosture {
+		if !granted[family.Kind] {
 			families = append(families, family)
 		}
 	}
