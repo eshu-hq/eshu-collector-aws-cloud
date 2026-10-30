@@ -10,12 +10,17 @@ import (
 	"github.com/eshu-hq/eshu-sdk/collector/conformance"
 )
 
-// TestWave1EC2Conformance is the Wave 1 EC2 Q4(a) gate: every kind the
-// completed EC2 live path emits validates against its checked-in JSON Schema
-// through the public fixture harness, using only the published SDK modules.
-// The observations below mirror the shared wave1 fixture vectors
-// (testdata/wave1-ec2-parity.json); the companion live tests prove the same
-// builders emit in-tree-identical stable keys (Q4(b)).
+// TestWave1EC2Conformance is the Wave 1 EC2 Q4(a) gate over the hand-built
+// vectors below: every kind the completed EC2 live path emits validates
+// against its checked-in JSON Schema through the public fixture harness,
+// using only the published SDK modules. The observations below mirror the
+// shared wave1 fixture vectors (testdata/wave1-ec2-parity.json); the
+// companion live tests prove the same builders emit in-tree-identical stable
+// keys (Q4(b)). Hand-built vectors cannot exercise builder-derived edge
+// shapes, so TestWave1EC2BuilderConformance in internal/live runs the real
+// builder output for both new posture kinds (legacy blank-rule-id and
+// nil-port prefix-list fallback rules; the instance row) through the SDK
+// validator and the conformance harness.
 func TestWave1EC2Conformance(t *testing.T) {
 	t.Parallel()
 
