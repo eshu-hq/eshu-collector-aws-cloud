@@ -1,0 +1,86 @@
+{
+  "description": "Wave 1 ECR parity inputs (eshu-hq/eshu#9296). Rows mirror the in-tree post-mapper scanner types (go/internal/collector/awscloud/service/ecr/types.go) so the in-tree oracle unmarshals them directly; the satellite test serves the same rows through a stubbed ECR API. The satellite live path must emit the same kind and stable key the in-tree Scanner.Scan derives for these rows; expected keys are frozen in the ecr parity test with provenance in testdata/stable-key-provenance.md. No real identifiers: all values are synthetic.",
+  "scope_id": "aws:123456789012:us-east-1",
+  "generation_id": "aws:123456789012:us-east-1:wave1:1",
+  "collector_instance_id": "aws-parity-wave1",
+  "repositories": [
+    {
+      "ARN": "arn:aws:ecr:us-east-1:123456789012:repository/wave1-a",
+      "Name": "wave1-a",
+      "URI": "123456789012.dkr.ecr.us-east-1.amazonaws.com/wave1-a",
+      "RegistryID": "123456789012",
+      "ImageTagMutability": "IMMUTABLE",
+      "EncryptionType": "KMS",
+      "KMSKey": "arn:aws:kms:us-east-1:123456789012:key/wave1-key-1",
+      "ScanOnPush": true,
+      "CreatedAt": "2026-09-15T00:00:00Z",
+      "Tags": {"env": "wave1"}
+    },
+    {
+      "ARN": "arn:aws:ecr:us-east-1:123456789012:repository/wave1-b",
+      "Name": "wave1-b",
+      "URI": "123456789012.dkr.ecr.us-east-1.amazonaws.com/wave1-b",
+      "RegistryID": "123456789012",
+      "ImageTagMutability": "MUTABLE",
+      "EncryptionType": "",
+      "KMSKey": "",
+      "ScanOnPush": false,
+      "CreatedAt": "0001-01-01T00:00:00Z",
+      "Tags": {}
+    }
+  ],
+  "images": [
+    {
+      "RepositoryARN": "arn:aws:ecr:us-east-1:123456789012:repository/wave1-a",
+      "RepositoryName": "wave1-a",
+      "RegistryID": "123456789012",
+      "ImageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "ManifestDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "Tags": ["latest", "v1"],
+      "PushedAt": "2026-09-16T12:00:00Z",
+      "ImageSizeInBytes": 12345678,
+      "ManifestMediaType": "application/vnd.oci.image.manifest.v1+json",
+      "ArtifactMediaType": "application/vnd.oci.image.config.v1+json"
+    },
+    {
+      "RepositoryARN": "arn:aws:ecr:us-east-1:123456789012:repository/wave1-a",
+      "RepositoryName": "wave1-a",
+      "RegistryID": "123456789012",
+      "ImageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "ManifestDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "Tags": null,
+      "PushedAt": "0001-01-01T00:00:00Z",
+      "ImageSizeInBytes": 8765,
+      "ManifestMediaType": "application/vnd.oci.image.manifest.v1+json",
+      "ArtifactMediaType": ""
+    },
+    {
+      "RepositoryARN": "arn:aws:ecr:us-east-1:123456789012:repository/wave1-b",
+      "RepositoryName": "wave1-b",
+      "RegistryID": "123456789012",
+      "ImageDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "ManifestDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "Tags": ["prod"],
+      "PushedAt": "2026-09-16T13:00:00Z",
+      "ImageSizeInBytes": 456789,
+      "ManifestMediaType": "application/vnd.docker.distribution.manifest.v2+json",
+      "ArtifactMediaType": ""
+    }
+  ],
+  "policies": [
+    {
+      "RepositoryARN": "arn:aws:ecr:us-east-1:123456789012:repository/wave1-a",
+      "RepositoryName": "wave1-a",
+      "RegistryID": "123456789012",
+      "PolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"wave1 keep last 5 prod images\",\"selection\":{\"tagStatus\":\"tagged\",\"tagPrefixList\":[\"prod\"],\"countType\":\"imageCountMoreThan\",\"countNumber\":5},\"action\":{\"type\":\"expire\"}}]}",
+      "LastEvaluatedAt": "2026-09-17T00:00:00Z"
+    },
+    {
+      "RepositoryARN": "arn:aws:ecr:us-east-1:123456789012:repository/wave1-b",
+      "RepositoryName": "wave1-b",
+      "RegistryID": "123456789012",
+      "PolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"retire wave1-secret drafts\",\"selection\":{\"tagStatus\":\"untagged\",\"countType\":\"sinceImagePushed\",\"countUnit\":\"days\",\"countNumber\":14},\"action\":{\"type\":\"expire\"}}]}",
+      "LastEvaluatedAt": "0001-01-01T00:00:00Z"
+    }
+  ]
+}
