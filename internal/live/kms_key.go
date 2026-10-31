@@ -14,22 +14,20 @@ import (
 	awskms "github.com/aws/aws-sdk-go-v2/service/kms"
 	kmstypes "github.com/aws/aws-sdk-go-v2/service/kms/types"
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
+	"github.com/eshu-hq/eshu-collector-aws-cloud/catalog"
 	awsv1 "github.com/eshu-hq/eshu-sdk/factschema/aws/v1"
 )
 
-// kmsAliasResourceType and the kmsGrant* relationship types below have no
-// constant in the pinned factschema release, so the literals mirror the
-// in-tree catalog strings; the parity test locks each value against the
-// in-tree oracle key.
+// The alias/grant resource and relationship types reuse the satellite
+// catalog constants (pinned to the in-tree catalog strings by
+// catalog/security_test.go); the parity test additionally locks each value
+// against the in-tree oracle key.
 const (
-	kmsAliasResourceType = "aws_kms_alias"
-	kmsGrantResourceType = "aws_kms_grant"
-)
-
-const (
-	kmsAliasTargetsKeyRelationship = "kms_alias_targets_key"
-	kmsGrantOnKeyRelationship      = "kms_grant_on_key"
-	kmsGrantForGranteeRelationship = "kms_grant_for_grantee"
+	kmsAliasResourceType           = catalog.ResourceTypeKMSAlias
+	kmsGrantResourceType           = catalog.ResourceTypeKMSGrant
+	kmsAliasTargetsKeyRelationship = catalog.RelationshipKMSAliasTargetsKey
+	kmsGrantOnKeyRelationship      = catalog.RelationshipKMSGrantOnKey
+	kmsGrantForGranteeRelationship = catalog.RelationshipKMSGrantForGrantee
 	granteePrincipalTypeAWS        = "AWS"
 	granteePrincipalTypeService    = "Service"
 )
