@@ -60,6 +60,11 @@ type Outcome struct {
 	Relationships   []collector.RelationshipObservation
 	ImageReferences []collector.ImageReferenceObservation
 	S3Postures      []collector.S3BucketPostureObservation
+	// S3Grants carries one bounded external-principal grant per bucket-policy
+	// Allow statement; ResourcePolicyPermissions carries one normalized
+	// statement per bucket-policy statement.
+	S3Grants                  []collector.S3ExternalPrincipalGrantObservation
+	ResourcePolicyPermissions []collector.ResourcePolicyPermissionObservation
 	// SGPostures carries one aws_security_group_rule posture per
 	// DescribeSecurityGroupRules row; EC2Postures carries one
 	// ec2_instance_posture per DescribeInstances row.
@@ -101,6 +106,8 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 	relationships := []collector.RelationshipObservation{}
 	imageReferences := []collector.ImageReferenceObservation{}
 	s3Postures := []collector.S3BucketPostureObservation{}
+	s3Grants := []collector.S3ExternalPrincipalGrantObservation{}
+	resourcePolicyPermissions := []collector.ResourcePolicyPermissionObservation{}
 	sgPostures := []collector.SecurityGroupRuleObservation{}
 	ec2Postures := []collector.EC2InstancePostureObservation{}
 	warningObservations := []collector.WarningObservation{}
@@ -169,6 +176,14 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 					posture.Boundary.AccountID = config.AccountID
 					s3Postures = append(s3Postures, posture)
 				}
+				for _, grant := range item.S3Grants {
+					grant.Boundary.AccountID = config.AccountID
+					s3Grants = append(s3Grants, grant)
+				}
+				for _, statement := range item.ResourcePolicyStatements {
+					statement.Boundary.AccountID = config.AccountID
+					resourcePolicyPermissions = append(resourcePolicyPermissions, statement)
+				}
 				if item.SGPosture != nil {
 					posture := *item.SGPosture
 					posture.Boundary.AccountID = config.AccountID
@@ -213,14 +228,16 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 			Source:      "aws-live:" + config.AccountID + "/" + strings.Join(config.Regions, ","),
 			Records:     records,
 		},
-		Warnings:            warnings,
-		WarningObservations: warningObservations,
-		Resources:           resources,
-		Relationships:       relationships,
-		ImageReferences:     imageReferences,
-		S3Postures:          s3Postures,
-		SGPostures:          sgPostures,
-		EC2Postures:         ec2Postures,
+		Warnings:                  warnings,
+		WarningObservations:       warningObservations,
+		Resources:                 resources,
+		Relationships:             relationships,
+		ImageReferences:           imageReferences,
+		S3Postures:                s3Postures,
+		S3Grants:                  s3Grants,
+		ResourcePolicyPermissions: resourcePolicyPermissions,
+		SGPostures:                sgPostures,
+		EC2Postures:               ec2Postures,
 	}, nil
 }
 

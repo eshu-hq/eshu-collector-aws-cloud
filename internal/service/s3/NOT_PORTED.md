@@ -11,12 +11,18 @@ replication presence, confirmed logging/versioning/ownership/encryption
 settings, the four block-public-access flags plus their all-enabled summary,
 and policy presence plus conservatively derived public and
 cross-account grant flags. `GetBucketPolicy` is parsed transiently; no policy
-text or principal is emitted. An empty successful policy response leaves its
+text is emitted. An empty successful policy response leaves its
 flags unknown. Buckets with a logging target also emit the
 `s3_bucket_logs_to_bucket` relationship (`internal/live/s3_relationship.go`).
-The legacy S3 scanner, full SDK adapter (policy normalization into external
-principal grants and resource-policy statements), and separate policy facts
-remain unported for the Wave 2 specialty-kind lanes.
+The same transient parse also derives bounded external-principal grants and
+normalized resource-policy statements (`internal/live/s3_policy_grants.go`,
+in-tree oracle pins in `internal/live/s3_policy_grants_test.go`), fanned out
+as `s3_external_principal_grant` and `aws_resource_policy_permission` facts
+through `s3_grant_collection.go` and
+`resource_policy_permission_collection.go`. Reducer acceptance for both kinds
+is verified (s3grant handler binding, iamcan consumption); the kinds were
+already declared in `Contract()` and `manifest.yaml`. The legacy S3 scanner
+and full SDK adapter remain unported.
 
 ## Not ported (class-c)
 
