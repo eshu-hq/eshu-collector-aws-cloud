@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
+	"github.com/eshu-hq/eshu-sdk/collector/marker"
 )
 
 // withoutIdentity adapts readers whose API does not need the verified caller
@@ -29,7 +30,11 @@ var loaders = map[string]Loader{
 	"dynamodb":       withoutIdentity(listDynamoDB),
 	"ec2":            listEC2,
 	"ecr":            withoutIdentity(listECR),
-	"ecs":            withoutIdentity(listECS),
+	// ecs runs unkeyed here and fails closed: CollectReport replaces this
+	// entry with the keyed listECS reader before source acquisition.
+	"ecs": withoutIdentity(func(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
+		return listECS(ctx, cfg, marker.Key{})
+	}),
 	"eks":            listEKS,
 	"elbv2":          withoutIdentity(listELBV2),
 	"eventbridge":    withoutIdentity(listEventBridge),

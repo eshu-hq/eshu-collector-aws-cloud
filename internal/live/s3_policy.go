@@ -14,12 +14,19 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
+	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 )
 
 type s3PolicyFlags struct {
 	present      *bool
 	public       *bool
 	crossAccount *bool
+	// grants and statements are the metadata-only separate policy facts
+	// derived from the same transient document as the flags: bounded
+	// external-principal grants and normalized statements. The raw document
+	// never leaves readS3BucketPolicyFlags.
+	grants     []collector.S3ExternalPrincipalGrantObservation
+	statements []collector.ResourcePolicyPermissionObservation
 }
 
 // errS3PolicyUnparsable marks a successfully-read policy document whose shape
@@ -59,8 +66,18 @@ func readS3BucketPolicyFlags(ctx context.Context, api s3BucketDetailsAPI, name, 
 	if !ok {
 		return s3PolicyFlags{}, fmt.Errorf("s3 get bucket policy %q: invalid policy document: %w", name, errS3PolicyUnparsable)
 	}
+	// The separate policy facts share the flags' transient document and
+	// conservative parse: no second GetBucketPolicy call, no retained text.
+	// Unreachable by construction (decode fails only on empty or
+	// unmarshalable input, both excluded above); kept as fail-closed
+	// defense so a future parser divergence keeps unknown policy evidence
+	// instead of emitting partial facts.
+	grants, statements, err := deriveS3PolicyFacts(aws.ToString(output.Policy), "", name, accountID)
+	if err != nil {
+		return s3PolicyFlags{}, fmt.Errorf("s3 get bucket policy %q: invalid policy document: %w", name, errS3PolicyUnparsable)
+	}
 	present := true
-	return s3PolicyFlags{present: &present, public: &public, crossAccount: &crossAccount}, nil
+	return s3PolicyFlags{present: &present, public: &public, crossAccount: &crossAccount, grants: grants, statements: statements}, nil
 }
 
 // deriveS3PolicyFlags mirrors the legacy adapter's Allow/AWS-principal rules.

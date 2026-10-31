@@ -72,7 +72,11 @@ configuration leaves its four flags unknown. GetBucketPolicyStatus adds the
 reported public-policy boolean; a missing policy leaves that boolean unknown.
 A separate required GetBucketPolicy read derives policy presence, public
 AWS-principal grants, and cross-account AWS-principal grants into the typed
-`s3_bucket_posture` fact. The raw document is discarded; malformed or ambiguous
+`s3_bucket_posture` fact, and additionally emits separate
+`s3_external_principal_grant` facts (one per bucket-policy Allow grant) and
+`aws_resource_policy_permission` facts (one per statement) through
+`AppendLiveS3ExternalPrincipalGrants` and
+`AppendLiveResourcePolicyPermissions`. The raw document is discarded; malformed or ambiguous
 Allow principals fail the S3 read with a sanitized error. No policy is reported
 as known absent with unknown grant flags, while an empty successful response
 leaves all three flags unknown. This adds one read per bucket and requires
@@ -118,9 +122,11 @@ task-definition binding, and load-balancer metadata. DescribeTasks emits
 task identity, status, containers, network-interface attachments, and reported
 runtime metadata. DescribeTaskDefinition emits task-definition identity,
 tags, roles, resource sizing, network mode, compatibilities, revision, and
-registration time. Services link to reported task definitions and tasks
-link to reported ENIs. Container definitions, environment values, and secret
-references remain excluded until keyed redaction and reference handling land.
+registration time, container definitions with keyed environment markers and
+secret references, and per-image relationships. Services link to reported
+task definitions and load-balancer targets; tasks
+link to reported ENIs. The ECS read requires `ESHU_AWS_REDACTION_KEY` (named
+by `source.redactionKeyEnv`) before source acquisition.
 The live read requires `ecs:DescribeTaskDefinition` and makes one describe
 call per distinct listed or service-referenced task definition, including
 inactive revisions referenced by services. This increases ECS API request

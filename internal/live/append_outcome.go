@@ -27,6 +27,12 @@ func AppendOutcomeFacts(result sdk.Result, outcome Outcome, sourceURI string, li
 	if result, err = collector.AppendLiveS3BucketPostures(result, outcome.S3Postures, sourceURI, limits); err != nil {
 		return result, err
 	}
+	if result, err = collector.AppendLiveS3ExternalPrincipalGrants(result, outcome.S3Grants, sourceURI, limits); err != nil {
+		return result, err
+	}
+	if result, err = collector.AppendLiveResourcePolicyPermissions(result, outcome.ResourcePolicyPermissions, sourceURI, limits); err != nil {
+		return result, err
+	}
 	if result, err = collector.AppendLiveSecurityGroupRulePostures(result, outcome.SGPostures, sourceURI, limits); err != nil {
 		return result, err
 	}

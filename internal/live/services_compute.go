@@ -200,9 +200,7 @@ func listECR(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			}
 			records = append(records, ecrRepositoryRecord(repository, tags, region))
 			seenImages := make(map[string]struct{})
-			images := awsecr.NewDescribeImagesPaginator(client, &awsecr.DescribeImagesInput{
-				RepositoryName: repository.RepositoryName,
-			})
+			images := awsecr.NewDescribeImagesPaginator(client, ecrDescribeImagesInput(repository))
 			for images.HasMorePages() {
 				imagePage, err := images.NextPage(ctx)
 				if err != nil {

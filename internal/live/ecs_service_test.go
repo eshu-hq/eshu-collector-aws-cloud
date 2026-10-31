@@ -21,7 +21,7 @@ func TestECSServiceRecordPreservesReportedObservation(t *testing.T) {
 		LoadBalancers: []awsecstypes.LoadBalancer{{TargetGroupArn: aws.String("arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/web/abc"), ContainerName: aws.String("web"), ContainerPort: aws.Int32(8080)}},
 		Tags:          []awsecstypes.Tag{{Key: aws.String(" team "), Value: aws.String("platform")}},
 	}
-	row := ecsServiceRecord(service, "us-east-1")
+	row := mustECSServiceRecord(t, service, "us-east-1")
 	if row.ID != arn || row.Name != "web" {
 		t.Fatalf("placeholder identity changed: %+v", row)
 	}
@@ -46,11 +46,14 @@ func TestECSServiceDescribeRequestsTagsAndOmitsMissingBalancer(t *testing.T) {
 	if len(input.Include) != 1 || input.Include[0] != awsecstypes.ServiceFieldTags {
 		t.Fatalf("service tags request missing: %+v", input)
 	}
-	row := ecsServiceRecord(awsecstypes.Service{ServiceArn: aws.String("arn:aws:ecs:us-east-1:123456789012:service/prod/web")}, "us-east-1")
+	row := mustECSServiceRecord(t, awsecstypes.Service{ServiceArn: aws.String("arn:aws:ecs:us-east-1:123456789012:service/prod/web")}, "us-east-1")
 	if balancers, ok := row.Resource.Attributes["load_balancers"].([]map[string]any); !ok || balancers != nil {
 		t.Fatalf("absent load balancers invented: %+v", row.Resource.Attributes["load_balancers"])
 	}
-	if ecsServiceRecord(awsecstypes.Service{}, "us-east-1").Resource != nil {
+	if len(row.Relationships) != 0 {
+		t.Fatalf("absent load balancers invented edges: %+v", row.Relationships)
+	}
+	if mustECSServiceRecord(t, awsecstypes.Service{}, "us-east-1").Resource != nil {
 		t.Fatal("service without ARN got typed identity")
 	}
 }

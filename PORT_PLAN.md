@@ -15,11 +15,17 @@ containers, network-interface attachments, and reported runtime metadata.
 DescribeTaskDefinition emits safe scalar metadata and tags, with one read
 per distinct listed or service-referenced ARN, including inactive revisions
 referenced by services. It requires `ecs:DescribeTaskDefinition` permission.
-Services link to their reported task definitions and tasks to reported ENIs.
-The legacy scanner records a task-definition ARN on each task as an attribute
-and anchor, without a separate task-to-definition edge. Container definitions,
-environment values, secret references, image relationships, and service
-load-balancer relationships remain deferred. EKS
+Services link to their reported task definitions and load-balancer targets;
+tasks link to reported ENIs. A target-group ARN takes precedence over a
+classic load-balancer name, matching the legacy scanner; a binding that
+reports neither fails the ECS read for the region. The legacy scanner records a
+task-definition ARN on each task as an attribute
+and anchor, without a separate task-to-definition edge. Task definitions
+carry container definitions with environment values replaced by keyed markers
+before emission (launch policy `aws-launch-2026-05-14`) and secret
+name/value_from references preserved verbatim; each reported image gets one
+aggregated task-definition-to-image edge. The ECS read fails closed without
+`ESHU_AWS_REDACTION_KEY` named by `source.redactionKeyEnv`. EKS
 DescribeCluster and DescribeNodegroup emit
 typed cluster and managed nodegroup identity, status, tags, version, and
 reported control-plane and nodegroup metadata. EKS DescribeAddon emits typed
@@ -229,8 +235,17 @@ importable only inside this module, satisfying `boundary_test.go`).
    MFA-delete, ownership/ACL-disabled, and confirmed encryption fields. Nil
    responses and denied encryption do not become false posture. Missing policy
    is known absent, while an empty successful policy response leaves all three
-   policy flags unknown. Typed public-access-block flags and separate policy
-   facts remain deferred pending reducer graph proof; no raw policy is emitted.
+   policy flags unknown. Typed public-access-block flags ride the
+   `s3_bucket_posture` fact the reducer already consumes (the internetexposure
+   handler reads `block_public_access_all`, `ignore_public_acls`, and
+   `restrict_public_buckets`), and separate policy facts ride the
+   `s3_external_principal_grant` (s3grant handler binding) and
+   `aws_resource_policy_permission` (iamcan consumption) kinds, all declared
+   in `Contract()` and `manifest.yaml`. The live reader derives grants and
+   normalized statements from the same transient `GetBucketPolicy` parse as
+   the flags — one call per bucket, no retained text — and emits them through
+   the claim-bound collection appenders. The legacy S3 scanner and full SDK
+   adapter remain unported; no raw policy is emitted.
 5. Remaining envelopes kind by kind; delete transitional kinds last.
 6. `awsruntime` + `service/` scanners service by service.
 7. `recordpolicy` / `freshness` / `catalog` / `checkpoint` integration.
