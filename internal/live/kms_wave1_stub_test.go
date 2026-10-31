@@ -133,7 +133,10 @@ func wave1KMSStubConfig(t *testing.T, fixture wave1KMSFixture) aws.Config {
 				return
 			}
 		}
-		marker, _ := body["Marker"].(string)
+		marker, ok := body["Marker"].(string)
+		if !ok {
+			marker = ""
+		}
 		target := r.Header.Get("X-Amz-Target")
 		switch {
 		case strings.HasSuffix(target, "ListKeys"):
@@ -154,7 +157,12 @@ func wave1KMSStubConfig(t *testing.T, fixture wave1KMSFixture) aws.Config {
 			}
 			serveDoc(map[string]any{"Keys": entries, "Truncated": false})
 		case strings.HasSuffix(target, "DescribeKey"):
-			id, _ := body["KeyId"].(string)
+			id, ok := body["KeyId"].(string)
+			if !ok {
+				t.Errorf("stub request missing KeyId")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
 			row, ok := byID[strings.TrimSpace(id)]
 			if !ok {
 				t.Errorf("unknown key %q", id)
@@ -181,7 +189,12 @@ func wave1KMSStubConfig(t *testing.T, fixture wave1KMSFixture) aws.Config {
 			}
 			serveDoc(map[string]any{"Aliases": entries, "Truncated": false})
 		case strings.HasSuffix(target, "ListGrants"):
-			id, _ := body["KeyId"].(string)
+			id, ok := body["KeyId"].(string)
+			if !ok {
+				t.Errorf("stub request missing KeyId")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
 			row, ok := byID[strings.TrimSpace(id)]
 			if !ok {
 				t.Errorf("unknown key %q", id)
