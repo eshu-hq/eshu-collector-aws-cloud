@@ -46,7 +46,8 @@ func TestECSTaskDefinitionRecordRetainsSafeMetadata(t *testing.T) {
 	if !ok {
 		t.Fatalf("environment value = %#v, want marker map, never the raw secret", environment[0]["value"])
 	}
-	if markerText, _ := redacted["marker"].(string); !strings.HasPrefix(markerText, "redacted:hmac-sha256:") {
+	markerText, ok := redacted["marker"].(string)
+	if !ok || !strings.HasPrefix(markerText, "redacted:hmac-sha256:") {
 		t.Fatalf("environment marker = %#v, want HMAC marker", redacted["marker"])
 	}
 	if redacted["reason"] != "known_sensitive_key" || redacted["ruleset_version"] != "aws-launch-2026-05-14" {

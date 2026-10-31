@@ -90,7 +90,6 @@ func normalizeECSKey(value string) string {
 		if unicode.IsUpper(current) && (unicode.IsLower(previous) || unicode.IsDigit(previous) || (unicode.IsUpper(previous) && unicode.IsLower(next))) {
 			if builder.Len() > 0 && !lastUnderscore {
 				builder.WriteByte('_')
-				lastUnderscore = true
 			}
 		}
 		builder.WriteRune(unicode.ToLower(current))

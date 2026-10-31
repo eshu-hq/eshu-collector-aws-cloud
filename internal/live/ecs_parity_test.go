@@ -71,7 +71,8 @@ func TestECSTaskDefinitionContainersRedactEnvironmentValues(t *testing.T) {
 	if !ok {
 		t.Fatalf("sensitive value = %#v, want marker map", environment[0]["value"])
 	}
-	if markerText, _ := sensitive["marker"].(string); !strings.HasPrefix(markerText, "redacted:hmac-sha256:") {
+	markerText, ok := sensitive["marker"].(string)
+	if !ok || !strings.HasPrefix(markerText, "redacted:hmac-sha256:") {
 		t.Fatalf("sensitive marker = %#v, want HMAC marker", sensitive["marker"])
 	}
 	if sensitive["reason"] != "known_sensitive_key" || sensitive["ruleset_version"] != "aws-launch-2026-05-14" {

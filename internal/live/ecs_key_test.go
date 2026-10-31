@@ -72,7 +72,8 @@ func TestRedactECSEnvironmentValueNeverLeaksRaw(t *testing.T) {
 		if redacted["ruleset_version"] != ecsRedactionRuleset {
 			t.Fatalf("ruleset_version = %#v, want launch policy", redacted["ruleset_version"])
 		}
-		if markerText, _ := redacted["marker"].(string); !strings.HasPrefix(markerText, "redacted:hmac-sha256:") {
+		markerText, ok := redacted["marker"].(string)
+		if !ok || !strings.HasPrefix(markerText, "redacted:hmac-sha256:") {
 			t.Fatalf("marker = %#v, want HMAC marker", redacted["marker"])
 		}
 		if redacted["marker"] == "raw-secret-material" || redacted["source"] == "raw-secret-material" || redacted["reason"] == "raw-secret-material" {
