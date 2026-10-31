@@ -17,12 +17,14 @@ import (
 // the exact correlation anchors (order-sensitive), source record IDs, and
 // edge tuples the in-tree scanner emits for the same rows.
 //
-// Expectations below are re-derived from the in-tree source, not from the
-// satellite builders:
-//   - service/ec2/scanner.go: vpcObservation, subnetObservation,
-//     securityGroupObservation, securityGroupRuleObservation (anchors are
-//     [resource_id, group-or-arn secondaries]),
-//     networkInterfaceObservation, securityGroupRuleID fallback;
+// Expectations below are re-derived from the in-tree source at eshu
+// b0371c05d5, not from the satellite builders — per-resource anchor orders:
+//   - service/ec2/scanner.go: vpcObservation [vpcID] (:168),
+//     subnetObservation [subnetARN, subnetID] (:214),
+//     securityGroupObservation [groupID, name] (:248),
+//     securityGroupRuleObservation [ruleID, groupID] (:323),
+//     networkInterfaceObservation [networkInterfaceID] (:371),
+//     securityGroupRuleID fallback;
 //   - service/ec2/identity.go: instanceIdentityObservation anchors
 //     [resourceID, arn] (resource id FIRST), instanceAMIRelationship tuple;
 //   - service/ec2/ami_identity.go: amiResourceObservation anchors [amiID];
