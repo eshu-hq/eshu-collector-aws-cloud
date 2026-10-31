@@ -8,9 +8,23 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awsecr "github.com/aws/aws-sdk-go-v2/service/ecr"
 	ecrtypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 )
+
+// ecrDescribeImagesInput scopes DescribeImages to the owning registry,
+// matching the in-tree adapter: a blank registry resolves in the caller
+// account, so cross-account repositories keep their own registry.
+func ecrDescribeImagesInput(repository ecrtypes.Repository) *awsecr.DescribeImagesInput {
+	input := &awsecr.DescribeImagesInput{
+		RepositoryName: repository.RepositoryName,
+	}
+	if registry := strings.TrimSpace(aws.ToString(repository.RegistryId)); registry != "" {
+		input.RegistryId = aws.String(registry)
+	}
+	return input
+}
 
 // ecrImageRecords retains the placeholder image record and one typed reference
 // for each image tag. An untagged digest receives one empty-tag reference.
