@@ -209,7 +209,42 @@ func TestWave1KMSPayloadBranches(t *testing.T) {
 // VALUES the stable-key parity cannot see: keys hash identity only, so a
 // swapped alias_name/target_key_id (or a wrong grantee) would pass every key
 // gate. Expectations come straight from the fixture rows in
+// assertWave1KMSEnrichment pins the enrichment VALUES the identity-only
+// stable keys cannot see: tags, policy names, alias/grant counts, rotation
+// knowledge, and the absence of rotation_enabled for unanswerable keys.
+// A misattributed tag set, count, policy name, or fabricated rotation answer
+// on any covered key fails here.
 // testdata/wave1-kms-parity.json.
+func assertWave1KMSEnrichment(t *testing.T, byID map[string]collector.Record, id string, tags map[string]string, policies []string, aliases, grants int, rotationKnown bool) {
+	t.Helper()
+	key, ok := byID["aws_kms_key\x00"+id]
+	if !ok {
+		t.Fatalf("key %q record missing", id)
+	}
+	if !reflect.DeepEqual(key.Resource.Tags, tags) {
+		t.Errorf("key %q tags = %#v, want %#v", id, key.Resource.Tags, tags)
+	}
+	var gotPolicies []string
+	if raw, present := key.Resource.Attributes["policy_revision_names"]; present {
+		gotPolicies, _ = raw.([]string)
+	}
+	if !reflect.DeepEqual(gotPolicies, policies) {
+		t.Errorf("key %q policy_revision_names = %#v, want %#v", id, gotPolicies, policies)
+	}
+	if got := key.Resource.Attributes["alias_count"]; got != aliases {
+		t.Errorf("key %q alias_count = %#v, want %d", id, got, aliases)
+	}
+	if got := key.Resource.Attributes["grant_count"]; got != grants {
+		t.Errorf("key %q grant_count = %#v, want %d", id, got, grants)
+	}
+	if got := key.Resource.Attributes["rotation_status_known"]; got != rotationKnown {
+		t.Errorf("key %q rotation_status_known = %#v, want %v", id, got, rotationKnown)
+	}
+	if value, present := key.Resource.Attributes["rotation_enabled"]; present {
+		t.Errorf("key %q rotation_enabled = %#v, want absent", id, value)
+	}
+}
+
 func TestWave1KMSAttributeEquality(t *testing.T) {
 	t.Parallel()
 
@@ -256,6 +291,17 @@ func TestWave1KMSAttributeEquality(t *testing.T) {
 	if !reflect.DeepEqual(keyA.Resource.Tags, map[string]string{"env": "wave1"}) {
 		t.Fatalf("key A tags = %#v, want the fixture tag set", keyA.Resource.Tags)
 	}
+
+	assertWave1KMSEnrichment(t, byID,
+		"b1b2c3d4-e5f6-4789-abcd-ef0123456789",
+		map[string]string{"env": "wave1", "stage": "staging"},
+		[]string{"default"}, 1, 2, false)
+	assertWave1KMSEnrichment(t, byID,
+		"c1b2c3d4-e5f6-4789-abcd-ef0123456789",
+		nil, nil, 0, 0, false)
+	assertWave1KMSEnrichment(t, byID,
+		"d1b2c3d4-e5f6-4789-abcd-ef0123456789",
+		nil, []string{"default"}, 1, 0, false)
 
 	aliasA, ok := byID["aws_kms_alias\x00arn:aws:kms:us-east-1:123456789012:alias/wave1-a"]
 	if !ok {

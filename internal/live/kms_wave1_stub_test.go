@@ -28,12 +28,15 @@ import (
 //
 // wave1KMSRotationAnswerable recomputes the rotation support gate from the
 // fixture row strings, independently of the production SDK-typed helper.
+// Keep in sync with kmsRotationSupported: Disabled and PendingImport keys
+// are never queried.
 func wave1KMSRotationAnswerable(row wave1KMSRow) bool {
 	if row.KeyManager != "CUSTOMER" || row.KeyUsage != "ENCRYPT_DECRYPT" || row.KeySpec != "SYMMETRIC_DEFAULT" {
 		return false
 	}
 	switch row.KeyState {
-	case "PendingDeletion", "PendingReplicaDeletion", "Unavailable", "Creating":
+	case "PendingDeletion", "PendingReplicaDeletion", "Unavailable", "Creating",
+		"Disabled", "PendingImport":
 		return false
 	}
 	return true
@@ -192,13 +195,13 @@ func wave1KMSStubConfig(t *testing.T, fixture wave1KMSFixture) aws.Config {
 				entries = append(entries, aliasDoc(alias))
 			}
 			entries = append(entries, map[string]any{"AliasName": "alias/wave1-unattached"})
-			if marker == "" {
+			if marker == "" && len(entries) > 2 {
 				serveDoc(map[string]any{"Aliases": entries[:2], "Truncated": true, "NextMarker": "page2"})
 				return
 			}
 			if marker == "page2" {
 				entries = entries[2:]
-			} else {
+			} else if marker != "" {
 				t.Errorf("unexpected ListAliases marker %q", marker)
 				w.WriteHeader(http.StatusBadRequest)
 				return

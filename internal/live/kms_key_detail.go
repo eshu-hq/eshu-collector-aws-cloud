@@ -38,17 +38,20 @@ type kmsKeyDetail struct {
 
 // kmsRotation carries the resolved automatic-rotation answer for one key.
 // known is false when GetKeyRotationStatus is not meaningful for the key
-// shape or when AWS reports UnsupportedOperation/AccessDenied; any other
-// rotation failure fails the service read so a real outage never masquerades
-// as "rotation unknown".
+// shape or when AWS reports UnsupportedOperation/AccessDenied, or the key is
+// in a state AWS cannot answer (disabled, pending import, or deleted between
+// DescribeKey and the rotation call); any other rotation failure fails the
+// service read so a real outage never masquerades as "rotation unknown".
 type kmsRotation struct {
 	known   bool
 	enabled bool
 }
 
 // readKMSTags follows every ListResourceTags page for one key. A denied tag
-// read contributes no tags, mirroring the in-tree adapter, so it cannot be
-// mistaken for an untagged key; any other failure fails the service read.
+// read contributes no tags, mirroring the in-tree adapter, so the resource
+// Tags are indistinguishable from an untagged key (both yield nil tags with
+// no denial signal — see the P2 thread on this PR); any other failure fails
+// the service read.
 func readKMSTags(ctx context.Context, client kmsDetailAPI, keyID string) (map[string]string, error) {
 	tags := map[string]string{}
 	pages := awskms.NewListResourceTagsPaginator(client, &awskms.ListResourceTagsInput{KeyId: aws.String(keyID)})
@@ -111,7 +114,7 @@ func readKMSRotation(ctx context.Context, client kmsDetailAPI, keyID string, key
 	}
 	output, err := client.GetKeyRotationStatus(ctx, &awskms.GetKeyRotationStatusInput{KeyId: aws.String(keyID)})
 	if err != nil {
-		if kmsIsUnsupported(err) || kmsIsDenied(err) {
+		if kmsIsUnsupported(err) || kmsIsDenied(err) || kmsIsUnanswerable(err) {
 			return kmsRotation{}, nil
 		}
 		return kmsRotation{}, fmt.Errorf("kms get key rotation status: %w", err)
@@ -139,10 +142,29 @@ func kmsRotationSupported(key kmstypes.KeyMetadata) bool {
 	case kmstypes.KeyStatePendingDeletion,
 		kmstypes.KeyStatePendingReplicaDeletion,
 		kmstypes.KeyStateUnavailable,
-		kmstypes.KeyStateCreating:
+		kmstypes.KeyStateCreating,
+		kmstypes.KeyStateDisabled,
+		kmstypes.KeyStatePendingImport:
 		return false
 	}
 	return true
+}
+
+// kmsIsUnanswerable reports the KMS error shapes AWS raises when the key
+// cannot answer GetKeyRotationStatus despite passing the gate: a key
+// disabled, deleted, or moved to pending import between DescribeKey and the
+// rotation call. These map to unknown, like the gate skip, instead of
+// failing the service read.
+func kmsIsUnanswerable(err error) bool {
+	var apiErr smithy.APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	switch apiErr.ErrorCode() {
+	case "DisabledException", "KMSInvalidStateException", "NotFoundException":
+		return true
+	}
+	return false
 }
 
 func kmsIsDenied(err error) bool {
