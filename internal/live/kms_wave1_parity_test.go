@@ -205,16 +205,11 @@ func TestWave1KMSPayloadBranches(t *testing.T) {
 	}
 }
 
-// TestWave1KMSAttributeEquality pins the key, alias, and grant attribute
-// VALUES the stable-key parity cannot see: keys hash identity only, so a
-// swapped alias_name/target_key_id (or a wrong grantee) would pass every key
-// gate. Expectations come straight from the fixture rows in
 // assertWave1KMSEnrichment pins the enrichment VALUES the identity-only
 // stable keys cannot see: tags, policy names, alias/grant counts, rotation
 // knowledge, and the absence of rotation_enabled for unanswerable keys.
 // A misattributed tag set, count, policy name, or fabricated rotation answer
 // on any covered key fails here.
-// testdata/wave1-kms-parity.json.
 func assertWave1KMSEnrichment(t *testing.T, byID map[string]collector.Record, id string, tags map[string]string, policies []string, aliases, grants int, rotationKnown bool) {
 	t.Helper()
 	key, ok := byID["aws_kms_key\x00"+id]
@@ -245,6 +240,11 @@ func assertWave1KMSEnrichment(t *testing.T, byID map[string]collector.Record, id
 	}
 }
 
+// TestWave1KMSAttributeEquality pins the key, alias, and grant attribute
+// VALUES the stable-key parity cannot see: keys hash identity only, so a
+// swapped alias_name/target_key_id (or a wrong grantee) would pass every key
+// gate. Expectations come straight from the fixture rows in
+// testdata/wave1-kms-parity.json.
 func TestWave1KMSAttributeEquality(t *testing.T) {
 	t.Parallel()
 

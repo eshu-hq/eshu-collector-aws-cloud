@@ -435,11 +435,12 @@ constants. A hand-copy error on key 17 was caught by the parity test itself
 going red; the corrected tail was verified by mechanical re-extraction of the
 throwaway run output, and every frozen constant was then re-verified present
 in the parity test by script.
-Deliberate satellite deviations are out of fixture scope (both documented in
-`internal/service/kms/NOT_PORTED.md`): key-policy statements, tags, rotation
-status, and policy revision names stay unread where the in-tree scan emits
-them; alias ARNs outside the claimed identity and grants without IDs fail
-where the in-tree mapper trusts the API.
+Deliberate satellite deviations are out of fixture scope (all documented in
+`internal/service/kms/NOT_PORTED.md`): key-policy statements stay underived
+where the in-tree scan emits them; alias ARNs outside the claimed identity
+and grants without IDs fail where the in-tree mapper trusts the API. Tags,
+rotation status, policy revision names, and the joined alias/grant counts
+are in fixture scope and locked by `TestWave1KMSAttributeEquality`.
 
 ## Why this closes the common-mode gap
 
