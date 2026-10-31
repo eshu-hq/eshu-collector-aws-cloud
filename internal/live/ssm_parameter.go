@@ -13,15 +13,14 @@ import (
 	awsssm "github.com/aws/aws-sdk-go-v2/service/ssm"
 	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
+	"github.com/eshu-hq/eshu-collector-aws-cloud/catalog"
 	awsv1 "github.com/eshu-hq/eshu-sdk/factschema/aws/v1"
 )
 
-// ssmParameterUsesKMSKeyRelationshipType is the in-tree catalog relationship
-// for an SSM SecureString parameter's KMS dependency. The pinned factschema
-// release exposes no constant for it yet, so the literal below mirrors the
-// volume-KMS precedent; the parity test locks the value against the in-tree
-// oracle key.
-const ssmParameterUsesKMSKeyRelationshipType = "ssm_parameter_uses_kms_key"
+// ssmParameterUsesKMSKeyRelationshipType reuses the satellite catalog
+// constant (pinned to the in-tree catalog string by catalog tests); the
+// parity test additionally locks the value against the in-tree oracle key.
+const ssmParameterUsesKMSKeyRelationshipType = catalog.RelationshipSSMParameterUsesKMSKey
 
 // ssmParameterRecord maps one DescribeParameters row plus its tag list into
 // the typed parameter resource plus its parameter-to-KMS edge, mirroring the
