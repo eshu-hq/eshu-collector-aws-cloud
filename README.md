@@ -72,7 +72,11 @@ configuration leaves its four flags unknown. GetBucketPolicyStatus adds the
 reported public-policy boolean; a missing policy leaves that boolean unknown.
 A separate required GetBucketPolicy read derives policy presence, public
 AWS-principal grants, and cross-account AWS-principal grants into the typed
-`s3_bucket_posture` fact. The raw document is discarded; malformed or ambiguous
+`s3_bucket_posture` fact, and additionally emits separate
+`s3_external_principal_grant` facts (one per bucket-policy Allow grant) and
+`aws_resource_policy_permission` facts (one per statement) through
+`AppendLiveS3ExternalPrincipalGrants` and
+`AppendLiveResourcePolicyPermissions`. The raw document is discarded; malformed or ambiguous
 Allow principals fail the S3 read with a sanitized error. No policy is reported
 as known absent with unknown grant flags, while an empty successful response
 leaves all three flags unknown. This adds one read per bucket and requires

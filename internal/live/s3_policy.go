@@ -68,8 +68,10 @@ func readS3BucketPolicyFlags(ctx context.Context, api s3BucketDetailsAPI, name, 
 	}
 	// The separate policy facts share the flags' transient document and
 	// conservative parse: no second GetBucketPolicy call, no retained text.
-	// Flags-accepted JSON always derives here; a derivation failure keeps the
-	// bucket with unknown policy evidence like an unparsable document.
+	// Unreachable by construction (decode fails only on empty or
+	// unmarshalable input, both excluded above); kept as fail-closed
+	// defense so a future parser divergence keeps unknown policy evidence
+	// instead of emitting partial facts.
 	grants, statements, err := deriveS3PolicyFacts(aws.ToString(output.Policy), "", name, accountID)
 	if err != nil {
 		return s3PolicyFlags{}, fmt.Errorf("s3 get bucket policy %q: invalid policy document: %w", name, errS3PolicyUnparsable)

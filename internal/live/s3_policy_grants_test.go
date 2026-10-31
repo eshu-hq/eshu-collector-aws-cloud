@@ -14,7 +14,7 @@ import (
 // grants), and one Deny statement (no grant, still a statement). The
 // in-tree awssdk derivation output for this document is the oracle
 // (TestZZLane0S3Oracle, deleted after the run); this test freezes it.
-const lane0S3PolicyDocument = `{"Version":"2012-10-17","Statement":[{"Sid":"PublicRead","Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"arn:aws:s3:::parity-artifacts/*"},{"Sid":"CrossAccount","Effect":"Allow","Principal":{"AWS":"arn:aws:iam::999988887777:root"},"Action":"s3:ListBucket","Resource":"arn:aws:s3:::parity-artifacts","Condition":{"StringEquals":{"aws:SourceVpce":"vpce-1234"}}},{"Sid":"ServiceDelivery","Effect":"Allow","Principal":{"Service":"logging.s3.amazonaws.com"},"Action":"s3:PutObject","Resource":"arn:aws:s3:::parity-artifacts/*"},{"Sid":"SameAccount","Effect":"Allow","Principal":{"AWS":"arn:aws:iam::123456789012:role/app"},"Action":"s3:GetObject","Resource":"arn:aws:s3:::parity-artifacts/*"},{"Sid":"DenyAll","Effect":"Deny","Principal":"*","Action":"s3:*","Resource":"*"}]}`
+const lane0S3PolicyDocument = `{"Version":"2012-10-17","Statement":[{"Sid":"PublicRead","Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"arn:aws:s3:::parity-artifacts/*"},{"Sid":"CrossAccount","Effect":"Allow","Principal":{"AWS":"arn:aws:iam::999988887777:root"},"Action":"s3:ListBucket","Resource":"arn:aws:s3:::parity-artifacts","Condition":{"StringEquals":{"aws:SourceVpce":"vpce-1234"}}},{"Sid":"ServiceDelivery","Effect":"Allow","Principal":{"Service":"logging.s3.amazonaws.com"},"Action":"s3:PutObject","Resource":"arn:aws:s3:::parity-artifacts/*"},{"Sid":"SameAccount","Effect":"Allow","Principal":{"AWS":"arn:aws:iam::123456789012:role/app"},"Action":"s3:GetObject","Resource":"arn:aws:s3:::parity-artifacts/*"},{"Sid":"DenyAll","Effect":"Deny","Principal":{"AWS":"arn:aws:iam::111122223333:root"},"Action":"s3:*","Resource":"*"}]}`
 
 func TestDeriveS3PolicyGrantsOracle(t *testing.T) {
 	t.Parallel()
@@ -25,6 +25,11 @@ func TestDeriveS3PolicyGrantsOracle(t *testing.T) {
 	}
 	if len(grants) != 3 {
 		t.Fatalf("grants = %d, want 3 (same-account skipped, deny ignored)", len(grants))
+	}
+	for _, grant := range grants {
+		if grant.SourceStatementID == "DenyAll" {
+			t.Fatalf("deny statement emitted a grant: %+v", grant)
+		}
 	}
 	first := grants[0]
 	if first.PrincipalKind != "public" || first.PrincipalValue != "*" || first.GrantOutcome != "public" || !first.Public || first.SourceStatementID != "PublicRead" {
@@ -78,7 +83,7 @@ func TestDeriveS3PolicyStatementsOracle(t *testing.T) {
 		t.Fatalf("SameAccount = %+v", same)
 	}
 	deny := statements[bySID["DenyAll"]]
-	if deny.Effect != "Deny" || !deny.IsPublic {
+	if deny.Effect != "Deny" || deny.IsPublic {
 		t.Fatalf("DenyAll = %+v", deny)
 	}
 }
