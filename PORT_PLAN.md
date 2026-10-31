@@ -179,7 +179,12 @@ importable only inside this module, satisfying `boundary_test.go`).
    from the legacy policy_text attribute. Missing policies emit no resource;
    denied reads fail the ECR service. The added call is one per repository
    and requires `ecr:GetLifecyclePolicy`; its live IAM grant and call cost
-   remain unverified. Lambda ListFunctions rows use one GetFunction read per
+   remain unverified. Wave 1 (eshu-hq/eshu#9296) completes the ECR surface:
+   repositories, per-tag image references (untagged digests keep one empty-tag
+   reference), and lifecycle policy metadata hold 8/8 stable-key parity against
+   the in-tree scanner on the shared fixture testdata/wave1-ecr-parity.json
+   (provenance in testdata/stable-key-provenance.md; Q4(a) in
+   internal/live/ecr_wave1_conformance_test.go). Lambda ListFunctions rows use one GetFunction read per
    function for safe configuration and source KMS key metadata. Validated ECR
    image URIs emit a function-to-image relationship; ListAliases pages emit typed
    alias resources and alias-to-function relationships with version and routing

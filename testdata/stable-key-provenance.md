@@ -261,6 +261,63 @@ emits them; GetFunction identity mismatches and unsafe image/KMS references
 fail where the in-tree mapper trusts the API; and a mapping-list denial
 degrades to partial plus warning where the in-tree scan fails.
 
+## Wave 1 ECR keys (in-tree scan parity pack)
+
+Input fixture: `testdata/wave1-ecr-parity.json`
+(`sha256:b18a7ff3cb29539870afdab58065c364caee7e979805043b7658c9c83b561340`).
+
+Oracle: check out eshu-hq/eshu at commit `b0371c05d5`
+(Merge pull request #9580), add a throwaway test in
+`go/internal/collector/awscloud/service/ecr/` that unmarshals the fixture
+directly into the scanner-owned types (the rows mirror those structs field for
+field, with `ManifestDigest` equal to the image digest exactly as the in-tree
+adapter maps DescribeImages rows, which carry no separate manifest digest),
+serves them from a fake `Client` (images and policies filtered by the
+requested repository ARN), and prints `FactKind` + `StableFactKey` per
+envelope from `Scanner.Scan` over boundary account `123456789012`, region
+`us-east-1`, service `ecr`, scope `aws:123456789012:us-east-1`, generation
+`aws:123456789012:us-east-1:wave1:1`, instance `aws-parity-wave1`, fencing
+token `7`, observed-at `2026-10-30T12:00:00Z`. Command, from the `go/`
+directory of the pinned commit:
+
+```sh
+go test ./internal/collector/awscloud/service/ecr/ \
+  -run 'TestZZWave1ECROracle' -count=1 -v
+```
+
+The scan emits 8 envelopes in call order: repository A (resource), its
+two-tag image (one reference per tag), its untagged image (one empty-tag
+reference), policy A (resource), repository B (resource), its image (one
+reference), policy B (resource). The satellite proves the same 8 keys through
+the full production `listECR` path over the stubbed ECR API
+(`internal/live/ecr_wave1_parity_test.go`), so tag fan-out, the untagged
+fallback, the absent-timestamp mapping, and the policy-text omission are
+covered end to end, not just the builders:
+
+| # | Kind | Frozen key |
+|---|---|---|
+| 00 | aws_resource (repository A) | `68c5e903…e17cf6` |
+| 01 | aws_image_reference (image, tag latest) | `2d65f7ac…26d873` |
+| 02 | aws_image_reference (image, tag v1) | `6928e0da…fff215` |
+| 03 | aws_image_reference (untagged image) | `235fb188…c9938d` |
+| 04 | aws_resource (policy A) | `51e9ec10…103cd5` |
+| 05 | aws_resource (repository B) | `a47eb392…f5369a` |
+| 06 | aws_image_reference (image, tag prod) | `cf4129ff…7f3a71` |
+| 07 | aws_resource (policy B) | `36caf41f…3f50dc` |
+
+(Full keys are frozen in the test; prefixes above are abbreviated.)
+Re-execution on 2026-10-30 returned all 8 keys byte-identical to the frozen
+satellite constants, including the four image-reference keys (proving the
+satellite's image identity hash equals `facts.StableID` for this identity
+shape) and the untagged empty-tag fallback on both sides. One deliberate
+satellite deviation is out of fixture scope (documented in
+`internal/service/ecr/NOT_PORTED.md`): raw lifecycle policy text stays
+excluded where the in-tree scan emits it (locked by
+`TestECRLifecyclePolicyMetadataOmitsPolicyText`); stable keys hash identity
+only, so the omission cannot move a key, and
+`TestWave1ECRAttributeEquality` pins the emitted maps plus RED on a
+value-swap mutant.
+
 ## Wave 1 SSM keys (in-tree scan parity pack)
 
 Input fixture: `testdata/wave1-ssm-parity.json`
