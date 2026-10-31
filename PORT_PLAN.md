@@ -227,8 +227,17 @@ importable only inside this module, satisfying `boundary_test.go`).
    MFA-delete, ownership/ACL-disabled, and confirmed encryption fields. Nil
    responses and denied encryption do not become false posture. Missing policy
    is known absent, while an empty successful policy response leaves all three
-   policy flags unknown. Typed public-access-block flags and separate policy
-   facts remain deferred pending reducer graph proof; no raw policy is emitted.
+   policy flags unknown. Typed public-access-block flags ride the
+   `s3_bucket_posture` fact the reducer already consumes (the internetexposure
+   handler reads `block_public_access_all`, `ignore_public_acls`, and
+   `restrict_public_buckets`), and separate policy facts ride the
+   `s3_external_principal_grant` (s3grant handler binding) and
+   `aws_resource_policy_permission` (iamcan consumption) kinds, all declared
+   in `Contract()` and `manifest.yaml`. The live reader derives grants and
+   normalized statements from the same transient `GetBucketPolicy` parse as
+   the flags — one call per bucket, no retained text — and emits them through
+   the claim-bound collection appenders. The legacy S3 scanner and full SDK
+   adapter remain unported; no raw policy is emitted.
 5. Remaining envelopes kind by kind; delete transitional kinds last.
 6. `awsruntime` + `service/` scanners service by service.
 7. `recordpolicy` / `freshness` / `catalog` / `checkpoint` integration.

@@ -103,6 +103,15 @@ type Record struct {
 	Resource *LiveResource `json:"-"`
 	// S3Posture carries confirmed bucket settings and derived policy flags.
 	S3Posture *S3BucketPostureObservation `json:"-"`
+	// S3Grants carries one bounded external-principal grant per bucket-policy
+	// Allow statement with a public, cross-account, service, or unsupported
+	// principal. The live S3 reader sets it; Collect fans it out through
+	// AppendLiveS3ExternalPrincipalGrants.
+	S3Grants []S3ExternalPrincipalGrantObservation `json:"-"`
+	// ResourcePolicyStatements carries one normalized metadata-only statement
+	// per bucket-policy statement. The live S3 reader sets it; Collect fans
+	// it out through AppendLiveResourcePolicyPermissions.
+	ResourcePolicyStatements []ResourcePolicyPermissionObservation `json:"-"`
 	// SGPosture carries one normalized security-group rule posture from a
 	// DescribeSecurityGroupRules row. The live EC2 reader sets it; Collect
 	// fans it out through AppendLiveSecurityGroupRulePostures.

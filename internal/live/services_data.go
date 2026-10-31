@@ -169,6 +169,16 @@ func listS3WithAPI(ctx context.Context, client s3BucketAPI, region string, ident
 				PolicyPresent: policyFlags.present, PolicyGrantsPublic: policyFlags.public,
 				PolicyGrantsCrossAccount: policyFlags.crossAccount,
 			}
+			for _, grant := range policyFlags.grants {
+				grant.BucketARN = row.Resource.ARN
+				grant.Boundary = collector.Boundary{Region: region, ServiceKind: "s3"}
+				row.S3Grants = append(row.S3Grants, grant)
+			}
+			for _, statement := range policyFlags.statements {
+				statement.ResourceARN = row.Resource.ARN
+				statement.Boundary = collector.Boundary{Region: region, ServiceKind: "s3"}
+				row.ResourcePolicyStatements = append(row.ResourcePolicyStatements, statement)
+			}
 			applyS3KnownPosture(row.S3Posture, posture, policyAndOwnership, websiteLogging, loggingObserved)
 			encryption, denied, err := readS3BucketEncryption(ctx, client, aws.ToString(bucket.Name), identity.AccountID)
 			if err != nil {
