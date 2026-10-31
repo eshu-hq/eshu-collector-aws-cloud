@@ -34,10 +34,10 @@ func TestZZECSParityOracle(t *testing.T) {
 					{"name": "DATABASE_URL", "value": zzMarker(t, "postgres://user:password@example.internal/app", "known_sensitive_key", "ecs.task_definition.container.environment.DATABASE_URL")},
 					{"name": "LOG_LEVEL", "value": zzMarker(t, "info", "unknown_provider_schema", "ecs.task_definition.container.environment.LOG_LEVEL")},
 				},
-				"essential": true,
-				"image":     "example.com/web:prod",
-				"name":      "web",
-				"secrets":   []map[string]string{{"name": "API_TOKEN", "value_from": "arn:aws:secretsmanager:us-east-1:123456789012:secret:api-token"}},
+				"essential":  true,
+				"image":      "example.com/web:prod",
+				"name":       "web",
+				"references": []map[string]string{{"name": "API_TOKEN", "value_from": "arn:aws:secretsmanager:us-east-1:123456789012:secret:api-token"}},
 			},
 			{
 				"environment": []map[string]any{

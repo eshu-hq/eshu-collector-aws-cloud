@@ -85,9 +85,9 @@ func TestECSTaskDefinitionContainersRedactEnvironmentValues(t *testing.T) {
 	if plain["reason"] != "unknown_provider_schema" {
 		t.Fatalf("plain reason = %#v, want unknown_provider_schema", plain["reason"])
 	}
-	secrets, ok := web["secrets"].([]map[string]string)
-	if !ok || len(secrets) != 1 || secrets[0]["name"] != "API_TOKEN" || secrets[0]["value_from"] != "arn:aws:secretsmanager:us-east-1:123456789012:secret:api-token" {
-		t.Fatalf("secret reference changed: %#v", web["secrets"])
+	refs, ok := web["references"].([]map[string]string)
+	if !ok || len(refs) != 1 || refs[0]["name"] != "API_TOKEN" || refs[0]["value_from"] != "arn:aws:secretsmanager:us-east-1:123456789012:secret:api-token" {
+		t.Fatalf("secret reference changed: %#v", web["references"])
 	}
 	encoded, err := json.Marshal(row.Resource.Attributes)
 	if err != nil {
@@ -118,8 +118,8 @@ func TestECSTaskDefinitionContainersOmitAbsentSections(t *testing.T) {
 	if _, exists := containers[0]["environment"]; exists {
 		t.Fatalf("absent environment invented: %#v", containers[0])
 	}
-	if _, exists := containers[0]["secrets"]; exists {
-		t.Fatalf("absent secrets invented: %#v", containers[0])
+	if _, exists := containers[0]["references"]; exists {
+		t.Fatalf("absent secret references invented: %#v", containers[0])
 	}
 }
 

@@ -21,8 +21,10 @@ func ecsServiceDescribeInput(clusterARN string, serviceARNs []string) *awsecs.De
 }
 
 // ecsServiceRecord carries reported DescribeServices metadata into a typed
-// resource. Load-balancer bindings become service-to-target edges; a binding
-// that reports no target fails the record instead of dropping the exposure.
+// resource. Load-balancer bindings become service-to-target edges; a
+// balancer entry with neither target-group ARN nor load-balancer name
+// fails the record, while a response with zero balancer entries yields
+// no LB edge.
 func ecsServiceRecord(service awsecstypes.Service, region string) (collector.Record, error) {
 	arn := strings.TrimSpace(aws.ToString(service.ServiceArn))
 	name := aws.ToString(service.ServiceName)

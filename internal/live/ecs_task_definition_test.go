@@ -10,6 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
+	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 	"github.com/eshu-hq/eshu-sdk/collector/marker"
 )
 
@@ -53,9 +54,9 @@ func TestECSTaskDefinitionRecordRetainsSafeMetadata(t *testing.T) {
 	if redacted["reason"] != "known_sensitive_key" || redacted["ruleset_version"] != "aws-launch-2026-05-14" {
 		t.Fatalf("environment classification = %#v, want known_sensitive_key + launch ruleset", redacted)
 	}
-	secrets, ok := containers[0]["secrets"].([]map[string]string)
-	if !ok || len(secrets) != 1 || secrets[0]["value_from"] != "secret-arn" {
-		t.Fatalf("secret reference changed: %#v", containers[0]["secrets"])
+	refs, ok := containers[0]["references"].([]map[string]string)
+	if !ok || len(refs) != 1 || refs[0]["value_from"] != "secret-arn" {
+		t.Fatalf("secret reference changed: %#v", containers[0]["references"])
 	}
 	if len(row.Resource.CorrelationAnchors) != 3 || row.Resource.CorrelationAnchors[2] != "web:4" {
 		t.Fatalf("task definition anchors: %+v", row.Resource.CorrelationAnchors)
@@ -75,5 +76,36 @@ func TestECSTaskDefinitionDescribeRequestsTagsAndRejectsMissingARN(t *testing.T)
 	}
 	if _, err := ecsTaskDefinitionRecord("listed-arn", awsecstypes.TaskDefinition{TaskDefinitionArn: aws.String("listed-arn")}, nil, "us-east-1", marker.Key{}); err == nil {
 		t.Fatal("task definition without redaction key got redacted containers")
+	}
+}
+
+// TestECSTaskDefinitionSecretsBearingRecordPassesResourceFactSeam proves the
+// renamed references key traverses the production emission seam: a
+// secrets-bearing task definition converts to a valid resource fact, while
+// the legacy "secrets" key shape is rejected by the same seam.
+func TestECSTaskDefinitionSecretsBearingRecordPassesResourceFactSeam(t *testing.T) {
+	arn, definition := ecsParityDefinition()
+	row, err := ecsTaskDefinitionRecord(arn, definition, nil, "us-east-1", ecsParityTestKey(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	observation := resourceObservation("123456789012", row.Resource)
+	observation.Boundary.ScopeID = "aws:123456789012:us-east-1"
+	observation.Boundary.GenerationID = "aws:123456789012:us-east-1:parity:1"
+	observation.Boundary.CollectorInstanceID = "aws-parity-ecs"
+	observation.Boundary.FencingToken = 7
+	observation.SourceURI = "aws:ecs:us-east-1:parity"
+	if _, err := collector.NewResourceFact(observation); err != nil {
+		t.Fatalf("references-keyed task definition rejected by seam: %v", err)
+	}
+	containers, ok := observation.Attributes["containers"].([]map[string]any)
+	if !ok || len(containers) == 0 {
+		t.Fatalf("containers = %#v, want container maps", observation.Attributes["containers"])
+	}
+	web := containers[0]
+	web["secrets"] = web["references"]
+	delete(web, "references")
+	if _, err := collector.NewResourceFact(observation); err == nil {
+		t.Fatal("legacy secrets-keyed task definition passed the seam")
 	}
 }

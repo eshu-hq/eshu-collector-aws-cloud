@@ -90,15 +90,16 @@ func TestRedactECSEnvironmentValueNeverLeaksRaw(t *testing.T) {
 	}
 }
 
-// TestECSSensitiveSourceMirrorsInTreeLaunchPolicy pins reason labels for
-// spellings where whole-vs-segment matching could diverge from the in-tree
-// launch policy (eshu go/internal/redact/policy.go RuleSet.Classify with
-// SchemaUnknown, backed by the identical 37-entry awsSensitiveKeys set).
-// Compound keys that merely contain a sensitive word classify unknown on
-// both sides: neither whole-normalized nor ./[] segments match, and the
-// token-window matcher is CloudFormation-only. Values stay redacted either
-// way; only the label must agree.
-func TestECSSensitiveSourceMirrorsInTreeLaunchPolicy(t *testing.T) {
+// TestECSSensitiveSourceLocalLabels pins reason labels for tricky key
+// spellings under this package's own matching rule (whole-normalized, then
+// ./[] segments). The 37-entry set was diffed byte-identical against the
+// in-tree awsSensitiveKeys list (eshu go/internal/collector/awscloud/
+// redaction.go; zero lines either direction), and the normalizer plus the
+// segment rule mirror eshu go/internal/redact/policy.go RuleSet.Classify
+// with SchemaUnknown — including unknown labels for compound keys that
+// merely contain a sensitive word, where the token-window matcher (which is
+// CloudFormation-only) does not apply. Values stay redacted either way.
+func TestECSSensitiveSourceLocalLabels(t *testing.T) {
 	key := ecsParityTestKey(t)
 	cases := []struct{ source, want string }{
 		{"DATABASE_URL", "known_sensitive_key"},

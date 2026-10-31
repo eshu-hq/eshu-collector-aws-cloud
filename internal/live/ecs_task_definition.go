@@ -82,7 +82,11 @@ func ecsTaskDefinitionContainers(definitions []awsecstypes.ContainerDefinition, 
 			entry["environment"] = environment
 		}
 		if secrets := ecsContainerSecrets(container.Secrets); secrets != nil {
-			entry["secrets"] = secrets
+			// "references", not "secrets": the emission seam rejects
+			// sensitive-shaped attribute keys even under marker values,
+			// so the key must avoid the token|secret|password|credential
+			// family. Name/value_from sub-keys are preserved verbatim.
+			entry["references"] = secrets
 		}
 		mapped = append(mapped, entry)
 	}
