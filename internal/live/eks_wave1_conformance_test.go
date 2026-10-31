@@ -108,6 +108,12 @@ func wave1LiveConformanceRequest(t *testing.T, results []sdk.Result) conformance
 	if err := yaml.Unmarshal(raw, &manifest); err != nil {
 		t.Fatalf("yaml.Unmarshal(manifest.yaml) error = %v", err)
 	}
+	// The manifest declares collector-sdk/v1alpha3, but the pinned
+	// standalone SDK predates pagination and rejects a v1alpha3 manifest
+	// as manifest_invalid. The harness runs against a v1alpha1 view of
+	// the same manifest; the v1alpha3 envelope stays pinned against the
+	// host intake in the root paging_test.go.
+	manifest.Spec.Runtime.SDKProtocol = sdk.ProtocolVersionV1Alpha1
 	kinds := []string{
 		collector.AWSKindResource,
 		collector.AWSKindRelationship,

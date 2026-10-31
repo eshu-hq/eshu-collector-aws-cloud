@@ -15,7 +15,11 @@ import (
 const supportedCoreRange = ">=0.0.5 <0.2.0"
 
 // TestCompatibilityMatrixSupportedPair checks the manifest range and protocol
-// with fixture conformance using the pinned standalone collector SDK.
+// with fixture conformance using the pinned standalone collector SDK. The
+// manifest declares collector-sdk/v1alpha3 (paged-result output); the pinned
+// SDK predates pagination, so the conformance harness runs against a
+// v1alpha1 view of the same manifest while the v1alpha3 envelope stays
+// pinned field-for-field against the host intake in paging_test.go.
 func TestCompatibilityMatrixSupportedPair(t *testing.T) {
 	t.Parallel()
 
@@ -23,14 +27,15 @@ func TestCompatibilityMatrixSupportedPair(t *testing.T) {
 	if manifest.Spec.CompatibleCore != supportedCoreRange {
 		t.Fatalf("CompatibleCore = %q, want %q", manifest.Spec.CompatibleCore, supportedCoreRange)
 	}
-	if manifest.Spec.Runtime.SDKProtocol != sdk.ProtocolVersionV1Alpha1 {
-		t.Fatalf("SDKProtocol = %q, want %q", manifest.Spec.Runtime.SDKProtocol, sdk.ProtocolVersionV1Alpha1)
+	if manifest.Spec.Runtime.SDKProtocol != ProtocolVersionV1Alpha3 {
+		t.Fatalf("SDKProtocol = %q, want %q", manifest.Spec.Runtime.SDKProtocol, ProtocolVersionV1Alpha3)
 	}
 	if hostRejectsCoreRange(manifest.Spec.CompatibleCore, "0.1.0") {
 		t.Fatalf("pinned range %q must cover supported core 0.1.0", manifest.Spec.CompatibleCore)
 	}
+	harnessManifest := harnessView(manifest)
 	result := mustCollect(t, "complete.json", testClaim(), testObservedAt(), "")
-	report := conformance.Run(coreFixtureRequest(t, manifest, []sdk.Result{result}))
+	report := conformance.Run(coreFixtureRequest(t, harnessManifest, []sdk.Result{result}))
 	if !report.OK() {
 		t.Fatalf("supported pair findings = %#v, want passed", report.Findings)
 	}
@@ -47,11 +52,12 @@ func TestCompatibilityMatrixRejectsUnsupportedVersions(t *testing.T) {
 
 	unsupportedProtocol := complete
 	unsupportedProtocol.ProtocolVersion = "collector-sdk/v9alpha9"
-	if report := conformance.Run(coreFixtureRequest(t, manifest, []sdk.Result{unsupportedProtocol})); report.OK() {
+	harness := harnessView(manifest)
+	if report := conformance.Run(coreFixtureRequest(t, harness, []sdk.Result{unsupportedProtocol})); report.OK() {
 		t.Fatal("unsupported protocol: report OK = true, want failed")
 	}
 
-	unversioned := loadManifestForMatrix(t)
+	unversioned := harnessView(loadManifestForMatrix(t))
 	unversioned.Spec.EmittedFacts[0].SchemaVersions = nil
 	if report := conformance.Run(coreFixtureRequest(t, unversioned, []sdk.Result{complete})); report.OK() {
 		t.Fatal("unversioned fact kind: report OK = true, want failed")

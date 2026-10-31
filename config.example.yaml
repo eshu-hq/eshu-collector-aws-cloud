@@ -18,6 +18,11 @@ config:
     maxRecordsPerClaim: 5000
     maxPayloadBytes: 65536
     claimTimeoutSeconds: 300
+    # maxPageBytes bounds one collector-sdk/v1alpha3 result page on stdout.
+    # The default (4128768 = 4 MiB host stdout cap minus 64 KiB envelope
+    # headroom) fits the default host stdout_limit_bytes; raise it only
+    # together with the host cap, or the host admission error fires.
+    maxPageBytes: 4128768
 # Live mode: the host activation config carries no source.input. The
 # collector then lists live AWS resources for the target account across the
 # allowed regions and services (the 19 names in internal/live), using the

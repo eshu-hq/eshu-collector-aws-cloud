@@ -385,9 +385,9 @@ func optionalString(config map[string]any, keys ...string) (string, bool, error)
 	return text, true, nil
 }
 
-// parseLimits reads limits.maxRecordsPerClaim, limits.maxPayloadBytes, and
-// limits.claimTimeoutSeconds; absent fields select DefaultResourceUse and
-// malformed values fail closed.
+// parseLimits reads limits.maxRecordsPerClaim, limits.maxPayloadBytes,
+// limits.claimTimeoutSeconds, and limits.maxPageBytes; absent fields select
+// DefaultResourceUse and malformed values fail closed.
 func parseLimits(config map[string]any) (collector.ResourceUse, error) {
 	limits := collector.DefaultResourceUse()
 	for _, field := range []struct {
@@ -397,6 +397,7 @@ func parseLimits(config map[string]any) (collector.ResourceUse, error) {
 		{"maxRecordsPerClaim", &limits.MaxRecordsPerClaim},
 		{"maxPayloadBytes", &limits.MaxPayloadBytes},
 		{"claimTimeoutSeconds", &limits.ClaimTimeoutSeconds},
+		{"maxPageBytes", &limits.MaxPageBytes},
 	} {
 		raw, present, err := optionalNumber(config, "limits", field.key)
 		if err != nil {

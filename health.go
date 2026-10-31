@@ -38,11 +38,21 @@ type ResourceUse struct {
 	MaxPayloadBytes int `json:"max_payload_bytes"`
 	// ClaimTimeoutSeconds bounds one claim's wall time.
 	ClaimTimeoutSeconds int `json:"claim_timeout_seconds"`
+	// MaxPageBytes bounds one v1alpha3 result page on stdout. It must fit
+	// the host's stdout_limit_bytes minus envelope headroom; the default
+	// assumes the host default (4 MiB). Operators who raise the host cap
+	// raise this to match.
+	MaxPageBytes int `json:"max_page_bytes"`
 }
 
 // DefaultResourceUse is the template's starting bound. Tune it per source.
 func DefaultResourceUse() ResourceUse {
-	return ResourceUse{MaxRecordsPerClaim: 5000, MaxPayloadBytes: 65536, ClaimTimeoutSeconds: 300}
+	return ResourceUse{
+		MaxRecordsPerClaim:  5000,
+		MaxPayloadBytes:     65536,
+		ClaimTimeoutSeconds: 300,
+		MaxPageBytes:        int(DefaultMaxPageBytes),
+	}
 }
 
 // Monitor is a goroutine-safe health tracker for one collector process.

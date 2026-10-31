@@ -22,6 +22,10 @@ type sdkRequest struct {
 	Claim           sdk.Claim      `json:"claim"`
 	Contract        sdk.Contract   `json:"contract"`
 	Config          map[string]any `json:"config,omitempty"`
+	// Continuation carries the resume cursor on collector-sdk/v1alpha3
+	// continuation calls. It is absent on the first call, so legacy hosts
+	// never observe it.
+	Continuation *collector.PageContinuation `json:"continuation,omitempty"`
 }
 
 func main() {
@@ -43,11 +47,12 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) err
 	maxRecords := flags.Int("max-records", 0, "max records per claim (0 selects the default bound)")
 	maxPayloadBytes := flags.Int("max-payload-bytes", 0, "max payload bytes per fact (0 selects the default bound)")
 	claimTimeoutSeconds := flags.Int("claim-timeout-seconds", 0, "claim timeout in seconds (0 selects the default bound)")
+	maxPageBytes := flags.Int("max-page-bytes", 0, "max result page bytes on v1alpha3 output (0 selects the default bound)")
 	sdkStdio := flags.Bool("sdk-stdio", false, "read one collector SDK host request from stdin")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if *maxRecords < 0 || *maxPayloadBytes < 0 || *claimTimeoutSeconds < 0 {
+	if *maxRecords < 0 || *maxPayloadBytes < 0 || *claimTimeoutSeconds < 0 || *maxPageBytes < 0 {
 		return fmt.Errorf("limits must be non-negative (0 selects defaults)")
 	}
 	limits := collector.DefaultResourceUse()
@@ -60,6 +65,9 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) err
 	if *claimTimeoutSeconds > 0 {
 		limits.ClaimTimeoutSeconds = *claimTimeoutSeconds
 	}
+	if *maxPageBytes > 0 {
+		limits.MaxPageBytes = *maxPageBytes
+	}
 	// The health monitor is the operator signal behind health.go: every
 	// outcome below is observed, and the snapshot line on stderr carries
 	// liveness, freshness, failure, and retry state. Adopters graduate this
@@ -70,17 +78,35 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) err
 	monitor := collector.NewMonitor()
 	var result sdk.Result
 	var err error
+	// emitProtocol selects the wire output: file mode keeps the legacy
+	// v1alpha1 single-shot shape, while --sdk-stdio emits whatever the
+	// host negotiated (v1alpha1 passthrough, v1alpha3 paged). A resumed
+	// v1alpha3 call re-collects and serves its cursor's page.
+	emitProtocol := sdk.ProtocolVersionV1Alpha1
+	var emitContinuation *collector.PageContinuation
 	if *sdkStdio {
 		var plan stdioPlan
 		plan, err = parseSDKStdio(stdin)
 		if err == nil {
 			limits = plan.limits
+			emitProtocol = plan.protocol
+			emitContinuation = plan.continuation
 			result, err = runWithTimeout(func() (sdk.Result, error) {
 				return collectStdioPlan(plan)
 			}, limits)
 		}
 	} else {
 		result, err = collectWithTimeout(*inputPath, *sourceURI, *previousDigest, limits)
+	}
+	// Paging selects the one page this call emits. On legacy requests it
+	// returns the result untouched, preserving the exact single-shot
+	// shape; on v1alpha3 it splits completable results into bounded pages.
+	// A resume failure (drifted source, bad cursor) fails the run so the
+	// host retries the claim from page zero instead of committing torn
+	// evidence.
+	var page *collector.ResultPage
+	if err == nil {
+		result, page, err = collector.PaginateResult(result, emitProtocol, emitContinuation, int64(limits.MaxPageBytes))
 	}
 	monitor.SetResource(limits)
 	if err != nil {
@@ -91,7 +117,9 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) err
 	}
 	// Only Complete/Partial with a snapshot digest move LastSuccessAt.
 	// Terminal outcomes observe as failures (propagating the failure
-	// class), and Unchanged outcomes leave the last good digest alone.
+	// class), and Unchanged outcomes leave the last good digest alone. A
+	// non-final page carries no snapshot fact (Collect appends it last),
+	// so it observes nothing, exactly like an unchanged check.
 	digest := ""
 	for _, fact := range result.Facts {
 		if fact.Kind == collector.FactKindSnapshot {
@@ -107,6 +135,9 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) err
 	logHealth(stderr, health, resource)
 	encoder := json.NewEncoder(stdout)
 	encoder.SetIndent("", "  ")
+	if page != nil {
+		return encoder.Encode(collector.PagedResult{Result: result, Page: page})
+	}
 	return encoder.Encode(result)
 }
 
@@ -203,13 +234,17 @@ func runWithTimeout(work func() (sdk.Result, error), limits collector.ResourceUs
 // stdioPlan is a parsed SDK host request: everything parseSDKStdio learns
 // from stdin before the wall-time bound starts covering the collection. A
 // request with source.input runs the local file mode; a host activation
-// request without it runs the config-driven live mode instead.
+// request without it runs the config-driven live mode instead. The protocol
+// and continuation select the wire output: v1alpha1 stays single-shot,
+// v1alpha3 pages bounded results and resumes at the cursor.
 type stdioPlan struct {
 	inputPath      string
 	sourceURI      string
 	previousDigest string
 	limits         collector.ResourceUse
 	claim          sdk.Claim
+	protocol       string
+	continuation   *collector.PageContinuation
 	liveMode       bool
 	live           live.Config
 }
@@ -232,8 +267,16 @@ func parseSDKStdio(stdin io.Reader) (stdioPlan, error) {
 		}
 		return stdioPlan{}, fmt.Errorf("decode SDK request trailer: %w", err)
 	}
-	if strings.TrimSpace(request.ProtocolVersion) != sdk.ProtocolVersionV1Alpha1 {
+	protocol := strings.TrimSpace(request.ProtocolVersion)
+	if protocol != sdk.ProtocolVersionV1Alpha1 && protocol != collector.ProtocolVersionV1Alpha3 {
 		return stdioPlan{}, fmt.Errorf("protocol_version %q is unsupported", request.ProtocolVersion)
+	}
+	// A resume cursor travels only on v1alpha3 continuation calls; a
+	// cursor on any other protocol is a version skew and fails closed at
+	// the boundary instead of resuming at an untrusted offset.
+	if request.Continuation != nil && strings.TrimSpace(request.Continuation.Cursor) != "" &&
+		protocol != collector.ProtocolVersionV1Alpha3 {
+		return stdioPlan{}, fmt.Errorf("continuation requires protocol_version %q", collector.ProtocolVersionV1Alpha3)
 	}
 	// source.input selects the local file mode; its absence selects the
 	// config-driven live mode, where the host activation config names the
@@ -248,6 +291,8 @@ func parseSDKStdio(stdin io.Reader) (stdioPlan, error) {
 		claim.GenerationID = "generation-1"
 	}
 	plan.claim = claim
+	plan.protocol = protocol
+	plan.continuation = request.Continuation
 	if inputPresent && strings.TrimSpace(inputPath) != "" {
 		// A missing key falls back to the placeholder; a present-but-malformed
 		// value fails closed instead of silently emitting against the placeholder.
@@ -361,8 +406,9 @@ func nestedOptionalString(config map[string]any, keys ...string) (string, bool, 
 
 // nestedLimits reads the optional limits block from config.example.yaml's
 // shape (limits.maxRecordsPerClaim, limits.maxPayloadBytes,
-// limits.claimTimeoutSeconds). Absent or partial blocks select
-// DefaultResourceUse for the missing fields; malformed values fail closed.
+// limits.claimTimeoutSeconds, limits.maxPageBytes). Absent or partial blocks
+// select DefaultResourceUse for the missing fields; malformed values fail
+// closed.
 func nestedLimits(config map[string]any) (collector.ResourceUse, error) {
 	limits := collector.DefaultResourceUse()
 	for _, field := range []struct {
@@ -372,6 +418,7 @@ func nestedLimits(config map[string]any) (collector.ResourceUse, error) {
 		{"maxRecordsPerClaim", &limits.MaxRecordsPerClaim},
 		{"maxPayloadBytes", &limits.MaxPayloadBytes},
 		{"claimTimeoutSeconds", &limits.ClaimTimeoutSeconds},
+		{"maxPageBytes", &limits.MaxPageBytes},
 	} {
 		raw, present, err := nestedOptionalNumber(config, "limits", field.key)
 		if err != nil {

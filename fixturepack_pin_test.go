@@ -85,7 +85,7 @@ func pinnedRequest(t *testing.T, payload map[string]any, schemas map[string]json
 			Payload: payload,
 		}},
 	}
-	request := coreFixtureRequest(t, manifest, []sdk.Result{result})
+	request := coreFixtureRequest(t, harnessView(manifest), []sdk.Result{result})
 	for kind, schema := range schemas {
 		request.PayloadSchemas[kind] = schema
 	}

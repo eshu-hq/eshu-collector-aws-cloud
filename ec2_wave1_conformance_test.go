@@ -94,7 +94,7 @@ func TestWave1EC2Conformance(t *testing.T) {
 	if _, err := sdk.NewValidator(Contract()).ValidateResult(result); err != nil {
 		t.Fatalf("SDK rejected wave1 EC2 result: %v", err)
 	}
-	report := conformance.Run(coreFixtureRequest(t, loadManifest(t), []sdk.Result{result}))
+	report := conformance.Run(coreFixtureRequest(t, harnessView(loadManifest(t)), []sdk.Result{result}))
 	if !report.OK() {
 		t.Fatalf("wave1 EC2 conformance findings = %#v, want passed", report.Findings)
 	}

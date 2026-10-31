@@ -5,6 +5,8 @@ package live
 
 import (
 	"testing"
+
+	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 )
 
 func hostConfig() map[string]any {
@@ -260,10 +262,27 @@ func TestParseConfigHonorsOverrides(t *testing.T) {
 	if parsed.Limits.MaxRecordsPerClaim != 7 {
 		t.Fatalf("MaxRecordsPerClaim = %d, want 7", parsed.Limits.MaxRecordsPerClaim)
 	}
+	if parsed.Limits.MaxPageBytes != int(collector.DefaultMaxPageBytes) {
+		t.Fatalf("MaxPageBytes = %d, want default %d", parsed.Limits.MaxPageBytes, collector.DefaultMaxPageBytes)
+	}
+	paged := hostConfig()
+	paged["limits"] = map[string]any{"maxPageBytes": 1048576.0}
+	parsedPaged, err := ParseConfig(paged)
+	if err != nil {
+		t.Fatalf("ParseConfig(maxPageBytes) error = %v", err)
+	}
+	if parsedPaged.Limits.MaxPageBytes != 1048576 {
+		t.Fatalf("MaxPageBytes = %d, want 1048576", parsedPaged.Limits.MaxPageBytes)
+	}
 	bad := hostConfig()
 	bad["limits"] = map[string]any{"maxRecordsPerClaim": "many"}
 	if _, err := ParseConfig(bad); err == nil {
 		t.Fatal("malformed limits error = nil, want failure")
+	}
+	badPage := hostConfig()
+	badPage["limits"] = map[string]any{"maxPageBytes": "many"}
+	if _, err := ParseConfig(badPage); err == nil {
+		t.Fatal("malformed maxPageBytes error = nil, want failure")
 	}
 }
 
