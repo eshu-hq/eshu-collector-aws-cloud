@@ -11,11 +11,17 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsecs "github.com/aws/aws-sdk-go-v2/service/ecs"
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
+	"github.com/eshu-hq/eshu-sdk/collector/marker"
 )
 
 // listECS reads ECS clusters, services, tasks, and distinct task definitions.
 // Service-referenced revisions are described even when the active list omits them.
-func listECS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
+// Task-definition environment values are redacted with the key before any
+// record is emitted, so a zero key fails before source acquisition.
+func listECS(ctx context.Context, cfg aws.Config, key marker.Key) ([]collector.Record, error) {
+	if key.IsZero() {
+		return nil, fmt.Errorf("ecs list requires a redaction key before source acquisition")
+	}
 	client := awsecs.NewFromConfig(cfg)
 	region := cfg.Region
 	records := []collector.Record{}
@@ -50,12 +56,15 @@ func listECS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 						return nil, fmt.Errorf("ecs describe services: %w", err)
 					}
 					for _, service := range described.Services {
-						row := ecsServiceRecord(service, region)
+						row, err := ecsServiceRecord(service, region)
+						if err != nil {
+							return nil, fmt.Errorf("ecs service record: %w", err)
+						}
 						if row.Resource == nil {
 							return nil, fmt.Errorf("ecs described service has no ARN")
 						}
 						records = append(records, row)
-						records, err = collectECSTaskDefinition(ctx, client, records, aws.ToString(service.TaskDefinition), region, seenDefinitions)
+						records, err = collectECSTaskDefinition(ctx, client, records, aws.ToString(service.TaskDefinition), region, seenDefinitions, key)
 						if err != nil {
 							return nil, err
 						}
@@ -82,7 +91,7 @@ func listECS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 						// Standalone tasks (run-task one-offs, Batch jobs)
 						// pin revisions no service references; collect them
 						// here so their definitions resolve like services'.
-						records, err = collectECSTaskDefinition(ctx, client, records, aws.ToString(task.TaskDefinitionArn), region, seenDefinitions)
+						records, err = collectECSTaskDefinition(ctx, client, records, aws.ToString(task.TaskDefinitionArn), region, seenDefinitions, key)
 						if err != nil {
 							return nil, err
 						}
@@ -99,7 +108,7 @@ func listECS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 }
 
 // collectECSTaskDefinition describes one previously unseen definition ARN.
-func collectECSTaskDefinition(ctx context.Context, client *awsecs.Client, records []collector.Record, arn, region string, seen map[string]struct{}) ([]collector.Record, error) {
+func collectECSTaskDefinition(ctx context.Context, client *awsecs.Client, records []collector.Record, arn, region string, seen map[string]struct{}, key marker.Key) ([]collector.Record, error) {
 	arn = strings.TrimSpace(arn)
 	if arn == "" {
 		return records, nil
@@ -114,7 +123,10 @@ func collectECSTaskDefinition(ctx context.Context, client *awsecs.Client, record
 	if described == nil || described.TaskDefinition == nil {
 		return nil, fmt.Errorf("ecs described task definition has no body")
 	}
-	row := ecsTaskDefinitionRecord(arn, *described.TaskDefinition, described.Tags, region)
+	row, err := ecsTaskDefinitionRecord(arn, *described.TaskDefinition, described.Tags, region, key)
+	if err != nil {
+		return nil, fmt.Errorf("ecs task definition record: %w", err)
+	}
 	if row.Resource == nil {
 		return nil, fmt.Errorf("ecs described task definition has no matching ARN")
 	}

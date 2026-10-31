@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/eshu-hq/eshu-collector-aws-cloud/internal/live"
 )
 
 // hostActivationConfig returns the ops-qa host's activation shape: target
@@ -96,6 +98,36 @@ func TestParseSDKStdioRejectsLiveConfigWithoutAccount(t *testing.T) {
 	_, err := parseSDKStdio(&stdin)
 	if err == nil || !strings.Contains(err.Error(), "target_scopes") {
 		t.Fatalf("parseSDKStdio(no account) error = %v, want target_scopes failure", err)
+	}
+}
+
+func TestResolveLiveRedactionKeySkipsServicesWithoutSecrets(t *testing.T) {
+	t.Parallel()
+
+	config := live.Config{Services: []string{"ec2"}}
+	if key, err := resolveLiveRedactionKey(config, nil); err != nil || !key.IsZero() {
+		t.Fatalf("resolveLiveRedactionKey(ec2) = %v, %v, want zero key without lookup", key, err)
+	}
+}
+
+func TestResolveLiveRedactionKeyRequiresFixedReference(t *testing.T) {
+	t.Parallel()
+
+	config := live.Config{Services: []string{"ecs"}}
+	lookup := func(string) (string, bool) { return "material", true }
+	if _, err := resolveLiveRedactionKey(config, lookup); err == nil {
+		t.Fatal("resolveLiveRedactionKey(ecs without reference) error = nil, want failure")
+	}
+	config.RedactionKeyEnv = "ESHU_AWS_REDACTION_KEY"
+	if _, err := resolveLiveRedactionKey(config, func(string) (string, bool) { return "", false }); err == nil {
+		t.Fatal("resolveLiveRedactionKey(ecs without material) error = nil, want failure")
+	}
+	if _, err := resolveLiveRedactionKey(config, func(string) (string, bool) { return "   ", true }); err == nil {
+		t.Fatal("resolveLiveRedactionKey(ecs blank material) error = nil, want failure")
+	}
+	key, err := resolveLiveRedactionKey(config, lookup)
+	if err != nil || key.IsZero() {
+		t.Fatalf("resolveLiveRedactionKey(ecs) = %v, %v, want keyed material", key, err)
 	}
 }
 

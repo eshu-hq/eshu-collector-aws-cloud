@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/eshu-hq/eshu-sdk/collector/marker"
 )
 
 type ecsRoundTripFunc func(*http.Request) (*http.Response, error)
@@ -68,7 +69,11 @@ func TestListECSIncludesInactiveServiceDefinitionOnce(t *testing.T) {
 		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/x-amz-json-1.1"}}, Body: io.NopCloser(strings.NewReader(string(body))), Request: request}, nil
 	})
 	cfg := aws.Config{Region: "us-east-1", Credentials: aws.AnonymousCredentials{}, HTTPClient: &http.Client{Transport: transport}, RetryMaxAttempts: 1}
-	records, err := listECS(context.Background(), cfg)
+	key, err := marker.NewKey([]byte("lane0-ecs-parity-test-key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	records, err := listECS(context.Background(), cfg, key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +146,11 @@ func TestListECSDescribesOnlyReferencedTaskDefinitions(t *testing.T) {
 		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/x-amz-json-1.1"}}, Body: io.NopCloser(strings.NewReader(string(body))), Request: request}, nil
 	})
 	cfg := aws.Config{Region: "us-east-1", Credentials: aws.AnonymousCredentials{}, HTTPClient: &http.Client{Transport: transport}, RetryMaxAttempts: 1}
-	records, err := listECS(context.Background(), cfg)
+	key, err := marker.NewKey([]byte("lane0-ecs-parity-test-key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	records, err := listECS(context.Background(), cfg, key)
 	if err != nil {
 		t.Fatal(err)
 	}

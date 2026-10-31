@@ -37,3 +37,8 @@ config:
 #    - iam
 #    - ec2
 #    - s3
+#  source:
+#    redactionKeyEnv: ESHU_AWS_REDACTION_KEY
+#    # Required when allowed_services includes ecs: names the process
+#    # variable carrying the redaction key material (never the value).
+#    # Must be exactly ESHU_AWS_REDACTION_KEY.

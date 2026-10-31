@@ -15,11 +15,17 @@ containers, network-interface attachments, and reported runtime metadata.
 DescribeTaskDefinition emits safe scalar metadata and tags, with one read
 per distinct listed or service-referenced ARN, including inactive revisions
 referenced by services. It requires `ecs:DescribeTaskDefinition` permission.
-Services link to their reported task definitions and tasks to reported ENIs.
-The legacy scanner records a task-definition ARN on each task as an attribute
-and anchor, without a separate task-to-definition edge. Container definitions,
-environment values, secret references, image relationships, and service
-load-balancer relationships remain deferred. EKS
+Services link to their reported task definitions and load-balancer targets;
+tasks link to reported ENIs. A target-group ARN takes precedence over a
+classic load-balancer name, matching the legacy scanner; a binding that
+reports neither fails the service record. The legacy scanner records a
+task-definition ARN on each task as an attribute
+and anchor, without a separate task-to-definition edge. Task definitions
+carry container definitions with environment values replaced by keyed markers
+before emission (launch policy `aws-launch-2026-05-14`) and secret
+name/value_from references preserved verbatim; each reported image gets one
+aggregated task-definition-to-image edge. The ECS read fails closed without
+`ESHU_AWS_REDACTION_KEY` named by `source.redactionKeyEnv`. EKS
 DescribeCluster and DescribeNodegroup emit
 typed cluster and managed nodegroup identity, status, tags, version, and
 reported control-plane and nodegroup metadata. EKS DescribeAddon emits typed

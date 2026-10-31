@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
+	"github.com/eshu-hq/eshu-sdk/collector/marker"
 )
 
 // SupportedServices is the live-read inventory this package implements: the
@@ -55,7 +56,14 @@ type Config struct {
 	// A role in any account but the scope account is rejected at parse.
 	RoleARN    string
 	ExternalID string
-	SourceURI  string
+	// RedactionKeyEnv names the fixed process variable that carries the
+	// deployment redaction material, never the material itself.
+	RedactionKeyEnv string
+	// RedactionKey is the copied, validated key passed to readers that
+	// redact source values scanner-side (currently ECS). The command
+	// boundary resolves it; Config never carries raw material from files.
+	RedactionKey marker.Key
+	SourceURI    string
 	// PreviousDigest is the host hint; live collection currently ignores it
 	// until typed resources and failed service pairs enter the digest.
 	PreviousDigest string
@@ -122,7 +130,15 @@ func ParseConfig(config map[string]any) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	keyEnv, _, err := optionalString(config, "source", "redactionKeyEnv")
+	if err != nil {
+		return Config{}, err
+	}
+	if keyEnv != "" && keyEnv != "ESHU_AWS_REDACTION_KEY" {
+		return Config{}, fmt.Errorf("config source.redactionKeyEnv must reference ESHU_AWS_REDACTION_KEY")
+	}
 	parsed.AccountID = account
+	parsed.RedactionKeyEnv = keyEnv
 	parsed.RoleARN = roleARN
 	parsed.ExternalID = externalID
 	parsed.Regions = regions

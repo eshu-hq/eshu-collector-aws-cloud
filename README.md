@@ -122,9 +122,11 @@ task-definition binding, and load-balancer metadata. DescribeTasks emits
 task identity, status, containers, network-interface attachments, and reported
 runtime metadata. DescribeTaskDefinition emits task-definition identity,
 tags, roles, resource sizing, network mode, compatibilities, revision, and
-registration time. Services link to reported task definitions and tasks
-link to reported ENIs. Container definitions, environment values, and secret
-references remain excluded until keyed redaction and reference handling land.
+registration time, container definitions with keyed environment markers and
+secret references, and per-image relationships. Services link to reported
+task definitions and load-balancer targets; tasks
+link to reported ENIs. The ECS read requires `ESHU_AWS_REDACTION_KEY` (named
+by `source.redactionKeyEnv`) before source acquisition.
 The live read requires `ecs:DescribeTaskDefinition` and makes one describe
 call per distinct listed or service-referenced task definition, including
 inactive revisions referenced by services. This increases ECS API request

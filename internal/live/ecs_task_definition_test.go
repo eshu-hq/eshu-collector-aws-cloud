@@ -4,11 +4,13 @@
 package live
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
+	"github.com/eshu-hq/eshu-sdk/collector/marker"
 )
 
 func TestECSTaskDefinitionRecordRetainsSafeMetadata(t *testing.T) {
@@ -22,15 +24,37 @@ func TestECSTaskDefinitionRecordRetainsSafeMetadata(t *testing.T) {
 		RequiresCompatibilities: []awsecstypes.Compatibility{awsecstypes.CompatibilityFargate},
 		ContainerDefinitions:    []awsecstypes.ContainerDefinition{{Name: aws.String("web"), Environment: []awsecstypes.KeyValuePair{{Name: aws.String("PASSWORD"), Value: aws.String("raw-secret")}}, Secrets: []awsecstypes.Secret{{Name: aws.String("db"), ValueFrom: aws.String("secret-arn")}}}},
 	}
-	row := ecsTaskDefinitionRecord(arn, definition, []awsecstypes.Tag{{Key: aws.String("team"), Value: aws.String("platform")}}, "us-east-1")
+	row, err := ecsTaskDefinitionRecord(arn, definition, []awsecstypes.Tag{{Key: aws.String("team"), Value: aws.String("platform")}}, "us-east-1", ecsParityTestKey(t))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if row.ID != arn || row.Resource == nil || row.Resource.ResourceID != arn || row.Resource.ResourceType != "aws_ecs_task_definition" || row.Resource.Name != "web" || row.Resource.State != "ACTIVE" || row.Resource.SourceRecordID != arn {
 		t.Fatalf("task definition identity: %+v", row)
 	}
 	if row.Resource.Tags["team"] != "platform" || row.Resource.Attributes["cpu"] != "256" || row.Resource.Attributes["memory"] != "512" || row.Resource.Attributes["revision"] != int32(4) || row.Resource.Attributes["registered_at"] != registered {
 		t.Fatalf("task definition metadata: %+v", row.Resource)
 	}
-	if _, exists := row.Resource.Attributes["containers"]; exists {
-		t.Fatalf("unredacted container data emitted: %+v", row.Resource.Attributes["containers"])
+	containers, ok := row.Resource.Attributes["containers"].([]map[string]any)
+	if !ok || len(containers) != 1 {
+		t.Fatalf("containers = %#v, want one redacted container map", row.Resource.Attributes["containers"])
+	}
+	environment, ok := containers[0]["environment"].([]map[string]any)
+	if !ok || len(environment) != 1 {
+		t.Fatalf("environment = %#v, want one redacted entry", containers[0]["environment"])
+	}
+	redacted, ok := environment[0]["value"].(map[string]any)
+	if !ok {
+		t.Fatalf("environment value = %#v, want marker map, never the raw secret", environment[0]["value"])
+	}
+	if markerText, _ := redacted["marker"].(string); !strings.HasPrefix(markerText, "redacted:hmac-sha256:") {
+		t.Fatalf("environment marker = %#v, want HMAC marker", redacted["marker"])
+	}
+	if redacted["reason"] != "known_sensitive_key" || redacted["ruleset_version"] != "aws-launch-2026-05-14" {
+		t.Fatalf("environment classification = %#v, want known_sensitive_key + launch ruleset", redacted)
+	}
+	secrets, ok := containers[0]["secrets"].([]map[string]string)
+	if !ok || len(secrets) != 1 || secrets[0]["value_from"] != "secret-arn" {
+		t.Fatalf("secret reference changed: %#v", containers[0]["secrets"])
 	}
 	if len(row.Resource.CorrelationAnchors) != 3 || row.Resource.CorrelationAnchors[2] != "web:4" {
 		t.Fatalf("task definition anchors: %+v", row.Resource.CorrelationAnchors)
@@ -42,10 +66,13 @@ func TestECSTaskDefinitionDescribeRequestsTagsAndRejectsMissingARN(t *testing.T)
 	if len(input.Include) != 1 || input.Include[0] != awsecstypes.TaskDefinitionFieldTags {
 		t.Fatalf("tags request missing: %+v", input)
 	}
-	if ecsTaskDefinitionRecord("", awsecstypes.TaskDefinition{}, nil, "us-east-1").Resource != nil {
+	if row, err := ecsTaskDefinitionRecord("", awsecstypes.TaskDefinition{}, nil, "us-east-1", ecsParityTestKey(t)); err != nil || row.Resource != nil {
 		t.Fatal("missing source ARN got typed identity")
 	}
-	if ecsTaskDefinitionRecord("listed-arn", awsecstypes.TaskDefinition{TaskDefinitionArn: aws.String("other-arn")}, nil, "us-east-1").Resource != nil {
+	if row, err := ecsTaskDefinitionRecord("listed-arn", awsecstypes.TaskDefinition{TaskDefinitionArn: aws.String("other-arn")}, nil, "us-east-1", ecsParityTestKey(t)); err != nil || row.Resource != nil {
 		t.Fatal("mismatched described ARN got typed identity")
+	}
+	if _, err := ecsTaskDefinitionRecord("listed-arn", awsecstypes.TaskDefinition{TaskDefinitionArn: aws.String("listed-arn")}, nil, "us-east-1", marker.Key{}); err == nil {
+		t.Fatal("task definition without redaction key got redacted containers")
 	}
 }
