@@ -38,7 +38,8 @@ the in-tree Scanner.Scan on the shared fixture
 testdata/wave1-eks-parity.json (provenance in
 testdata/stable-key-provenance.md; Q4(a) in internal/live/eks_wave1_conformance_test.go (TestWave1EKSLiveConformance over real builder output; eks_wave1_conformance_test.go is the schema-admission companion).
 No production change was needed for EKS. Wave 1 (eshu-hq/eshu#9296)
-completes the KMS surface: the live reader adds ListAliases and ListGrants to
+completes the KMS surface: the live reader adds ListAliases, ListGrants,
+ListResourceTags, ListKeyPolicies, and gated GetKeyRotationStatus to
 its existing ListKeys/DescribeKey passes, so every key emits its alias
 resources and alias-to-key edges plus grant resources with grant-to-key and
 grant-to-grantee edges, and the full KMS fact set holds 18/18 stable-key
@@ -46,7 +47,8 @@ parity against the in-tree scanner on the shared fixture
 testdata/wave1-kms-parity.json (provenance in
 testdata/stable-key-provenance.md; Q4(a) in
 internal/live/kms_wave1_conformance_test.go). The live KMS reader now
-emits verified key metadata, and the IAM reader emits verified role and
+emits verified key metadata with tags, rotation status, policy revision
+names, and joined alias/grant counts, and the IAM reader emits verified role and
 user metadata at the legacy `aws-global` fact boundary without raw trust
 documents, policy documents, or credential material. Their live IAM and
 request-cost proof is pending.

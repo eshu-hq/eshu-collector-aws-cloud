@@ -2,8 +2,11 @@
 
 Ported: `doc.go`, `types.go`. The bounded live loader also emits typed
 `aws_kms_key` metadata from ListKeys and DescribeKey, binding the reported ARN
-to the STS-verified account, partition, region, and listed key ID. It does not
-read key material, raw policies, tags, or rotation status.
+to the STS-verified account, partition, region, and listed key ID, enriched
+with tags (ListResourceTags, denial-tolerant), rotation status
+(GetKeyRotationStatus, gated to answerable key shapes), policy revision
+names (ListKeyPolicies), and the joined alias/grant counts. It does not
+read key material, raw policies, or key-policy documents.
 The full SDK adapter and legacy scanner remain unported.
 
 ## Not ported (class-c)
@@ -46,12 +49,14 @@ shared fixture `testdata/wave1-kms-parity.json` (18/18 keys, provenance in
 | `grantObservation` + `grantOnKeyRelationship` + `grantGranteeRelationship` | `kmsGrantRecord` in `internal/live/kms_key.go` |
 | `awssdk/client.go` (ListKeys, DescribeKey, ListAliases, ListGrants) | the same SDK calls in `listKMS` (no OTEL spans, no per-call telemetry) |
 
-Deliberate satellite deviations, out of fixture scope: key-policy statements,
-tags, rotation status, and policy revision names stay unread where the in-tree
-scan emits them (no such read exists in `kmsKeyAPI`); an alias ARN outside the
+Deliberate satellite deviations, out of fixture scope: key-policy statements
+stay underived where the in-tree scan emits them (no GetKeyPolicy document
+read exists in `kmsKeyAPI`); an alias ARN outside the
 claimed identity and a grant without an ID fail where the in-tree mapper
 trusts the API (locked by the `kmsAliasRecord` / `kmsGrantRecord` identity
 guards); and an alias-list or grant-list denial fails the service read where
 the satellite degrades other reviewed optional reads to partial (locked by
 `TestKMSAliasOrGrantReadFailureFailsService`, matching the in-tree
-fail-closed scan).
+fail-closed scan). Tags, rotation status, policy revision names, and the
+joined alias/grant counts are in fixture scope and locked by
+`TestWave1KMSAttributeEquality`.

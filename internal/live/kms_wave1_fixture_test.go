@@ -41,6 +41,9 @@ type wave1KMSRow struct {
 	SigningAlgorithms      []string
 	MACAlgorithms          []string
 	KeyAgreementAlgorithms []string
+	Tags                   map[string]string
+	RotationEnabled        bool
+	PolicyRevisionNames    []string
 	Aliases                []wave1KMSAlias
 	Grants                 []wave1KMSGrant
 }

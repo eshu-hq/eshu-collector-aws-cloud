@@ -33,23 +33,32 @@ const (
 )
 
 // kmsKeyAPI contains only the read calls needed for the key/alias/grant
-// slice: key discovery and metadata plus the alias index and per-key grant
-// list. Key-policy, tag, and rotation reads belong to later slices.
+// slice: key discovery and metadata plus the alias index, per-key grant
+// list, tags, policy revision names, and rotation status. Key-policy
+// document reads belong to a later slice.
 type kmsKeyAPI interface {
 	ListKeys(context.Context, *awskms.ListKeysInput, ...func(*awskms.Options)) (*awskms.ListKeysOutput, error)
 	DescribeKey(context.Context, *awskms.DescribeKeyInput, ...func(*awskms.Options)) (*awskms.DescribeKeyOutput, error)
 	ListAliases(context.Context, *awskms.ListAliasesInput, ...func(*awskms.Options)) (*awskms.ListAliasesOutput, error)
 	ListGrants(context.Context, *awskms.ListGrantsInput, ...func(*awskms.Options)) (*awskms.ListGrantsOutput, error)
+	ListResourceTags(context.Context, *awskms.ListResourceTagsInput, ...func(*awskms.Options)) (*awskms.ListResourceTagsOutput, error)
+	ListKeyPolicies(context.Context, *awskms.ListKeyPoliciesInput, ...func(*awskms.Options)) (*awskms.ListKeyPoliciesOutput, error)
+	GetKeyRotationStatus(context.Context, *awskms.GetKeyRotationStatusInput, ...func(*awskms.Options)) (*awskms.GetKeyRotationStatusOutput, error)
 }
+
+var _ kmsKeyAPI = (*awskms.Client)(nil)
 
 func listKMS(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]collector.Record, error) {
 	return listKMSWithAPI(ctx, awskms.NewFromConfig(cfg), cfg.Region, identity)
 }
 
 // listKMSWithAPI follows every ListKeys page and fails the service read when
-// discovery, the alias index, or any required DescribeKey or ListGrants read
-// fails. The alias index is read once and joined by target key, mirroring the
-// in-tree adapter; grants are listed per key.
+// discovery, the alias index, or any required DescribeKey, ListGrants, or
+// ListKeyPolicies read fails. The alias index is read once and joined by
+// target key, mirroring the in-tree adapter; grants, tags, policy names, and
+// rotation status are listed per key. A denied tag read contributes no tags
+// and an unanswerable or denied rotation read contributes no rotation answer,
+// mirroring the in-tree adapter.
 func listKMSWithAPI(ctx context.Context, client kmsKeyAPI, region string, identity VerifiedIdentity) ([]collector.Record, error) {
 	records := []collector.Record{}
 	aliasesByKey, err := listKMSAliasesByKey(ctx, client)
@@ -74,7 +83,29 @@ func listKMSWithAPI(ctx context.Context, client kmsKeyAPI, region string, identi
 			if described == nil || described.KeyMetadata == nil {
 				return nil, fmt.Errorf("kms DescribeKey returned no metadata")
 			}
-			row, err := kmsKeyRecord(*described.KeyMetadata, id, region, identity)
+			tags, err := readKMSTags(ctx, client, id)
+			if err != nil {
+				return nil, err
+			}
+			policyNames, err := listKMSKeyPolicies(ctx, client, id)
+			if err != nil {
+				return nil, err
+			}
+			rotation, err := readKMSRotation(ctx, client, id, *described.KeyMetadata)
+			if err != nil {
+				return nil, err
+			}
+			grants, err := listKMSGrants(ctx, client, id)
+			if err != nil {
+				return nil, err
+			}
+			row, err := kmsKeyRecord(*described.KeyMetadata, id, region, identity, kmsKeyDetail{
+				Tags:        tags,
+				PolicyNames: policyNames,
+				AliasCount:  len(aliasesByKey[id]),
+				GrantCount:  len(grants),
+				Rotation:    rotation,
+			})
 			if err != nil {
 				return nil, err
 			}
@@ -86,10 +117,6 @@ func listKMSWithAPI(ctx context.Context, client kmsKeyAPI, region string, identi
 					return nil, err
 				}
 				records = append(records, aliasRecord)
-			}
-			grants, err := listKMSGrants(ctx, client, id)
-			if err != nil {
-				return nil, err
 			}
 			for _, grant := range grants {
 				grantRecord, err := kmsGrantRecord(grant, id, keyARN, region)
@@ -140,9 +167,12 @@ func listKMSGrants(ctx context.Context, client kmsKeyAPI, keyID string) ([]kmsty
 	return grants, nil
 }
 
-// kmsKeyRecord emits only DescribeKey metadata and the reported key identity.
-// It validates ARN scope against the caller identity verified for this claim.
-func kmsKeyRecord(key kmstypes.KeyMetadata, listedID, region string, identity VerifiedIdentity) (collector.Record, error) {
+// kmsKeyRecord emits DescribeKey metadata, the reported key identity, and
+// the per-key enrichment detail (tags, policy revision names, joined
+// alias/grant counts, rotation answer). It validates ARN scope against the
+// caller identity verified for this claim, mirroring the in-tree key
+// observation field for field.
+func kmsKeyRecord(key kmstypes.KeyMetadata, listedID, region string, identity VerifiedIdentity, detail kmsKeyDetail) (collector.Record, error) {
 	id := strings.TrimSpace(aws.ToString(key.KeyId))
 	arn := strings.TrimSpace(aws.ToString(key.Arn))
 	parsed, err := awsarn.Parse(arn)
@@ -167,9 +197,16 @@ func kmsKeyRecord(key kmstypes.KeyMetadata, listedID, region string, identity Ve
 		"signing_algorithms":       kmsSigningAlgorithms(key.SigningAlgorithms),
 		"mac_algorithms":           kmsMACAlgorithms(key.MacAlgorithms),
 		"key_agreement_algorithms": kmsAgreementAlgorithms(key.KeyAgreementAlgorithms),
+		"policy_revision_names":    kmsStrings(detail.PolicyNames),
+		"alias_count":              detail.AliasCount,
+		"grant_count":              detail.GrantCount,
+		"rotation_status_known":    detail.Rotation.known,
+	}
+	if detail.Rotation.known {
+		attrs["rotation_enabled"] = detail.Rotation.enabled
 	}
 	result := record(arn, "kms", region, id, "key")
-	result.Resource = &collector.LiveResource{Region: region, ServiceKind: "kms", ResourceType: "aws_kms_key", ResourceID: id, ARN: arn, Name: id, State: string(key.KeyState), Attributes: attrs, CorrelationAnchors: []string{arn, id}, SourceRecordID: arn}
+	result.Resource = &collector.LiveResource{Region: region, ServiceKind: "kms", ResourceType: "aws_kms_key", ResourceID: id, ARN: arn, Name: id, State: string(key.KeyState), Tags: kmsTags(detail.Tags), Attributes: attrs, CorrelationAnchors: []string{arn, id}, SourceRecordID: arn}
 	return result, nil
 }
 

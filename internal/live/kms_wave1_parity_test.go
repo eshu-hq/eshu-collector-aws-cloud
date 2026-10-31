@@ -16,8 +16,9 @@ import (
 // to the in-tree oracle keys: every fact the in-tree Scanner.Scan derives for
 // the shared fixture (testdata/wave1-kms-parity.json) has a satellite twin
 // with the identical stable key. The test drives the full production listKMS
-// path (stubbed KMS API: ListKeys plus DescribeKey, ListAliases, and
-// ListGrants) and converts records to facts exactly as CollectReport does.
+// path (stubbed KMS API: ListKeys plus DescribeKey, ListAliases, ListGrants,
+// ListResourceTags, GetKeyRotationStatus, and ListKeyPolicies) and converts
+// records to facts exactly as CollectReport does.
 // Oracle keys come from the in-tree scan; the re-derivation recipe is in
 // testdata/stable-key-provenance.md.
 func TestWave1KMSParityAgainstInTreeOracle(t *testing.T) {
@@ -243,9 +244,17 @@ func TestWave1KMSAttributeEquality(t *testing.T) {
 		"signing_algorithms":       []string(nil),
 		"mac_algorithms":           []string(nil),
 		"key_agreement_algorithms": []string(nil),
+		"policy_revision_names":    []string{"default"},
+		"alias_count":              1,
+		"grant_count":              1,
+		"rotation_status_known":    true,
+		"rotation_enabled":         true,
 	}
 	if !reflect.DeepEqual(keyA.Resource.Attributes, wantKeyA) {
 		t.Fatalf("key A attributes = %#v, want %#v", keyA.Resource.Attributes, wantKeyA)
+	}
+	if !reflect.DeepEqual(keyA.Resource.Tags, map[string]string{"env": "wave1"}) {
+		t.Fatalf("key A tags = %#v, want the fixture tag set", keyA.Resource.Tags)
 	}
 
 	aliasA, ok := byID["aws_kms_alias\x00arn:aws:kms:us-east-1:123456789012:alias/wave1-a"]
