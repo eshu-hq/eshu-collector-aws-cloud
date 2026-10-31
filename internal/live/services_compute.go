@@ -432,7 +432,11 @@ func listLambda(ctx context.Context, cfg aws.Config) ([]collector.Record, error)
 					return nil, fmt.Errorf("lambda list event source mappings: %w", err)
 				}
 				for _, mapping := range mappingPage.EventSourceMappings {
-					mappingRecords = append(mappingRecords, record(aws.ToString(mapping.EventSourceArn), "lambda", region, aws.ToString(mapping.UUID), "event-source-mapping"))
+					mappingRecord, err := lambdaEventSourceMappingRecord(mapping, functionRecord.Resource.ARN, region)
+					if err != nil {
+						return nil, fmt.Errorf("lambda event source mapping identity: %w", err)
+					}
+					mappingRecords = append(mappingRecords, mappingRecord)
 				}
 			}
 			if !mappingDenied {

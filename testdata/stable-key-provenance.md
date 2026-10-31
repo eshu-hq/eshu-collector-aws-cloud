@@ -202,6 +202,241 @@ vendored at `testdata/wave1-ec2-oracle.txt` so the claim stays checkable
 without eshu-repo access; `TestWave1EC2OracleOutputMatchesFrozenKeys` fails on
 any drift between the vendored output and the frozen constants.
 
+## Wave 1 Lambda keys (in-tree scan parity pack)
+
+Input fixture: `testdata/wave1-lambda-parity.json`
+(`sha256:cb5ffa829a19ff4aec80e58f3d2f69178bdc24cf6646e4f51afbd31fb2640d29`).
+
+Oracle: check out eshu-hq/eshu at commit `b0371c05d5`
+(Merge pull request #9580), add a throwaway test in
+`go/internal/collector/awscloud/service/lambda/` that unmarshals the fixture
+directly into the scanner-owned types (the rows mirror those structs field for
+field, with `FunctionName` grouping aliases and mappings under their parent),
+serves them from a fake `Client` (aliases/mappings filtered by the requested
+function ARN), and prints `FactKind` + `StableFactKey` per envelope from
+`Scanner.Scan` over boundary account `123456789012`, region `us-east-1`,
+service `lambda`, scope `aws:123456789012:us-east-1`, generation
+`aws:123456789012:us-east-1:wave1:1`, instance `aws-parity-wave1`, fencing
+token `7`, observed-at `2026-10-30T12:00:00Z`. Command, from the `go/`
+directory of the pinned commit:
+
+```sh
+go test ./internal/collector/awscloud/service/lambda/ \
+  -run 'TestZZWave1LambdaOracle' -count=1 -v
+```
+
+The scan emits 16 envelopes in call order: function A (resource, role edge,
+2 subnet edges, security-group edge), alias live A (resource, edge),
+ARN-less alias staging A (resource only; the edge needs a source ARN on both
+sides), mapping A (resource, edge), function B (resource, image edge; no
+role, no VPC), alias live B (resource, edge), UUID-only mapping B (resource,
+edge with the parent-derived function link). The satellite proves the same
+16 keys through the full production `listLambda` path over the stubbed
+Lambda API (`internal/live/lambda_wave1_parity_test.go`), so GetFunction
+enrichment, the ARN-less alias fallback, and the UUID-only mapping fallback
+are covered end to end, not just the builders:
+
+| # | Kind | Frozen key |
+|---|---|---|
+| 00 | aws_resource (function A) | `fa37b448…28c09d` |
+| 01 | aws_relationship (function->role) | `efae44c5…bb69ca` |
+| 02 | aws_relationship (function->subnet a) | `bcc50526…cdc7b3` |
+| 03 | aws_relationship (function->subnet b) | `d1edae98…91cdc` |
+| 04 | aws_relationship (function->security group) | `e9fb98e7…087cb1` |
+| 05 | aws_resource (alias live A) | `0a18e0f2…66df196` |
+| 06 | aws_relationship (alias->function) | `6597492b…6e7e2cb` |
+| 07 | aws_resource (alias staging A, ARN-less) | `8f1d9720…6d376715` |
+| 08 | aws_resource (mapping A) | `0272b442…c1218f59` |
+| 09 | aws_relationship (mapping->function) | `798b427f…6624b` |
+| 10 | aws_resource (function B) | `4d58f839…a667bc62` |
+| 11 | aws_relationship (function->image) | `8a42c89b…fc3b83` |
+| 12 | aws_resource (alias live B) | `28b276d0…ad914e` |
+| 13 | aws_relationship (alias->function) | `2b5f15a4…1384d1b` |
+| 14 | aws_resource (mapping B, UUID-only) | `685dd254…60ec015` |
+| 15 | aws_relationship (mapping->function) | `bb934c2e…6972f221` |
+
+(Full keys are frozen in the test; prefixes above are abbreviated.)
+Re-execution on 2026-10-30 returned all 16 keys byte-identical to the frozen
+satellite constants. Deliberate satellite deviations are out of fixture scope
+(both documented in `internal/service/lambda/NOT_PORTED.md`): environment
+values, tags, and alias descriptions stay excluded where the in-tree scan
+emits them; GetFunction identity mismatches and unsafe image/KMS references
+fail where the in-tree mapper trusts the API; and a mapping-list denial
+degrades to partial plus warning where the in-tree scan fails.
+
+## Wave 1 ECR keys (in-tree scan parity pack)
+
+Input fixture: `testdata/wave1-ecr-parity.json`
+(`sha256:b18a7ff3cb29539870afdab58065c364caee7e979805043b7658c9c83b561340`).
+
+Oracle: check out eshu-hq/eshu at commit `b0371c05d5`
+(Merge pull request #9580), add a throwaway test in
+`go/internal/collector/awscloud/service/ecr/` that unmarshals the fixture
+directly into the scanner-owned types (the rows mirror those structs field for
+field, with `ManifestDigest` equal to the image digest exactly as the in-tree
+adapter maps DescribeImages rows, which carry no separate manifest digest),
+serves them from a fake `Client` (images and policies filtered by the
+requested repository ARN), and prints `FactKind` + `StableFactKey` per
+envelope from `Scanner.Scan` over boundary account `123456789012`, region
+`us-east-1`, service `ecr`, scope `aws:123456789012:us-east-1`, generation
+`aws:123456789012:us-east-1:wave1:1`, instance `aws-parity-wave1`, fencing
+token `7`, observed-at `2026-10-30T12:00:00Z`. Command, from the `go/`
+directory of the pinned commit:
+
+```sh
+go test ./internal/collector/awscloud/service/ecr/ \
+  -run 'TestZZWave1ECROracle' -count=1 -v
+```
+
+The scan emits 8 envelopes in call order: repository A (resource), its
+two-tag image (one reference per tag), its untagged image (one empty-tag
+reference), policy A (resource), repository B (resource), its image (one
+reference), policy B (resource). The satellite proves the same 8 keys through
+the full production `listECR` path over the stubbed ECR API
+(`internal/live/ecr_wave1_parity_test.go`), so tag fan-out, the untagged
+fallback, the absent-timestamp mapping, and the policy-text omission are
+covered end to end, not just the builders:
+
+| # | Kind | Frozen key |
+|---|---|---|
+| 00 | aws_resource (repository A) | `68c5e903…e17cf6` |
+| 01 | aws_image_reference (image, tag latest) | `2d65f7ac…26d873` |
+| 02 | aws_image_reference (image, tag v1) | `6928e0da…fff215` |
+| 03 | aws_image_reference (untagged image) | `235fb188…c9938d` |
+| 04 | aws_resource (policy A) | `51e9ec10…103cd5` |
+| 05 | aws_resource (repository B) | `a47eb392…f5369a` |
+| 06 | aws_image_reference (image, tag prod) | `cf4129ff…7f3a71` |
+| 07 | aws_resource (policy B) | `36caf41f…3f50dc` |
+
+(Full keys are frozen in the test; prefixes above are abbreviated.)
+Re-execution on 2026-10-30 returned all 8 keys byte-identical to the frozen
+satellite constants, including the four image-reference keys (proving the
+satellite's image identity hash equals `facts.StableID` for this identity
+shape) and the untagged empty-tag fallback on both sides. One deliberate
+satellite deviation is out of fixture scope (documented in
+`internal/service/ecr/NOT_PORTED.md`): raw lifecycle policy text stays
+excluded where the in-tree scan emits it (locked by
+`TestECRLifecyclePolicyMetadataOmitsPolicyText`); stable keys hash identity
+only, so the omission cannot move a key, and
+`TestWave1ECRAttributeEquality` pins the emitted maps plus RED on a
+value-swap mutant.
+
+## Wave 1 SSM keys (in-tree scan parity pack)
+
+Input fixture: `testdata/wave1-ssm-parity.json`
+(`sha256:b38444ecffcd1e0442d402434cd9963ab7c98f29477d0a471010a72bcd765914`).
+
+Oracle: check out eshu-hq/eshu at commit `b0371c05d5`
+(Merge pull request #9580), add a throwaway test in
+`go/internal/collector/awscloud/service/ssm/` that unmarshals the fixture
+directly into the scanner-owned types (the rows mirror those structs field for
+field), serves them from a fake `Client`, and prints `FactKind` +
+`StableFactKey` per envelope from `Scanner.Scan` over boundary account
+`123456789012`, region `us-east-1`, service `ssm`, scope
+`aws:123456789012:us-east-1`, generation
+`aws:123456789012:us-east-1:wave1:1`, instance `aws-parity-wave1`, fencing
+token `7`, observed-at `2026-10-30T12:00:00Z`. Command, from the `go/`
+directory of the pinned commit:
+
+```sh
+go test ./internal/collector/awscloud/service/ssm/ \
+  -run 'TestZZWave1SSMOracle' -count=1 -v
+```
+
+The scan emits 5 envelopes in call order: parameter A (resource, KMS edge),
+parameter B (resource, alias-key edge with an empty target ARN), parameter C
+(resource only; no key means no edge). The satellite proves the same 5 keys
+through the full production `listSSM` path over the stubbed SSM API
+(`internal/live/ssm_wave1_parity_test.go`), so DescribeParameters mapping,
+the per-parameter ListTagsForResource enrichment, the ARN-less name fallback,
+and the alias-key edge are covered end to end, not just the builders:
+
+| # | Kind | Frozen key |
+|---|---|---|
+| 00 | aws_resource (parameter A, SecureString) | `7b6bc061…956ff8` |
+| 01 | aws_relationship (parameter->KMS ARN) | `2d7c3fb7…74104c` |
+| 02 | aws_resource (parameter B, alias key) | `39c75ea6…41045e` |
+| 03 | aws_relationship (parameter->alias, empty target ARN) | `1c12ea50…761ad5f` |
+| 04 | aws_resource (parameter C, ARN-less) | `dde48d93…a1fff08b` |
+
+(Full keys are frozen in the test; prefixes above are abbreviated.)
+Derivation on 2026-10-31 returned all 5 keys byte-identical to the frozen
+satellite constants, including the ARN-less name fallback and the padded tag
+key trim (proving the satellite's tag normalization equals the in-tree
+mapper's). The one deliberate satellite deviation is out of fixture scope
+(documented in `internal/service/ssm/NOT_PORTED.md`): a row with neither ARN
+nor name fails where the in-tree mapper trusts the API. Raw descriptions,
+allowed patterns, and policy JSON stay excluded on both sides by construction
+(presence booleans and type/status pairs only, locked by
+`TestWave1SSMParameterAttributeEquality`).
+
+## Wave 1 KMS keys (in-tree scan parity pack)
+
+Input fixture: `testdata/wave1-kms-parity.json`
+(`sha256:bbf5fdb90f47e965945d44d6901e6e5e9c5779038d9bd117748effb41b027c8e`).
+
+Oracle: check out eshu-hq/eshu at commit `b0371c05d54ab19fd03c848d509e55fc506ea81a`,
+add a throwaway test in
+`go/internal/collector/awscloud/service/kms/` that unmarshals the fixture
+`keys` array directly into the scanner-owned `Key` type (the rows use those
+exact Go field names; `RetiringPrincipalType` has no scanner counterpart and
+is ignored), serves them from a fake `Client`, and prints `FactKind` +
+`StableFactKey` per envelope from `Scanner.Scan` over boundary account
+`123456789012`, region `us-east-1`, service `kms`, scope
+`aws:123456789012:us-east-1`, generation
+`aws:123456789012:us-east-1:wave1:1`, instance `aws-parity-wave1`, fencing
+token `7`, observed-at `2026-10-30T12:00:00Z`. Command, from the `go/`
+directory of the pinned commit:
+
+```sh
+go test ./internal/collector/awscloud/service/kms/ \
+  -run 'TestZZWave1KMSOracle' -count=1 -v
+```
+
+The scan emits 18 envelopes in call order: key A with alias (resource, edge)
+and IAM-ARN grant (resource, on-key edge, grantee edge); key B with ARN-less
+alias (resource, edge) and two grants — a service-principal grant (resource,
+on-key edge, grantee edge with no target ARN) and a grantee-less grant
+(resource, on-key edge only); multi-region replica key C alone; AWS-managed
+key D with alias (resource, edge). The fixture keys carry no key-policy
+statements, tags, or rotation status, so the oracle emits no
+resource-policy-permission facts and the satellite proves the same 18 keys
+through the full production `listKMS` path over stubbed KMS APIs
+(`internal/live/kms_wave1_parity_test.go`):
+
+| # | Kind | Frozen key |
+|---|---|---|
+| 00 | aws_resource (key A) | `a166e6f4…8e2450` |
+| 01 | aws_resource (alias A) | `b0e9de72…7eafa0` |
+| 02 | aws_relationship (alias A->key) | `cfd61259…d16d88` |
+| 03 | aws_resource (grant A1) | `b43a2e3a…0bfa22` |
+| 04 | aws_relationship (grant A1->key) | `6ddea314…563fa9` |
+| 05 | aws_relationship (grant A1->grantee) | `548d66f2…eedca8` |
+| 06 | aws_resource (key B) | `930e73fa…c6a4a3` |
+| 07 | aws_resource (alias B, ARN-less) | `a167a0ec…c46c1d` |
+| 08 | aws_relationship (alias B->key) | `5a8efb8c…cb13fe` |
+| 09 | aws_resource (grant B1) | `db6af0a3…74debb` |
+| 10 | aws_relationship (grant B1->key) | `de7e8b73…5deccc` |
+| 11 | aws_relationship (grant B1->grantee, Service) | `3623aa2e…767f33` |
+| 12 | aws_resource (grant B2) | `2ec91ad5…459768` |
+| 13 | aws_relationship (grant B2->key) | `e955de58…f423ac` |
+| 14 | aws_resource (key C, replica) | `76709be6…24e12f` |
+| 15 | aws_resource (key D, AWS-managed) | `2e903168…f204cf` |
+| 16 | aws_resource (alias D) | `7058a3b6…d73969` |
+| 17 | aws_relationship (alias D->key) | `5ed3d2a7…3547c6` |
+
+(Full keys are frozen in the test; prefixes above are abbreviated.)
+Re-execution returned all 18 keys byte-identical to the frozen satellite
+constants. A hand-copy error on key 17 was caught by the parity test itself
+going red; the corrected tail was verified by mechanical re-extraction of the
+throwaway run output, and every frozen constant was then re-verified present
+in the parity test by script.
+Deliberate satellite deviations are out of fixture scope (both documented in
+`internal/service/kms/NOT_PORTED.md`): key-policy statements, tags, rotation
+status, and policy revision names stay unread where the in-tree scan emits
+them; alias ARNs outside the claimed identity and grants without IDs fail
+where the in-tree mapper trusts the API.
+
 ## Why this closes the common-mode gap
 
 Every parity test still compares its builder against a hardcoded constant, but

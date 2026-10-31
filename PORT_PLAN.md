@@ -37,7 +37,15 @@ locks the EKS surface at full in-tree fixture parity: 24/24 stable keys match
 the in-tree Scanner.Scan on the shared fixture
 testdata/wave1-eks-parity.json (provenance in
 testdata/stable-key-provenance.md; Q4(a) in internal/live/eks_wave1_conformance_test.go (TestWave1EKSLiveConformance over real builder output; eks_wave1_conformance_test.go is the schema-admission companion).
-No production change was needed. The live KMS reader now
+No production change was needed for EKS. Wave 1 (eshu-hq/eshu#9296)
+completes the KMS surface: the live reader adds ListAliases and ListGrants to
+its existing ListKeys/DescribeKey passes, so every key emits its alias
+resources and alias-to-key edges plus grant resources with grant-to-key and
+grant-to-grantee edges, and the full KMS fact set holds 18/18 stable-key
+parity against the in-tree scanner on the shared fixture
+testdata/wave1-kms-parity.json (provenance in
+testdata/stable-key-provenance.md; Q4(a) in
+internal/live/kms_wave1_conformance_test.go). The live KMS reader now
 emits verified key metadata, and the IAM reader emits verified role and
 user metadata at the legacy `aws-global` fact boundary without raw trust
 documents, policy documents, or credential material. Their live IAM and
@@ -171,14 +179,26 @@ importable only inside this module, satisfying `boundary_test.go`).
    from the legacy policy_text attribute. Missing policies emit no resource;
    denied reads fail the ECR service. The added call is one per repository
    and requires `ecr:GetLifecyclePolicy`; its live IAM grant and call cost
-   remain unverified. Lambda ListFunctions rows use one GetFunction read per
+   remain unverified. Wave 1 (eshu-hq/eshu#9296) completes the ECR surface:
+   repositories, per-tag image references (untagged digests keep one empty-tag
+   reference), and lifecycle policy metadata hold 8/8 stable-key parity against
+   the in-tree scanner on the shared fixture testdata/wave1-ecr-parity.json
+   (provenance in testdata/stable-key-provenance.md; Q4(a) in
+   internal/live/ecr_wave1_conformance_test.go). Lambda ListFunctions rows use one GetFunction read per
    function for safe configuration and source KMS key metadata. Validated ECR
    image URIs emit a function-to-image relationship; ListAliases pages emit typed
    alias resources and alias-to-function relationships with version and routing
    weights. Alias descriptions are excluded as user-authored text. Event-source
-   mappings remain transitional, with reviewed mapping denials marked partial. Environment
+   mappings emit typed mapping resources and mapping-to-function relationships
+   from the same ListEventSourceMappings pages; a reviewed mapping-list denial
+   still marks the claim partial while keeping functions and aliases. Environment
    values, tags, and presigned package URLs stay excluded. The added read
    requires `lambda:GetFunction`; live IAM access and cost remain unverified.
+   Wave 1 (eshu-hq/eshu#9296) completes the Lambda surface: every function emits
+   the execution-role link plus per-subnet and per-security-group placement links,
+   and the full Lambda fact set holds 16/16 stable-key parity against the in-tree
+   scanner on the shared fixture testdata/wave1-lambda-parity.json (provenance in
+   testdata/stable-key-provenance.md; Q4(a) in internal/live/lambda_wave1_conformance_test.go).
    S3 buckets emit typed identity, listed region, creation time, and tags after
    HeadBucket owner verification and GetBucketTagging. GetBucketEncryption,
    GetBucketVersioning, GetPublicAccessBlock, GetBucketPolicyStatus,

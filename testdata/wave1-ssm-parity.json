@@ -1,0 +1,53 @@
+{
+  "description": "Wave 1 SSM parity inputs (eshu-hq/eshu#9296). Rows mirror the in-tree post-mapper scanner types (go/internal/collector/awscloud/service/ssm/types.go) so the in-tree oracle unmarshals them directly; the satellite test serves the same rows through a stubbed SSM API. The satellite live path must emit the same kind and stable key the in-tree Scanner.Scan derives for these rows; expected keys are frozen in the ssm parity test with provenance in testdata/stable-key-provenance.md. No real identifiers: all values are synthetic.",
+  "scope_id": "aws:123456789012:us-east-1",
+  "generation_id": "aws:123456789012:us-east-1:wave1:1",
+  "collector_instance_id": "aws-parity-wave1",
+  "parameters": [
+    {
+      "ARN": "arn:aws:ssm:us-east-1:123456789012:parameter/wave1/db/password",
+      "Name": "/wave1/db/password",
+      "Type": "SecureString",
+      "Tier": "Advanced",
+      "DataType": "text",
+      "KeyID": "arn:aws:kms:us-east-1:123456789012:key/wave1-key-1",
+      "LastModifiedAt": "2026-09-15T14:00:00+02:00",
+      "DescriptionPresent": true,
+      "AllowedPatternPresent": true,
+      "Policies": [
+        {"Type": "Expiration", "Status": "Pending"},
+        {"Type": "", "Status": ""},
+        {"Type": "NoChangeNotification", "Status": "Finished"}
+      ],
+      "Tags": {"env": "wave1", " team ": "platform"}
+    },
+    {
+      "ARN": "arn:aws:ssm:us-east-1:123456789012:parameter/wave1/app/config",
+      "Name": "/wave1/app/config",
+      "Type": "String",
+      "Tier": "Standard",
+      "DataType": "text",
+      "KeyID": "alias/wave1",
+      "LastModifiedAt": "0001-01-01T00:00:00Z",
+      "DescriptionPresent": false,
+      "AllowedPatternPresent": false,
+      "Policies": null,
+      "Tags": {}
+    },
+    {
+      "ARN": "",
+      "Name": "/wave1/ami/latest",
+      "Type": "StringList",
+      "Tier": "Intelligent-Tiering",
+      "DataType": "aws:ec2:image",
+      "KeyID": "",
+      "LastModifiedAt": "2026-09-10T00:00:00Z",
+      "DescriptionPresent": true,
+      "AllowedPatternPresent": false,
+      "Policies": [
+        {"Type": "ExpirationNotification", "Status": "InProgress"}
+      ],
+      "Tags": {"env": "wave1"}
+    }
+  ]
+}

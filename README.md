@@ -61,7 +61,7 @@ additional routing weights. User-authored alias descriptions are omitted.
 An alias ARN must match the known parent function ARN and qualifier; without
 that parent ARN, the alias read fails rather than attributing a foreign ARN.
 A missing alias ARN can still use the known parent ARN and alias name for its
-resource ID. The reviewed mapping-denial path retains successful aliases.
+resource ID. The reviewed mapping-denial path retains successful aliases. Functions also emit execution-role, per-subnet, and per-security-group placement relationships, and ListEventSourceMappings pages emit typed `aws_lambda_event_source_mapping` resources with mapping-to-function edges.
 The S3 reader emits typed bucket identity, region, and creation time from
 regional ListBuckets. It verifies the expected owner with HeadBucket and
 reads tags through GetBucketTagging. Only NoSuchTagSet means an empty tag set.
@@ -157,11 +157,18 @@ matching the legacy scanner. For described keys it verifies the reported ARN
 against the listed key ID and the STS-verified account, partition, and region;
 missing or conflicting DescribeKey identity fails the service read. The resource
 includes only DescribeKey metadata such as manager, state, usage, origin, algorithms,
-creation/deletion dates, and multi-Region configuration. It does not read
-key material, raw policies, aliases, grants, tags, or rotation status;
+creation/deletion dates, and multi-Region configuration. ListAliases pages emit typed
+`aws_kms_alias` resources and alias-to-key relationships joined by target key ID;
+a reported alias ARN must scope to the claimed identity, while a missing alias ARN
+still identifies by alias name. ListGrants pages emit typed `aws_kms_grant` resources
+with grant-to-key edges, plus grant-to-grantee edges for named IAM or service
+grantees; grant encryption contexts and constraints stay excluded. Alias or grant
+list denials fail the service read. The reader does not read
+key material, raw policies, tags, or rotation status;
 legacy `alias_count`, `grant_count`, `policy_revision_names`, and
 `rotation_status_known` are therefore absent rather than guessed. The new
-read requires `kms:ListKeys` and `kms:DescribeKey`, with one DescribeKey
+reads require `kms:ListKeys`, `kms:DescribeKey`, `kms:ListAliases`, and
+`kms:ListGrants`, with one DescribeKey and one ListGrants
 call per nonblank listed key ID; live IAM access and call cost remain unverified.
 The IAM reader emits typed `aws_iam_role` resources from ListRoles, GetRole,
 ListAttachedRolePolicies, and ListRolePolicies. It binds each regionless
@@ -399,6 +406,9 @@ way; re-pin them when bumping either base. `version` in `manifest.yaml`
 and the git tag must match (`v0.1.0` for `0.1.0`); pushing a `v*` tag runs
 `release.yml`, which builds, signs, and publishes the image plus SBOM and
 provenance attestations. `release_version_test.go` enforces both directions.
+The workflow publishes only when the tag is exactly `v` plus the manifest
+version and points at the protected `main` head; anything else fails before
+anything builds or pushes.
 
 ## Remote proof
 

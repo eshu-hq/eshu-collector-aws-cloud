@@ -94,7 +94,7 @@ func TestLambdaMappingDenialKeepsFunctionsAliasesAndOtherMappings(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(outcome.Warnings) != 1 || len(outcome.WarningObservations) != 1 || len(outcome.Resources) != 4 || len(outcome.Relationships) != 2 || len(outcome.Report.Records) != 5 {
+			if len(outcome.Warnings) != 1 || len(outcome.WarningObservations) != 1 || len(outcome.Resources) != 5 || len(outcome.Relationships) != 3 || len(outcome.Report.Records) != 5 {
 				t.Fatalf("Lambda outcome: warnings=%v observations=%v resources=%d records=%d", outcome.Warnings, outcome.WarningObservations, len(outcome.Resources), len(outcome.Report.Records))
 			}
 			observedAt := time.Now().UTC()

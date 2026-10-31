@@ -1,0 +1,143 @@
+{
+  "description": "Wave 1 Lambda parity inputs (eshu-hq/eshu#9296). Rows mirror the in-tree post-mapper scanner types (go/internal/collector/awscloud/service/lambda/types.go) so the in-tree oracle unmarshals them directly; the satellite test serves the same rows through a stubbed Lambda API. The satellite live path must emit the same kind and stable key the in-tree Scanner.Scan derives for these rows; expected keys are frozen in the lambda parity test with provenance in testdata/stable-key-provenance.md. No real identifiers: all values are synthetic.",
+  "scope_id": "aws:123456789012:us-east-1",
+  "generation_id": "aws:123456789012:us-east-1:wave1:1",
+  "collector_instance_id": "aws-parity-wave1",
+  "functions": [
+    {
+      "ARN": "arn:aws:lambda:us-east-1:123456789012:function:wave1-a",
+      "Name": "wave1-a",
+      "Runtime": "python3.12",
+      "RoleARN": "arn:aws:iam::123456789012:role/wave1-lambda-role",
+      "Handler": "index.handler",
+      "Description": "wave1 zip function",
+      "State": "Active",
+      "LastUpdateStatus": "Successful",
+      "PackageType": "Zip",
+      "Version": "$LATEST",
+      "CodeSHA256": "wave1aaa1111111111111111111111111111111111111111111111111111111",
+      "CodeSize": 1234,
+      "ImageURI": "",
+      "ResolvedImageURI": "",
+      "KMSKeyARN": "arn:aws:kms:us-east-1:123456789012:key/wave1-key-1",
+      "SourceKMSKeyARN": "",
+      "MemorySize": 256,
+      "TimeoutSeconds": 30,
+      "LastModified": "2026-09-15T00:00:00Z",
+      "Architectures": ["x86_64"],
+      "Environment": {
+        "LOG_LEVEL": "info",
+        "DATABASE_URL": "postgres://wave1:wave1-secret@example.invalid/app"
+      },
+      "VPCConfig": {
+        "VPCID": "vpc-wave1",
+        "SubnetIDs": ["subnet-wave1a", "subnet-wave1b"],
+        "SecurityGroupIDs": ["sg-wave1"],
+        "IPv6AllowedForDS": false
+      },
+      "LoggingConfig": {
+        "LogGroup": "/aws/lambda/wave1-a",
+        "LogFormat": "JSON",
+        "ApplicationLogLevel": "INFO",
+        "SystemLogLevel": "WARN"
+      },
+      "Tags": {"env": "wave1"}
+    },
+    {
+      "ARN": "arn:aws:lambda:us-east-1:123456789012:function:wave1-b",
+      "Name": "wave1-b",
+      "Runtime": "",
+      "RoleARN": "",
+      "Handler": "",
+      "Description": "",
+      "State": "Active",
+      "LastUpdateStatus": "Successful",
+      "PackageType": "Image",
+      "Version": "$LATEST",
+      "CodeSHA256": "wave1bbb2222222222222222222222222222222222222222222222222222222",
+      "CodeSize": 4567,
+      "ImageURI": "123456789012.dkr.ecr.us-east-1.amazonaws.com/wave1/worker:prod",
+      "ResolvedImageURI": "123456789012.dkr.ecr.us-east-1.amazonaws.com/wave1/worker@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "KMSKeyARN": "",
+      "SourceKMSKeyARN": "",
+      "MemorySize": 512,
+      "TimeoutSeconds": 60,
+      "LastModified": "0001-01-01T00:00:00Z",
+      "Architectures": ["arm64"],
+      "Environment": null,
+      "VPCConfig": {
+        "VPCID": "",
+        "SubnetIDs": [],
+        "SecurityGroupIDs": [],
+        "IPv6AllowedForDS": false
+      },
+      "LoggingConfig": {
+        "LogGroup": "",
+        "LogFormat": "",
+        "ApplicationLogLevel": "",
+        "SystemLogLevel": ""
+      },
+      "Tags": {}
+    }
+  ],
+  "aliases": [
+    {
+      "FunctionName": "wave1-a",
+      "ARN": "arn:aws:lambda:us-east-1:123456789012:function:wave1-a:live",
+      "Name": "live",
+      "FunctionARN": "arn:aws:lambda:us-east-1:123456789012:function:wave1-a",
+      "FunctionVersion": "5",
+      "Description": "user text that must not be emitted",
+      "RevisionID": "rev-live-1",
+      "RoutingWeights": {"6": 0.25}
+    },
+    {
+      "FunctionName": "wave1-a",
+      "ARN": "",
+      "Name": "staging",
+      "FunctionARN": "",
+      "FunctionVersion": "5",
+      "Description": "",
+      "RevisionID": "",
+      "RoutingWeights": null
+    },
+    {
+      "FunctionName": "wave1-b",
+      "ARN": "arn:aws:lambda:us-east-1:123456789012:function:wave1-b:live",
+      "Name": "live",
+      "FunctionARN": "arn:aws:lambda:us-east-1:123456789012:function:wave1-b",
+      "FunctionVersion": "3",
+      "Description": "",
+      "RevisionID": "",
+      "RoutingWeights": null
+    }
+  ],
+  "mappings": [
+    {
+      "FunctionName": "wave1-a",
+      "ARN": "arn:aws:lambda:us-east-1:123456789012:event-source-mapping:11111111-2222-3333-4444-555555555555",
+      "UUID": "11111111-2222-3333-4444-555555555555",
+      "FunctionARN": "arn:aws:lambda:us-east-1:123456789012:function:wave1-a",
+      "EventSourceARN": "arn:aws:sqs:us-east-1:123456789012:wave1-events",
+      "State": "Enabled",
+      "LastProcessingResult": "OK",
+      "StartingPosition": "TRIM_HORIZON",
+      "BatchSize": 10,
+      "MaximumRetryAttempts": 2,
+      "ParallelizationFactor": 1
+    },
+    {
+      "FunctionName": "wave1-b",
+      "ARN": "",
+      "UUID": "22222222-2222-3333-4444-555555555555",
+      "FunctionARN": "",
+      "EventSourceARN": "arn:aws:kinesis:us-east-1:123456789012:stream/wave1-events",
+      "State": "Creating",
+      "LastProcessingResult": "",
+      "StartingPosition": "",
+      "BatchSize": 0,
+      "MaximumRetryAttempts": 0,
+      "ParallelizationFactor": 0
+    }
+  ]
+}

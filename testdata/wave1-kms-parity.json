@@ -1,0 +1,151 @@
+{
+  "scope_id": "aws:123456789012:us-east-1",
+  "generation_id": "aws:123456789012:us-east-1:wave1:1",
+  "collector_instance_id": "aws-parity-wave1",
+  "keys": [
+    {
+      "ID": "a1b2c3d4-e5f6-4789-abcd-ef0123456789",
+      "ARN": "arn:aws:kms:us-east-1:123456789012:key/a1b2c3d4-e5f6-4789-abcd-ef0123456789",
+      "Description": "wave1 primary key",
+      "KeyManager": "CUSTOMER",
+      "KeyUsage": "ENCRYPT_DECRYPT",
+      "KeySpec": "SYMMETRIC_DEFAULT",
+      "KeyState": "Enabled",
+      "Origin": "AWS_KMS",
+      "CreationDate": "2026-01-15T10:30:00Z",
+      "DeletionDate": "",
+      "Enabled": true,
+      "MultiRegion": false,
+      "MultiRegionKeyType": "",
+      "PrimaryKeyARN": "",
+      "EncryptionAlgorithms": ["SYMMETRIC_DEFAULT"],
+      "SigningAlgorithms": null,
+      "MACAlgorithms": null,
+      "KeyAgreementAlgorithms": null,
+      "Aliases": [
+        {
+          "Name": "alias/wave1-a",
+          "ARN": "arn:aws:kms:us-east-1:123456789012:alias/wave1-a",
+          "TargetKeyID": "a1b2c3d4-e5f6-4789-abcd-ef0123456789",
+          "LastUpdated": "2026-02-01T12:00:00Z"
+        }
+      ],
+      "Grants": [
+        {
+          "ID": "grant-a1",
+          "Name": "wave1-grant",
+          "CreationDate": "2026-03-01T09:00:00Z",
+          "GranteePrincipal": "arn:aws:iam::123456789012:role/wave1-app",
+          "GranteePrincipalType": "AWS",
+          "RetiringPrincipal": "arn:aws:iam::123456789012:role/wave1-admin",
+          "RetiringPrincipalType": "AWS",
+          "IssuingAccount": "123456789012",
+          "Operations": ["Encrypt", "Decrypt", "GenerateDataKey"]
+        }
+      ]
+    },
+    {
+      "ID": "b1b2c3d4-e5f6-4789-abcd-ef0123456789",
+      "ARN": "arn:aws:kms:us-east-1:123456789012:key/b1b2c3d4-e5f6-4789-abcd-ef0123456789",
+      "Description": "",
+      "KeyManager": "CUSTOMER",
+      "KeyUsage": "SIGN_VERIFY",
+      "KeySpec": "RSA_2048",
+      "KeyState": "Enabled",
+      "Origin": "AWS_KMS",
+      "CreationDate": "",
+      "DeletionDate": "",
+      "Enabled": true,
+      "MultiRegion": false,
+      "MultiRegionKeyType": "",
+      "PrimaryKeyARN": "",
+      "EncryptionAlgorithms": null,
+      "SigningAlgorithms": ["RSASSA_PSS_SHA_256"],
+      "MACAlgorithms": null,
+      "KeyAgreementAlgorithms": null,
+      "Aliases": [
+        {
+          "Name": "alias/wave1-b-staging",
+          "ARN": "",
+          "TargetKeyID": "b1b2c3d4-e5f6-4789-abcd-ef0123456789",
+          "LastUpdated": ""
+        }
+      ],
+      "Grants": [
+        {
+          "ID": "grant-b1",
+          "Name": "",
+          "CreationDate": "",
+          "GranteePrincipal": "s3.amazonaws.com",
+          "GranteePrincipalType": "Service",
+          "RetiringPrincipal": "",
+          "RetiringPrincipalType": "",
+          "IssuingAccount": "123456789012",
+          "Operations": ["GenerateDataKey", "Decrypt"]
+        },
+        {
+          "ID": "grant-b2",
+          "Name": "wave1-detachable",
+          "CreationDate": "2026-03-02T09:00:00Z",
+          "GranteePrincipal": "",
+          "GranteePrincipalType": "",
+          "RetiringPrincipal": "arn:aws:iam::123456789012:role/wave1-admin",
+          "RetiringPrincipalType": "AWS",
+          "IssuingAccount": "123456789012",
+          "Operations": null
+        }
+      ]
+    },
+    {
+      "ID": "c1b2c3d4-e5f6-4789-abcd-ef0123456789",
+      "ARN": "arn:aws:kms:us-east-1:123456789012:key/c1b2c3d4-e5f6-4789-abcd-ef0123456789",
+      "Description": "wave1 replica",
+      "KeyManager": "CUSTOMER",
+      "KeyUsage": "GENERATE_VERIFY_MAC",
+      "KeySpec": "HMAC_256",
+      "KeyState": "PendingDeletion",
+      "Origin": "AWS_KMS",
+      "CreationDate": "2025-11-01T00:00:00Z",
+      "DeletionDate": "2026-02-01T00:00:00Z",
+      "Enabled": false,
+      "MultiRegion": true,
+      "MultiRegionKeyType": "REPLICA",
+      "PrimaryKeyARN": "arn:aws:kms:us-west-2:123456789012:key/primary-key-id",
+      "EncryptionAlgorithms": null,
+      "SigningAlgorithms": null,
+      "MACAlgorithms": ["HMAC_SHA_256"],
+      "KeyAgreementAlgorithms": null,
+      "Aliases": [],
+      "Grants": []
+    },
+    {
+      "ID": "d1b2c3d4-e5f6-4789-abcd-ef0123456789",
+      "ARN": "arn:aws:kms:us-east-1:123456789012:key/d1b2c3d4-e5f6-4789-abcd-ef0123456789",
+      "Description": "",
+      "KeyManager": "AWS",
+      "KeyUsage": "ENCRYPT_DECRYPT",
+      "KeySpec": "SYMMETRIC_DEFAULT",
+      "KeyState": "Enabled",
+      "Origin": "AWS_KMS",
+      "CreationDate": "2026-01-01T00:00:00Z",
+      "DeletionDate": "",
+      "Enabled": true,
+      "MultiRegion": false,
+      "MultiRegionKeyType": "",
+      "PrimaryKeyARN": "",
+      "EncryptionAlgorithms": ["SYMMETRIC_DEFAULT"],
+      "SigningAlgorithms": null,
+      "MACAlgorithms": null,
+      "KeyAgreementAlgorithms": null,
+      "Aliases": [
+        {
+          "Name": "alias/aws/wave1",
+          "ARN": "arn:aws:kms:us-east-1:123456789012:alias/aws/wave1",
+          "TargetKeyID": "d1b2c3d4-e5f6-4789-abcd-ef0123456789",
+          "LastUpdated": "2026-01-02T00:00:00Z"
+        }
+      ],
+      "Grants": []
+    }
+  ]
+}

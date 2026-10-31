@@ -5,6 +5,7 @@ package live
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -15,6 +16,8 @@ import (
 type fakeKMSKeys struct {
 	listed    int
 	described []string
+	aliasErr  error
+	grantErr  error
 }
 
 func (f *fakeKMSKeys) ListKeys(_ context.Context, input *awskms.ListKeysInput, _ ...func(*awskms.Options)) (*awskms.ListKeysOutput, error) {
@@ -31,6 +34,20 @@ func (f *fakeKMSKeys) ListKeys(_ context.Context, input *awskms.ListKeysInput, _
 func (f *fakeKMSKeys) DescribeKey(_ context.Context, input *awskms.DescribeKeyInput, _ ...func(*awskms.Options)) (*awskms.DescribeKeyOutput, error) {
 	f.described = append(f.described, aws.ToString(input.KeyId))
 	return &awskms.DescribeKeyOutput{KeyMetadata: &kmstypes.KeyMetadata{KeyId: aws.String("key-1"), Arn: aws.String("arn:aws:kms:us-east-1:123456789012:key/key-1"), KeyManager: kmstypes.KeyManagerTypeCustomer, KeyState: kmstypes.KeyStateEnabled}}, nil
+}
+
+func (f *fakeKMSKeys) ListAliases(context.Context, *awskms.ListAliasesInput, ...func(*awskms.Options)) (*awskms.ListAliasesOutput, error) {
+	if f.aliasErr != nil {
+		return nil, f.aliasErr
+	}
+	return &awskms.ListAliasesOutput{}, nil
+}
+
+func (f *fakeKMSKeys) ListGrants(context.Context, *awskms.ListGrantsInput, ...func(*awskms.Options)) (*awskms.ListGrantsOutput, error) {
+	if f.grantErr != nil {
+		return nil, f.grantErr
+	}
+	return &awskms.ListGrantsOutput{}, nil
 }
 
 func TestKMSKeyLoaderEmitsReportedIdentity(t *testing.T) {
@@ -73,6 +90,17 @@ func TestKMSKeyRejectsForeignOrMissingReportedIdentity(t *testing.T) {
 				t.Fatal("unsafe reported identity accepted")
 			}
 		})
+	}
+}
+
+func TestKMSAliasOrGrantReadFailureFailsService(t *testing.T) {
+	identity := VerifiedIdentity{AccountID: "123456789012", Partition: "aws"}
+	denied := errors.New("access denied")
+	if _, err := listKMSWithAPI(context.Background(), &fakeKMSKeys{aliasErr: denied}, "us-east-1", identity); err == nil {
+		t.Fatal("alias list failure accepted")
+	}
+	if _, err := listKMSWithAPI(context.Background(), &fakeKMSKeys{grantErr: denied}, "us-east-1", identity); err == nil {
+		t.Fatal("grant list failure accepted")
 	}
 }
 
