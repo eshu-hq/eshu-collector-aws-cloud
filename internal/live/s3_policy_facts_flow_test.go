@@ -95,13 +95,13 @@ func TestCollectReportCarriesS3PolicyFacts(t *testing.T) {
 		Loaders: map[string]Loader{"s3": func(_ context.Context, _ aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
 			return []collector.Record{{
 				S3Grants: []collector.S3ExternalPrincipalGrantObservation{{
-					Boundary:    collector.Boundary{AccountID: "123456789012", Region: "us-east-1", ServiceKind: "s3"},
-					BucketARN:   "arn:aws:s3:::assets", BucketName: "assets",
+					Boundary:  collector.Boundary{AccountID: "123456789012", Region: "us-east-1", ServiceKind: "s3"},
+					BucketARN: "arn:aws:s3:::assets", BucketName: "assets",
 					PrincipalKind: "public", PrincipalValue: "*", GrantOutcome: "public", Public: true,
 				}},
 				ResourcePolicyStatements: []collector.ResourcePolicyPermissionObservation{{
-					Boundary:     collector.Boundary{AccountID: "123456789012", Region: "us-east-1", ServiceKind: "s3"},
-					ResourceARN:  "arn:aws:s3:::assets", ResourceType: "aws_s3_bucket",
+					Boundary:    collector.Boundary{AccountID: "123456789012", Region: "us-east-1", ServiceKind: "s3"},
+					ResourceARN: "arn:aws:s3:::assets", ResourceType: "aws_s3_bucket",
 					StatementSID: "LivePublic", Effect: "Allow", IsPublic: true,
 				}},
 			}}, nil
