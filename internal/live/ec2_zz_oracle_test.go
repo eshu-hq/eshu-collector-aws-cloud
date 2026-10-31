@@ -270,6 +270,9 @@ func mapOf(payload map[string]any, key string) map[string]any {
 	if !ok || raw == nil {
 		return nil
 	}
-	out, _ := raw.(map[string]any)
+	out, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
 	return out
 }
