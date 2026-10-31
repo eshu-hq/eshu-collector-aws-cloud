@@ -11,8 +11,11 @@ This repo pins the published SDK pair for core `>=0.0.5 <0.2.0`:
 - `github.com/eshu-hq/eshu-sdk/collector v0.1.0-rc.4`
 - `github.com/eshu-hq/eshu-sdk/factschema v0.1.0-rc.7`
 
-Wire protocol: `collector-sdk/v1alpha1`. There are no `replace` directives:
-an out-of-tree clone resolves both modules through the Go module proxy.
+Wire protocol: `collector-sdk/v1alpha1` requests keep the exact legacy
+single-shot shape; `collector-sdk/v1alpha3` requests emit bounded result
+pages with continuation tokens (`manifest.yaml` advertises v1alpha3). There
+are no `replace` directives: an out-of-tree clone resolves both modules
+through the Go module proxy.
 
 ## Naming
 
@@ -422,6 +425,38 @@ provenance attestations. `release_version_test.go` enforces both directions.
 The workflow publishes only when the tag is exactly `v` plus the manifest
 version and points at the protected `main` head; anything else fails before
 anything builds or pushes.
+
+## Result paging (collector-sdk/v1alpha3)
+
+Large first scans can exceed one bounded host stdout write (the motivating
+case is a 72 MB result against a 64 MB cap). On a v1alpha3 host request the
+satellite splits completable results into pages within a per-page byte
+budget and the host re-invokes the satellite with a continuation cursor
+until a final page closes the generation (eshu-hq/eshu#9716).
+
+- Per-page byte budget: `limits.maxPageBytes`, default `4128768` (the
+  default host `stdout_limit_bytes` of 4 MiB minus 64 KiB envelope
+  headroom). Keep it at or below the host cap minus headroom — for the
+  motivating 64 MB QA cap that means raising the host cap and this knob
+  together. A page that still exceeds the host cap trips the host
+  admission error with byte sizes. A single fact larger than the bound
+  fails the claim terminal with class `page-budget-exceeded` instead of
+  emitting an over-budget page.
+- Continuation tokens: the satellite is stateless, so each page-0 cursor
+  pins the generation (ID, observed time, freshness hint, deletion
+  attestation) and a digest of the full fact stream. A resumed call
+  re-collects, proves the stream still matches, repeats the pinned
+  generation, and serves the cursored page. Drift fails the run so the
+  host retries the claim from page zero; only the final page carries
+  statuses because the host sums per-page statuses.
+- Compatibility: v1alpha1 requests never see a page envelope. Results with
+  no page stay single-shot on either protocol, and only complete/partial
+  states paginate.
+
+The paging math (`paging.go`: page bound, wire sizes, split, cursor codec)
+mirrors the host SDK contract field-for-field; `paging_test.go` pins the
+envelope shape against the host intake because the pinned standalone SDK
+predates pagination.
 
 ## Remote proof
 

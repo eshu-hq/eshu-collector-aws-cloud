@@ -90,7 +90,7 @@ func TestSpecialtySeamConformance(t *testing.T) {
 	if _, err := sdk.NewValidator(Contract()).ValidateResult(result); err != nil {
 		t.Fatalf("SDK rejected specialty result: %v", err)
 	}
-	report := conformance.Run(coreFixtureRequest(t, loadManifest(t), []sdk.Result{result}))
+	report := conformance.Run(coreFixtureRequest(t, harnessView(loadManifest(t)), []sdk.Result{result}))
 	if !report.OK() {
 		t.Fatalf("specialty conformance findings = %#v, want passed", report.Findings)
 	}

@@ -135,7 +135,7 @@ func TestWave1LambdaConformance(t *testing.T) {
 	if _, err := sdk.NewValidator(Contract()).ValidateResult(result); err != nil {
 		t.Fatalf("SDK rejected wave1 Lambda result: %v", err)
 	}
-	report := conformance.Run(coreFixtureRequest(t, loadManifest(t), []sdk.Result{result}))
+	report := conformance.Run(coreFixtureRequest(t, harnessView(loadManifest(t)), []sdk.Result{result}))
 	if !report.OK() {
 		t.Fatalf("wave1 Lambda conformance findings = %#v, want passed", report.Findings)
 	}

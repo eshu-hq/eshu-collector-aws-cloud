@@ -12,6 +12,18 @@ import (
 	"github.com/eshu-hq/eshu-sdk/factschema/fixturepack"
 )
 
+// harnessView returns the shipped manifest with the wire protocol the pinned
+// conformance harness admits. The manifest declares collector-sdk/v1alpha3
+// (paged-result output), but the pinned standalone SDK predates pagination
+// and rejects a v1alpha3 manifest as manifest_invalid. The harness therefore
+// runs against a v1alpha1 view of the same manifest while the v1alpha3
+// envelope stays pinned field-for-field against the host intake in
+// paging_test.go.
+func harnessView(manifest conformance.Manifest) conformance.Manifest {
+	manifest.Spec.Runtime.SDKProtocol = sdk.ProtocolVersionV1Alpha1
+	return manifest
+}
+
 // coreFixtureRequest supplies synthetic authorization for local conformance.
 // Production authorization comes only from the host's live grant snapshot.
 // The reserved inventory tracks the Wave 0 emission contract (see
