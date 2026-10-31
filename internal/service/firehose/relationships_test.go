@@ -152,3 +152,49 @@ func TestDeliveryStreamRelationshipsCollapseDuplicateTargets(t *testing.T) {
 		t.Fatalf("s3 edge count = %d, want 2 (distinct buckets stay distinct)", got)
 	}
 }
+
+// TestDeliveryStreamNegativeBranches pins the drop rules: an identity-less
+// stream yields nothing, a Redshift destination emits its cluster and staging
+// edges while skipping a malformed Lambda ARN, and S3/Redshift/OpenSearch
+// destinations without an addressable target plus unknown kinds emit nothing.
+func TestDeliveryStreamNegativeBranches(t *testing.T) {
+	t.Parallel()
+	boundary := awscloud.Boundary{Region: "us-east-1", ServiceKind: catalog.ServiceFirehose}
+	if got := deliveryStreamRelationships(boundary, DeliveryStream{}); got != nil {
+		t.Fatalf("identity-less stream = %#v, want nil", got)
+	}
+	lambdaARN := "arn:aws:lambda:us-east-1:123456789012:function:t"
+	stream := DeliveryStream{
+		Name: "cov",
+		ARN:  "arn:aws:firehose:us-east-1:123456789012:deliverystream/cov",
+		Destinations: []Destination{
+			{
+				Kind: "redshift", S3BucketARN: "arn:aws:s3:::stage",
+				RedshiftClusterIdentifier: "red-cluster",
+				TransformLambdaARNs:       []string{"bogus", lambdaARN},
+			},
+			{Kind: destinationKindS3},
+			{Kind: "redshift"},
+			{Kind: "opensearch"},
+			{Kind: "splunk"},
+		},
+	}
+	observations := deliveryStreamRelationships(boundary, stream)
+	if len(observations) != 3 {
+		t.Fatalf("edge count = %d, want 3 (staging, redshift, lambda)", len(observations))
+	}
+	seen := map[string]bool{}
+	for _, obs := range observations {
+		seen[obs.SourceRecordID] = true
+	}
+	streamID := "arn:aws:firehose:us-east-1:123456789012:deliverystream/cov"
+	for _, want := range []string{
+		streamID + "#s3-staging#arn:aws:s3:::stage",
+		streamID + "#redshift#red-cluster",
+		streamID + "#lambda-transform#" + lambdaARN,
+	} {
+		if !seen[want] {
+			t.Errorf("missing edge %q (got %v)", want, seen)
+		}
+	}
+}

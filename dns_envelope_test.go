@@ -146,3 +146,16 @@ func TestDNSRecordFactRejectsHostileInput(t *testing.T) {
 		t.Fatal("opaque source URI accepted")
 	}
 }
+
+// TestDNSRecordSourceIDJoinsParts pins the deterministic source record id:
+// zone, type, and normalized name always join, with the weighted-set
+// identifier appended only when present.
+func TestDNSRecordSourceIDJoinsParts(t *testing.T) {
+	t.Parallel()
+	if got := dnsRecordSourceID("Z123", "Example.COM.", "A", ""); got != "Z123#A#example.com" {
+		t.Fatalf("dnsRecordSourceID() = %q", got)
+	}
+	if got := dnsRecordSourceID("Z123", "Example.COM.", "A", "w1"); got != "Z123#A#example.com#w1" {
+		t.Fatalf("dnsRecordSourceID(weighted) = %q", got)
+	}
+}

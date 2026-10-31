@@ -175,3 +175,64 @@ func TestEmptyOptionalDenialEmitsSDKPartialAndTypedWarning(t *testing.T) {
 		t.Fatalf("empty denied SDK result: state=%s typed=%d statuses=%+v", result.State, typed, result.Statuses)
 	}
 }
+
+// TestAppendLiveWarningsGuardsAndBudgets pins the append guards: a
+// non-partial result passes through untouched, zero limits fall back to the
+// defaults, an invalid source URI fails, a malformed warning fails, and the
+// record and payload budgets fail terminal instead of emitting unbounded
+// facts.
+func TestAppendLiveWarningsGuardsAndBudgets(t *testing.T) {
+	t.Parallel()
+	base := WarningObservation{
+		Boundary:    Boundary{AccountID: "123456789012", Region: "us-east-1", ServiceKind: "ec2", ScopeID: "aws", GenerationID: "g1", CollectorInstanceID: "collector", ClaimToken: "token", ObservedAt: time.Now().UTC()},
+		WarningKind: "permission_denied", ErrorClass: "permission_denied", SourceURI: "aws://123456789012/us-east-1",
+		Attributes: map[string]any{"operation": "DescribeInstances", "resource": "region:us-east-1", "effect": "instances-unavailable"},
+	}
+	partial := func() sdk.Result {
+		return sdk.Result{State: sdk.ResultPartial, Claim: sdk.Claim{Scope: sdk.Scope{ID: "aws"}, GenerationID: "g1", InstanceID: "collector", FencingToken: "token"}, Generation: sdk.Generation{ID: "g1", ObservedAt: time.Now().UTC()}}
+	}
+
+	complete, err := AppendLiveWarnings(sdk.Result{State: sdk.ResultComplete}, []WarningObservation{base}, base.SourceURI, DefaultResourceUse())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(complete.Facts) != 0 {
+		t.Fatalf("non-partial result gained %d facts, want passthrough", len(complete.Facts))
+	}
+
+	defaulted, err := AppendLiveWarnings(partial(), []WarningObservation{base}, base.SourceURI, ResourceUse{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(defaulted.Facts) != 1 {
+		t.Fatalf("zero-limits append facts = %d, want 1 via defaults", len(defaulted.Facts))
+	}
+
+	if _, err := AppendLiveWarnings(partial(), []WarningObservation{base}, "https://example.com/collector?token=opaque", DefaultResourceUse()); err == nil {
+		t.Fatal("opaque source URI accepted")
+	}
+	broken := base
+	broken.Attributes = map[string]any{}
+	if _, err := AppendLiveWarnings(partial(), []WarningObservation{broken}, base.SourceURI, DefaultResourceUse()); err == nil {
+		t.Fatal("malformed warning accepted")
+	}
+
+	recordCapped := partial()
+	recordCapped.Facts = defaulted.Facts
+	other := base
+	other.Attributes = map[string]any{"operation": "DescribeVolumes", "resource": "region:us-east-1", "effect": "volumes-unavailable"}
+	capped, err := AppendLiveWarnings(recordCapped, []WarningObservation{other}, base.SourceURI, ResourceUse{MaxRecordsPerClaim: 1, MaxPayloadBytes: 65536})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if capped.State != sdk.ResultTerminal {
+		t.Fatalf("record-budget state = %q, want terminal", capped.State)
+	}
+	payloadCapped, err := AppendLiveWarnings(partial(), []WarningObservation{base}, base.SourceURI, ResourceUse{MaxRecordsPerClaim: 5000, MaxPayloadBytes: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if payloadCapped.State != sdk.ResultTerminal {
+		t.Fatalf("payload-budget state = %q, want terminal", payloadCapped.State)
+	}
+}
