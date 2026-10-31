@@ -422,9 +422,10 @@ way; re-pin them when bumping either base. `version` in `manifest.yaml`
 and the git tag must match (`v0.1.0` for `0.1.0`); pushing a `v*` tag runs
 `release.yml`, which builds, signs, and publishes the image plus SBOM and
 provenance attestations. `release_version_test.go` enforces both directions.
-The workflow publishes only when the tag is exactly `v` plus the manifest
+The workflow publishes a tag only when the tag is exactly `v` plus the manifest
 version and points at the protected `main` head; anything else fails before
-anything builds or pushes.
+anything builds or pushes. Pushes to `main` publish `:main`, `:latest` (both
+moving), and `:sha-<long-sha>` with the same signatures, SBOM, and attestations.
 
 ## Result paging (collector-sdk/v1alpha3)
 

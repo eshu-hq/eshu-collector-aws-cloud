@@ -93,10 +93,19 @@ func stepIndex(steps []workflowStep, match func(workflowStep) bool) int {
 	return -1
 }
 
+// tagOnlyGate is the exact step condition scoping the tag guards to tag
+// events, so a main push is never gated on a tag. branchOnlyGate scopes the
+// branch metadata step to branch events.
+const (
+	tagOnlyGate    = "github.ref_type == 'tag'"
+	branchOnlyGate = "github.ref_type == 'branch'"
+)
+
 // contractProblems checks the steps that make a published image trustworthy:
-// the tag and manifest checks run before anything is pushed, one platform is
-// built, the signature is verified against a pinned identity and issuer, and
-// the provenance and SBOM attestations are generated and verified.
+// the tag and manifest checks run before anything is pushed on tag events,
+// one platform is built, the signature is verified against a pinned identity
+// and issuer, and the provenance and SBOM attestations are generated and
+// verified.
 func contractProblems(steps []workflowStep) []string {
 	var problems []string
 	tagIdx := stepIndex(steps, func(s workflowStep) bool { return strings.Contains(s.Run, tagShapeCheck) })
@@ -173,19 +182,24 @@ func contractProblems(steps []workflowStep) []string {
 	for _, guard := range []struct {
 		name string
 		idx  int
+		want string
 	}{
-		{"tag shape check", tagIdx},
-		{"manifest version check", versionIdx},
-		{"main-head check", mainHeadIdx},
-		{"cosign verify", verifyIdx},
-		{"gh attestation verify", attestIdx},
+		{"tag shape check", tagIdx, tagOnlyGate},
+		{"manifest version check", versionIdx, tagOnlyGate},
+		{"main-head check", mainHeadIdx, tagOnlyGate},
+		{"cosign verify", verifyIdx, ""},
+		{"gh attestation verify", attestIdx, ""},
 	} {
 		if guard.idx < 0 {
 			continue
 		}
 		step := steps[guard.idx]
-		if step.If != "" {
-			problems = append(problems, fmt.Sprintf("the %s runs under %q, want it unconditional", guard.name, step.If))
+		if step.If != guard.want {
+			if guard.want == "" {
+				problems = append(problems, fmt.Sprintf("the %s runs under %q, want it unconditional", guard.name, step.If))
+			} else {
+				problems = append(problems, fmt.Sprintf("the %s runs under %q, want %q so a main push is not gated on a tag", guard.name, step.If, guard.want))
+			}
 		}
 		if step.ContinueOnError {
 			problems = append(problems, fmt.Sprintf("the %s sets continue-on-error, want its failure to fail the job", guard.name))
@@ -194,11 +208,76 @@ func contractProblems(steps []workflowStep) []string {
 	return problems
 }
 
+// metaProblems checks the dual metadata steps that tag tag events and branch
+// events independently: the tag step must emit exactly the tag ref, the
+// branch step must emit main, latest, and the long sha tag, and the build
+// step must publish the concatenation of both so a tag event pushes exactly
+// what the tag-only workflow pushed.
+func metaProblems(steps []workflowStep) []string {
+	var problems []string
+	count := 0
+	for _, step := range steps {
+		if !strings.HasPrefix(step.Uses, "docker/metadata-action@") {
+			continue
+		}
+		count++
+		switch step.If {
+		case tagOnlyGate, branchOnlyGate:
+		default:
+			problems = append(problems, fmt.Sprintf("metadata step %q runs under %q, want %q or %q", step.Name, step.If, tagOnlyGate, branchOnlyGate))
+		}
+		if step.ContinueOnError {
+			problems = append(problems, fmt.Sprintf("metadata step %q sets continue-on-error, want a failed tag set to fail the job", step.Name))
+		}
+	}
+	if count != 2 {
+		return append(problems, fmt.Sprintf("found %d docker/metadata-action steps, want exactly 2 (one per ref type)", count))
+	}
+	tagIdx := stepIndex(steps, func(s workflowStep) bool {
+		return strings.HasPrefix(s.Uses, "docker/metadata-action@") && s.If == tagOnlyGate
+	})
+	branchIdx := stepIndex(steps, func(s workflowStep) bool {
+		return strings.HasPrefix(s.Uses, "docker/metadata-action@") && s.If == branchOnlyGate
+	})
+	if tagIdx < 0 {
+		problems = append(problems, "no metadata step runs for tag events")
+	} else if got := fmt.Sprint(steps[tagIdx].With["tags"]); !strings.Contains(got, "type=ref,event=tag") {
+		problems = append(problems, fmt.Sprintf("tag metadata tags = %q, want type=ref,event=tag", got))
+	}
+	if branchIdx < 0 {
+		problems = append(problems, "no metadata step runs for branch events")
+	} else {
+		got := fmt.Sprint(steps[branchIdx].With["tags"])
+		for _, want := range []string{"type=raw,value=main", "type=raw,value=latest", "type=sha,prefix=sha-,format=long"} {
+			if !strings.Contains(got, want) {
+				problems = append(problems, fmt.Sprintf("branch metadata tags = %q, want %s", got, want))
+			}
+		}
+	}
+	publishIdx := stepIndex(steps, func(s workflowStep) bool { return fmt.Sprint(s.With["push"]) == "true" })
+	if publishIdx >= 0 {
+		tags := fmt.Sprint(steps[publishIdx].With["tags"])
+		for _, want := range []string{"steps.meta-tag.outputs.tags", "steps.meta-branch.outputs.tags"} {
+			if !strings.Contains(tags, want) {
+				problems = append(problems, fmt.Sprintf("build tags = %q, want both %s", tags, want))
+			}
+		}
+		labels := fmt.Sprint(steps[publishIdx].With["labels"])
+		for _, want := range []string{"steps.meta-tag.outputs.labels", "steps.meta-branch.outputs.labels"} {
+			if !strings.Contains(labels, want) {
+				problems = append(problems, fmt.Sprintf("build labels = %q, want both %s", labels, want))
+			}
+		}
+	}
+	return problems
+}
+
 // releaseWorkflowProblems returns every way raw breaks the release workflow's
-// safety properties: it must run only for pushed v* tags, hold only the
-// permissions publishing and attesting an image need, use no secret but
-// GITHUB_TOKEN, pin every action by full commit SHA, deploy nothing, and keep
-// the tag, platform, signature, and attestation checks.
+// safety properties: it must run only for pushes to main and pushed v* tags,
+// serialize image publishes, hold only the permissions publishing and
+// attesting an image need, use no secret but GITHUB_TOKEN, pin every action
+// by full commit SHA, deploy nothing, and keep the tag, platform, signature,
+// and attestation checks.
 func releaseWorkflowProblems(raw []byte) []string {
 	var workflow workflowFile
 	if err := yaml.Unmarshal(raw, &workflow); err != nil {
@@ -209,8 +288,17 @@ func releaseWorkflowProblems(raw []byte) []string {
 	push, pushTyped := pushValue.(map[string]any)
 	tagsValue, tagsPresent := push["tags"]
 	tags, tagsTyped := tagsValue.([]any)
-	if len(workflow.On) != 1 || !pushPresent || !pushTyped || len(push) != 1 || !tagsPresent || !tagsTyped || len(tags) != 1 || tags[0] != "v*" {
-		problems = append(problems, fmt.Sprintf("triggers = %v, want only push of tags [v*]", workflow.On))
+	branchesValue, branchesPresent := push["branches"]
+	branches, branchesTyped := branchesValue.([]any)
+	if len(workflow.On) != 1 || !pushPresent || !pushTyped || len(push) != 2 ||
+		!tagsPresent || !tagsTyped || len(tags) != 1 || tags[0] != "v*" ||
+		!branchesPresent || !branchesTyped || len(branches) != 1 || branches[0] != "main" {
+		problems = append(problems, fmt.Sprintf("triggers = %v, want push of branches [main] and tags [v*]", workflow.On))
+	}
+	group, groupOk := workflow.Concurrency["group"].(string)
+	cancel, cancelOk := workflow.Concurrency["cancel-in-progress"].(bool)
+	if len(workflow.Concurrency) != 2 || !groupOk || group != "image-publish-${{ github.ref }}" || !cancelOk || cancel {
+		problems = append(problems, fmt.Sprintf("concurrency = %v, want group image-publish-${{ github.ref }} with cancel-in-progress: false", workflow.Concurrency))
 	}
 	if len(workflow.Permissions) != 1 || workflow.Permissions["contents"] != "read" {
 		problems = append(problems, fmt.Sprintf("workflow permissions = %v, want contents: read only", workflow.Permissions))
@@ -241,6 +329,7 @@ func releaseWorkflowProblems(raw []byte) []string {
 		problems = append(problems, "want exactly one job, named image")
 	}
 	problems = append(problems, contractProblems(image.Steps)...)
+	problems = append(problems, metaProblems(image.Steps)...)
 	for _, match := range secretUsePattern.FindAllStringSubmatch(string(raw), -1) {
 		name := match[1]
 		if name == "" {
@@ -284,8 +373,8 @@ func TestReleaseWorkflowGateRejectsViolations(t *testing.T) {
 	good := string(raw)
 	for name, mutate := range map[string]func(string) string{
 		"pull request trigger": func(s string) string { return strings.Replace(s, "on:\n  push:", "on:\n  pull_request:\n  push:", 1) },
-		"branch trigger": func(s string) string {
-			return strings.Replace(s, "    tags:\n", "    branches:\n      - main\n    tags:\n", 1)
+		"branch trigger widened": func(s string) string {
+			return strings.Replace(s, "      - main\n", "      - main\n      - develop\n", 1)
 		},
 		"tag pattern widened": func(s string) string { return strings.Replace(s, `- "v*"`, `- "*"`, 1) },
 		"tag-pinned action": func(s string) string {
@@ -305,6 +394,21 @@ func TestReleaseWorkflowGateRejectsViolations(t *testing.T) {
 		},
 		"if-never on version check": func(s string) string {
 			return strings.Replace(s, "- name: Require the tag to match the manifest version\n", "- name: Require the tag to match the manifest version\n        if: github.event_name == 'never'\n", 1)
+		},
+		"tag guard ungated": func(s string) string {
+			return strings.Replace(s, "        if: github.ref_type == 'tag'\n", "", 1)
+		},
+		"verify step gated on tag": func(s string) string {
+			return strings.Replace(s, "- name: Verify the image signature\n", "- name: Verify the image signature\n        if: github.ref_type == 'tag'\n", 1)
+		},
+		"branch metadata gated on tag": func(s string) string {
+			return strings.Replace(s, "id: meta-branch\n        if: github.ref_type == 'branch'", "id: meta-branch\n        if: github.ref_type == 'tag'", 1)
+		},
+		"concurrency cancelled": func(s string) string {
+			return strings.Replace(s, "cancel-in-progress: false", "cancel-in-progress: true", 1)
+		},
+		"latest tag dropped": func(s string) string {
+			return strings.Replace(s, "            type=raw,value=latest\n", "", 1)
 		},
 		"main-head check weakened": func(s string) string {
 			return strings.Replace(s, "git rev-parse origin/main", "git rev-parse HEAD", 1)

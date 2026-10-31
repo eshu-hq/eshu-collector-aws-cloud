@@ -25,7 +25,7 @@ Job names are frozen because branch protection requires `ci-complete`:
 | `govulncheck` | Dependency changes, pushes to `main`, weekly schedule, manual dispatch; a failing scheduled run files or updates an issue |
 | `gosec` | Pushes to `main`, weekly schedule, and manual dispatch; advisory, SARIF to the Security tab; a scheduled run with findings fails and files or updates an issue |
 | `ci-complete` | Always; fails on any needed lane failure, passes on legitimate skips |
-| `release` (`release.yml`, not `ci.yml`) | Version tag `v*` push only: builds, signs, and publishes the image plus SBOM and provenance attestations. The tag must point at the `main` head and match the `manifest.yaml` version (`release_version_test.go` enforces both directions) |
+| `release` (`release.yml`, not `ci.yml`) | Push to `main` or a version tag `v*`: builds, signs, and publishes the image plus SBOM and provenance attestations. A tag must point at the `main` head and match the `manifest.yaml` version (`release_version_test.go` enforces both directions); a `main` push publishes `:main`, `:latest`, and `:sha-<long-sha>` with the same hardening |
 
 Docs-only PRs run no lane and stay mergeable through `ci-complete`.
 A manual `workflow_dispatch` run records every lane; the weekly schedule
