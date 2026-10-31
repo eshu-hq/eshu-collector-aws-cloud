@@ -1,0 +1,41 @@
+# Wave 1 EC2 in-tree oracle output (vendored transcription).
+#
+# Source: owner re-execution on 2026-10-30 in a throwaway worktree of
+# eshu-hq/eshu at 6ca3ad9294e2b001583da6f3b50b8161e0a80006 (Merge pull
+# request #9613). The throwaway test unmarshals testdata/wave1-ec2-parity.json
+# (sha256:b996ce9ba05937e784ce66e5865ba3dec3327d1d5fd6090d5940e556eab2ed0b)
+# directly into the in-tree scanner types, serves them from a fake Client,
+# and prints every envelope from the real Scanner.Scan:
+#
+#   go test ./internal/collector/awscloud/service/ec2/ -run 'TestZZWave1Oracle' -count=1 -v
+#
+# Byte-identical to the first run recorded in testdata/stable-key-provenance.md.
+# Any reader with eshu-repo access can reproduce these lines with that command
+# and diff against this file. TestWave1EC2OracleOutputMatchesFrozenKeys
+# (internal/live/ec2_wave1_oracle_test.go) pins every line below to the frozen
+# satellite constants, so a transcription drift on either side fails loudly.
+ORACLE 00 kind=aws_resource key=17f471132bc29990b36837ab30c388f7b8206c3cf8701bfa6ea126f0b365a2f8
+ORACLE 01 kind=aws_resource key=adaa5ade324f15fb97f3d500d7bd212d69fbb65a36204c041fb601e75fe768de
+ORACLE 02 kind=aws_relationship key=c4fed8da5d0bc3f7355074189f3e19de685c50434418e780389f136bf6c4b03e
+ORACLE 03 kind=aws_resource key=28c160045a039e8b569ec379b49b8e7e61700957aa2957fec7444db86561cbc9
+ORACLE 04 kind=aws_relationship key=6f8ff0f2bb1de0f9733ddb17e55f05cce5af8a181f6325314ba1aabad88dc400
+ORACLE 05 kind=aws_resource key=b621175c9e3822d9a775125e8623fa2cf513d1ab3b26f5171b52104035045945
+ORACLE 06 kind=aws_relationship key=9fc143989fdb07c5e4aff31764f22f6b4098ac4da860770f38077ea5f9f703fd
+ORACLE 07 kind=aws_security_group_rule key=d4373b5d54f28e24d86164a999d1b4413957f5725e869980ef33d1ae57c88c8b
+ORACLE 08 kind=aws_resource key=a99604f42609e05d67cb38e197d1f5160afecd73ba452d3660eaf8be3bc6a480
+ORACLE 09 kind=aws_relationship key=6e8c480b48b9c514b1b29e4b6f6d482dcefa57cb959367912775c7685a9b6979
+ORACLE 10 kind=aws_security_group_rule key=828bdb8d4b4842d4c75dc70aae4fb53f6d658ec6a957f8322fbebdeed5e2e3dd
+ORACLE 11 kind=aws_resource key=5b84b35dbd6bdf089315c426b489cb4f84b0c5f3f4275da81648a66e084f3bb5
+ORACLE 12 kind=aws_relationship key=f4b077abca9ba48f8b7d3c1fc8be86ff1c8cd3236a43ddc675e0bba959e9779f
+ORACLE 13 kind=aws_security_group_rule key=31dc36fc0dd0fee06cbadcdb51fffbe36932a1a178731c638044840aebe7e126
+ORACLE 14 kind=aws_resource key=3e70715b86c89a8ab22d98de9321da98fa27558a5f28fe8056fa3dee9b849a0c
+ORACLE 15 kind=aws_relationship key=f4e7f9024d13785a7abc69fb54ce4d5091fb07d40cd6dfc3a6721984dc695678
+ORACLE 16 kind=aws_relationship key=68e87405a93f23ca4dc02e5564f149d7b78fa8f732670d3f147507514d36b080
+ORACLE 17 kind=aws_relationship key=5e4b5ae77652cee885e3e99f5c9b4bcc74c6d15475b425e1a8d5842fb3129800
+ORACLE 18 kind=aws_relationship key=22614ae83911c01335f2fa516dece9fd6f3f82be7c7ddc2778cecaf561bb9168
+ORACLE 19 kind=ec2_instance_posture key=bccfe99d717602531c9eeb0ac1889236f16e0924ffc40b66ff8fefee72e81b04
+ORACLE 20 kind=aws_resource key=b3467e6df86a6c7484e93d8874df7dcff3c416e71487d6b3f663dafe22fec5ad
+ORACLE 21 kind=aws_relationship key=32b57dbc3bd9c05ff77e9ed8ba6c4ef9d878426526c7f1005a34e6f0a3531e5f
+ORACLE 22 kind=aws_resource key=83cdc1f7260f45a402b835c108b3c6ca6d9af7cfc4f3cbc2b8635f486ffbdb52
+ORACLE 23 kind=aws_resource key=347ea629dbebba6b9a7af6aa45c299bfd922bbda9232097b40528d7f07dfd905
+ORACLE 24 kind=aws_relationship key=36648f191e897893177aa08e14713af8d659095e49ec09a3b07f09f86f2abf20

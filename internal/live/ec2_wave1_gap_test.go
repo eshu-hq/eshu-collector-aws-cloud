@@ -16,8 +16,12 @@ import (
 // rule and one ec2_instance_posture fact per instance, and the satellite live
 // path now emits all four with identical stable keys on the shared fixture.
 // (The companion parity test covers every resource and relationship key; the
-// edge unit tests below pin the new edge shapes.) This test fails until the
-// posture channel exists: the record builders carry no posture observations.
+// edge unit tests below pin the new edge shapes.) The four keys below are the
+// satellite-half transcription: TestWave1EC2OracleOutputMatchesFrozenKeys pins
+// them to the vendored oracle output (testdata/wave1-ec2-oracle.txt, owner's
+// independent re-execution), and executing the oracle itself binds the later
+// in-tree-deletion gate. This test fails until the posture channel exists:
+// the record builders carry no posture observations.
 func TestWave1EC2GapParityAgainstInTreeOracle(t *testing.T) {
 	t.Parallel()
 

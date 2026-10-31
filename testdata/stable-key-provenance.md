@@ -197,7 +197,10 @@ Re-execution on 2026-10-30 returned all 25 keys byte-identical to the frozen
 satellite constants, including the legacy no-id rule fallback (proving the
 satellite's un-normalized fallback hash equals `facts.StableID` for this
 identity shape) and the synthesized attachment ARN (proving the satellite's
-caller-identity ARN synthesis equals the in-tree mapper's).
+caller-identity ARN synthesis equals the in-tree mapper's). The full output is
+vendored at `testdata/wave1-ec2-oracle.txt` so the claim stays checkable
+without eshu-repo access; `TestWave1EC2OracleOutputMatchesFrozenKeys` fails on
+any drift between the vendored output and the frozen constants.
 
 ## Wave 1 Lambda keys (in-tree scan parity pack)
 
