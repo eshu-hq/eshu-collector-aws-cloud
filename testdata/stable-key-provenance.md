@@ -213,21 +213,6 @@ serves them from a fake `Client` (aliases/mappings filtered by the requested
 function ARN), and prints `FactKind` + `StableFactKey` per envelope from
 `Scanner.Scan` over boundary account `123456789012`, region `us-east-1`,
 service `lambda`, scope `aws:123456789012:us-east-1`, generation
-## Wave 1 ECR keys (in-tree scan parity pack)
-
-Input fixture: `testdata/wave1-ecr-parity.json`
-(`sha256:b18a7ff3cb29539870afdab58065c364caee7e979805043b7658c9c83b561340`).
-
-Oracle: check out eshu-hq/eshu at commit `b0371c05d5`
-(Merge pull request #9580), add a throwaway test in
-`go/internal/collector/awscloud/service/ecr/` that unmarshals the fixture
-directly into the scanner-owned types (the rows mirror those structs field for
-field, with `ManifestDigest` equal to the image digest exactly as the in-tree
-adapter maps DescribeImages rows, which carry no separate manifest digest),
-serves them from a fake `Client` (images and policies filtered by the
-requested repository ARN), and prints `FactKind` + `StableFactKey` per
-envelope from `Scanner.Scan` over boundary account `123456789012`, region
-`us-east-1`, service `ecr`, scope `aws:123456789012:us-east-1`, generation
 `aws:123456789012:us-east-1:wave1:1`, instance `aws-parity-wave1`, fencing
 token `7`, observed-at `2026-10-30T12:00:00Z`. Command, from the `go/`
 directory of the pinned commit:
@@ -275,6 +260,27 @@ values, tags, and alias descriptions stay excluded where the in-tree scan
 emits them; GetFunction identity mismatches and unsafe image/KMS references
 fail where the in-tree mapper trusts the API; and a mapping-list denial
 degrades to partial plus warning where the in-tree scan fails.
+
+## Wave 1 ECR keys (in-tree scan parity pack)
+
+Input fixture: `testdata/wave1-ecr-parity.json`
+(`sha256:b18a7ff3cb29539870afdab58065c364caee7e979805043b7658c9c83b561340`).
+
+Oracle: check out eshu-hq/eshu at commit `b0371c05d5`
+(Merge pull request #9580), add a throwaway test in
+`go/internal/collector/awscloud/service/ecr/` that unmarshals the fixture
+directly into the scanner-owned types (the rows mirror those structs field for
+field, with `ManifestDigest` equal to the image digest exactly as the in-tree
+adapter maps DescribeImages rows, which carry no separate manifest digest),
+serves them from a fake `Client` (images and policies filtered by the
+requested repository ARN), and prints `FactKind` + `StableFactKey` per
+envelope from `Scanner.Scan` over boundary account `123456789012`, region
+`us-east-1`, service `ecr`, scope `aws:123456789012:us-east-1`, generation
+`aws:123456789012:us-east-1:wave1:1`, instance `aws-parity-wave1`, fencing
+token `7`, observed-at `2026-10-30T12:00:00Z`. Command, from the `go/`
+directory of the pinned commit:
+
+```sh
 go test ./internal/collector/awscloud/service/ecr/ \
   -run 'TestZZWave1ECROracle' -count=1 -v
 ```
