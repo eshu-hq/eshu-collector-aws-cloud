@@ -104,7 +104,10 @@ func wave1ECRStubConfig(t *testing.T, fixture wave1ECRFixture) aws.Config {
 			t.Errorf("decode stub request: %v", err)
 			return ""
 		}
-		value, _ := doc[field].(string)
+		value, ok := doc[field].(string)
+		if !ok {
+			return ""
+		}
 		return value
 	}
 
