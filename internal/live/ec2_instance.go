@@ -24,6 +24,10 @@ func instanceRecord(instance ec2types.Instance, region string, identity Verified
 	if instance.State != nil {
 		resource.State = strings.TrimSpace(string(instance.State.Name))
 	}
+	// Anchor order mirrors the in-tree instance identity observation
+	// (resource id first, ARN second): the seam would otherwise fall back to
+	// (arn, resource_id) and emit a byte-different twin of the same fact.
+	resource.CorrelationAnchors = []string{id, resource.ARN}
 	resource.Attributes = map[string]any{"ami_id": strings.TrimSpace(aws.ToString(instance.ImageId))}
 	if amiID := strings.TrimSpace(aws.ToString(instance.ImageId)); amiID != "" {
 		result.Relationship = &collector.LiveRelationship{
