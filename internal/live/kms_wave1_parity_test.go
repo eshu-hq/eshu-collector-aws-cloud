@@ -221,7 +221,12 @@ func assertWave1KMSEnrichment(t *testing.T, byID map[string]collector.Record, id
 	}
 	var gotPolicies []string
 	if raw, present := key.Resource.Attributes["policy_revision_names"]; present {
-		gotPolicies, _ = raw.([]string)
+		typed, ok := raw.([]string)
+		if !ok {
+			t.Errorf("key %q policy_revision_names has wrong type %T", id, raw)
+		} else {
+			gotPolicies = typed
+		}
 	}
 	if !reflect.DeepEqual(gotPolicies, policies) {
 		t.Errorf("key %q policy_revision_names = %#v, want %#v", id, gotPolicies, policies)

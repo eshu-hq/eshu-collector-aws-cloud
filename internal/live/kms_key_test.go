@@ -234,9 +234,8 @@ func TestKMSKeyRotationUnsupportedKeysStayUnknown(t *testing.T) {
 }
 
 func TestKMSKeyRotationDeniedStaysUnknown(t *testing.T) {
-	denied := &smithy.GenericAPIError{Code: "AccessDenied", Message: "denied"}
-	unsupported := &smithy.GenericAPIError{Code: "UnsupportedOperationException", Message: "unsupported"}
-	for _, err := range []error{denied, unsupported} {
+	for _, code := range []string{"AccessDenied", "AccessDeniedException", "UnsupportedOperationException", "UnsupportedOperation"} {
+		err := &smithy.GenericAPIError{Code: code, Message: "denied"}
 		client := &fakeKMSKeys{metadata: rotationSupportedKMSMetadata(), rotationErr: err}
 		rows, listErr := listKMSWithAPI(context.Background(), client, "us-east-1", VerifiedIdentity{AccountID: "123456789012", Partition: "aws"})
 		if listErr != nil {
@@ -256,17 +255,19 @@ func TestKMSKeyRotationFailureFailsService(t *testing.T) {
 }
 
 func TestKMSKeyTagsDeniedRetainsKeyWithNilTags(t *testing.T) {
-	denied := &smithy.GenericAPIError{Code: "AccessDenied", Message: "denied"}
-	client := &fakeKMSKeys{metadata: rotationSupportedKMSMetadata(), tagsErr: denied}
-	rows, err := listKMSWithAPI(context.Background(), client, "us-east-1", VerifiedIdentity{AccountID: "123456789012", Partition: "aws"})
-	if err != nil {
-		t.Fatalf("denied tag read failed the service: %v", err)
-	}
-	if len(rows) != 1 || rows[0].Resource == nil {
-		t.Fatalf("rows = %#v", rows)
-	}
-	if rows[0].Resource.Tags != nil {
-		t.Fatalf("tags = %#v, want nil on denial", rows[0].Resource.Tags)
+	for _, code := range []string{"AccessDenied", "AccessDeniedException"} {
+		denied := &smithy.GenericAPIError{Code: code, Message: "denied"}
+		client := &fakeKMSKeys{metadata: rotationSupportedKMSMetadata(), tagsErr: denied}
+		rows, err := listKMSWithAPI(context.Background(), client, "us-east-1", VerifiedIdentity{AccountID: "123456789012", Partition: "aws"})
+		if err != nil {
+			t.Fatalf("denied tag read (%s) failed the service: %v", code, err)
+		}
+		if len(rows) != 1 || rows[0].Resource == nil {
+			t.Fatalf("rows = %#v", rows)
+		}
+		if rows[0].Resource.Tags != nil {
+			t.Fatalf("tags = %#v, want nil on denial (%s)", rows[0].Resource.Tags, code)
+		}
 	}
 }
 

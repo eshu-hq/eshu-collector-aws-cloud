@@ -7,8 +7,10 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"reflect"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	awskms "github.com/aws/aws-sdk-go-v2/service/kms"
 	kmstypes "github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/aws/smithy-go"
@@ -141,5 +143,76 @@ func TestReadKMSRotationToleratesUnanswerableErrors(t *testing.T) {
 		err: &smithy.GenericAPIError{Code: "KMSInternalException", Message: "outage"},
 	}, "outage-key", key); err == nil {
 		t.Error("readKMSRotation(KMSInternalException) error = nil, want propagation")
+	}
+}
+
+// pagedKMSDetailClient is a kmsDetailAPI fake serving two truncated pages for
+// tags and policy names, proving the production paginator follows every page.
+type pagedKMSDetailClient struct {
+	tagCalls    []string
+	policyCalls []string
+}
+
+func pagedTag(key, value string) kmstypes.Tag {
+	return kmstypes.Tag{TagKey: aws.String(key), TagValue: aws.String(value)}
+}
+
+func (f *pagedKMSDetailClient) ListResourceTags(_ context.Context, input *awskms.ListResourceTagsInput, _ ...func(*awskms.Options)) (*awskms.ListResourceTagsOutput, error) {
+	f.tagCalls = append(f.tagCalls, aws.ToString(input.Marker))
+	if aws.ToString(input.Marker) == "" {
+		return &awskms.ListResourceTagsOutput{
+			Tags:       []kmstypes.Tag{pagedTag("env", "wave1"), pagedTag("stage", "staging")},
+			Truncated:  true,
+			NextMarker: aws.String("t2"),
+		}, nil
+	}
+	return &awskms.ListResourceTagsOutput{
+		Tags: []kmstypes.Tag{pagedTag("owner", "lane0")},
+	}, nil
+}
+
+func (f *pagedKMSDetailClient) ListKeyPolicies(_ context.Context, input *awskms.ListKeyPoliciesInput, _ ...func(*awskms.Options)) (*awskms.ListKeyPoliciesOutput, error) {
+	f.policyCalls = append(f.policyCalls, aws.ToString(input.Marker))
+	if aws.ToString(input.Marker) == "" {
+		return &awskms.ListKeyPoliciesOutput{
+			PolicyNames: []string{"default"},
+			Truncated:   true,
+			NextMarker:  aws.String("p2"),
+		}, nil
+	}
+	return &awskms.ListKeyPoliciesOutput{PolicyNames: []string{"custom"}}, nil
+}
+
+func (f *pagedKMSDetailClient) GetKeyRotationStatus(context.Context, *awskms.GetKeyRotationStatusInput, ...func(*awskms.Options)) (*awskms.GetKeyRotationStatusOutput, error) {
+	return &awskms.GetKeyRotationStatusOutput{}, nil
+}
+
+// TestKMSDetailReadsFollowEveryPage proves readKMSTags and listKMSKeyPolicies
+// collect pages 2+ instead of silently keeping only the first page: dropping
+// a page would lose the owner tag and the custom policy name here.
+func TestKMSDetailReadsFollowEveryPage(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	client := &pagedKMSDetailClient{}
+	tags, err := readKMSTags(ctx, client, "paged-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := map[string]string{"env": "wave1", "stage": "staging", "owner": "lane0"}; !reflect.DeepEqual(tags, want) {
+		t.Errorf("tags = %#v, want all three pages-merged tags %#v", tags, want)
+	}
+	if !reflect.DeepEqual(client.tagCalls, []string{"", "t2"}) {
+		t.Errorf("tag page markers = %#v, want initial plus follow-up", client.tagCalls)
+	}
+	names, err := listKMSKeyPolicies(ctx, client, "paged-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"default", "custom"}; !reflect.DeepEqual(names, want) {
+		t.Errorf("policy names = %#v, want %#v", names, want)
+	}
+	if !reflect.DeepEqual(client.policyCalls, []string{"", "p2"}) {
+		t.Errorf("policy page markers = %#v, want initial plus follow-up", client.policyCalls)
 	}
 }
