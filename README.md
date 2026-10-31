@@ -61,7 +61,7 @@ additional routing weights. User-authored alias descriptions are omitted.
 An alias ARN must match the known parent function ARN and qualifier; without
 that parent ARN, the alias read fails rather than attributing a foreign ARN.
 A missing alias ARN can still use the known parent ARN and alias name for its
-resource ID. The reviewed mapping-denial path retains successful aliases.
+resource ID. The reviewed mapping-denial path retains successful aliases. Functions also emit execution-role, per-subnet, and per-security-group placement relationships, and ListEventSourceMappings pages emit typed `aws_lambda_event_source_mapping` resources with mapping-to-function edges.
 The S3 reader emits typed bucket identity, region, and creation time from
 regional ListBuckets. It verifies the expected owner with HeadBucket and
 reads tags through GetBucketTagging. Only NoSuchTagSet means an empty tag set.

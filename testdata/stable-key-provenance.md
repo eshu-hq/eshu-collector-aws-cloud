@@ -199,6 +199,68 @@ satellite's un-normalized fallback hash equals `facts.StableID` for this
 identity shape) and the synthesized attachment ARN (proving the satellite's
 caller-identity ARN synthesis equals the in-tree mapper's).
 
+## Wave 1 Lambda keys (in-tree scan parity pack)
+
+Input fixture: `testdata/wave1-lambda-parity.json`
+(`sha256:cb5ffa829a19ff4aec80e58f3d2f69178bdc24cf6646e4f51afbd31fb2640d29`).
+
+Oracle: check out eshu-hq/eshu at commit `b0371c05d5`
+(Merge pull request #9580), add a throwaway test in
+`go/internal/collector/awscloud/service/lambda/` that unmarshals the fixture
+directly into the scanner-owned types (the rows mirror those structs field for
+field, with `FunctionName` grouping aliases and mappings under their parent),
+serves them from a fake `Client` (aliases/mappings filtered by the requested
+function ARN), and prints `FactKind` + `StableFactKey` per envelope from
+`Scanner.Scan` over boundary account `123456789012`, region `us-east-1`,
+service `lambda`, scope `aws:123456789012:us-east-1`, generation
+`aws:123456789012:us-east-1:wave1:1`, instance `aws-parity-wave1`, fencing
+token `7`, observed-at `2026-10-30T12:00:00Z`. Command, from the `go/`
+directory of the pinned commit:
+
+```sh
+go test ./internal/collector/awscloud/service/lambda/ \
+  -run 'TestZZWave1LambdaOracle' -count=1 -v
+```
+
+The scan emits 16 envelopes in call order: function A (resource, role edge,
+2 subnet edges, security-group edge), alias live A (resource, edge),
+ARN-less alias staging A (resource only; the edge needs a source ARN on both
+sides), mapping A (resource, edge), function B (resource, image edge; no
+role, no VPC), alias live B (resource, edge), UUID-only mapping B (resource,
+edge with the parent-derived function link). The satellite proves the same
+16 keys through the full production `listLambda` path over the stubbed
+Lambda API (`internal/live/lambda_wave1_parity_test.go`), so GetFunction
+enrichment, the ARN-less alias fallback, and the UUID-only mapping fallback
+are covered end to end, not just the builders:
+
+| # | Kind | Frozen key |
+|---|---|---|
+| 00 | aws_resource (function A) | `fa37b448…28c09d` |
+| 01 | aws_relationship (function->role) | `efae44c5…bb69ca` |
+| 02 | aws_relationship (function->subnet a) | `bcc50526…cdc7b3` |
+| 03 | aws_relationship (function->subnet b) | `d1edae98…91cdc` |
+| 04 | aws_relationship (function->security group) | `e9fb98e7…087cb1` |
+| 05 | aws_resource (alias live A) | `0a18e0f2…66df196` |
+| 06 | aws_relationship (alias->function) | `6597492b…6e7e2cb` |
+| 07 | aws_resource (alias staging A, ARN-less) | `8f1d9720…6d376715` |
+| 08 | aws_resource (mapping A) | `0272b442…c1218f59` |
+| 09 | aws_relationship (mapping->function) | `798b427f…6624b` |
+| 10 | aws_resource (function B) | `4d58f839…a667bc62` |
+| 11 | aws_relationship (function->image) | `8a42c89b…fc3b83` |
+| 12 | aws_resource (alias live B) | `28b276d0…ad914e` |
+| 13 | aws_relationship (alias->function) | `2b5f15a4…1384d1b` |
+| 14 | aws_resource (mapping B, UUID-only) | `685dd254…60ec015` |
+| 15 | aws_relationship (mapping->function) | `bb934c2e…6972f221` |
+
+(Full keys are frozen in the test; prefixes above are abbreviated.)
+Re-execution on 2026-10-30 returned all 16 keys byte-identical to the frozen
+satellite constants. Deliberate satellite deviations are out of fixture scope
+(both documented in `internal/service/lambda/NOT_PORTED.md`): environment
+values, tags, and alias descriptions stay excluded where the in-tree scan
+emits them; GetFunction identity mismatches and unsafe image/KMS references
+fail where the in-tree mapper trusts the API; and a mapping-list denial
+degrades to partial plus warning where the in-tree scan fails.
+
 ## Why this closes the common-mode gap
 
 Every parity test still compares its builder against a hardcoded constant, but

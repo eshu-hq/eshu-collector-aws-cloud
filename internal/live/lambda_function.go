@@ -59,7 +59,60 @@ func lambdaFunctionRecord(function lambdatypes.FunctionConfiguration, region str
 			"vpc_config":         lambdaVPCConfig(function.VpcConfig),
 		},
 	}
+	result.Relationships = lambdaFunctionPlacementRelationships(function, region)
 	return result, nil
+}
+
+// lambdaFunctionPlacementRelationships mirrors the in-tree lambda scanner's
+// function edges: the execution-role link plus one link per VPC subnet and
+// security group. The container-image link stays with lambdaGetFunctionRecord,
+// which alone sees the GetFunction code references. It adds no AWS API call.
+func lambdaFunctionPlacementRelationships(function lambdatypes.FunctionConfiguration, region string) []collector.LiveRelationship {
+	functionARN := strings.TrimSpace(aws.ToString(function.FunctionArn))
+	if functionARN == "" {
+		return nil
+	}
+	var relationships []collector.LiveRelationship
+	if roleARN := strings.TrimSpace(aws.ToString(function.Role)); roleARN != "" {
+		relationships = append(relationships, collector.LiveRelationship{
+			Region: region, ServiceKind: "lambda", RelationshipType: "lambda_function_uses_execution_role",
+			SourceResourceID: functionARN, SourceARN: functionARN,
+			TargetResourceID: roleARN, TargetARN: roleARN, TargetType: awsv1.ResourceTypeIAMRole,
+			SourceRecordID: functionARN + "#execution-role#" + roleARN,
+		})
+	}
+	vpcID := ""
+	var subnetIDs, securityGroupIDs []string
+	if function.VpcConfig != nil {
+		vpcID = strings.TrimSpace(aws.ToString(function.VpcConfig.VpcId))
+		subnetIDs = function.VpcConfig.SubnetIds
+		securityGroupIDs = function.VpcConfig.SecurityGroupIds
+	}
+	for _, subnetID := range subnetIDs {
+		if subnetID = strings.TrimSpace(subnetID); subnetID == "" {
+			continue
+		}
+		relationships = append(relationships, collector.LiveRelationship{
+			Region: region, ServiceKind: "lambda", RelationshipType: "lambda_function_uses_subnet",
+			SourceResourceID: functionARN, SourceARN: functionARN,
+			TargetResourceID: subnetID, TargetType: awsv1.ResourceTypeEC2Subnet,
+			SourceRecordID: functionARN + "#subnet#" + subnetID,
+			Attributes:     map[string]any{"vpc_id": vpcID},
+		})
+	}
+	for _, groupID := range securityGroupIDs {
+		if groupID = strings.TrimSpace(groupID); groupID == "" {
+			continue
+		}
+		relationships = append(relationships, collector.LiveRelationship{
+			Region: region, ServiceKind: "lambda", RelationshipType: "lambda_function_uses_security_group",
+			SourceResourceID: functionARN, SourceARN: functionARN,
+			TargetResourceID: groupID, TargetType: awsv1.ResourceTypeEC2SecurityGroup,
+			SourceRecordID: functionARN + "#security-group#" + groupID,
+			Attributes:     map[string]any{"vpc_id": vpcID},
+		})
+	}
+	return relationships
 }
 
 var lambdaECRImageReference = regexp.MustCompile(`^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com(?:\.cn)?/[A-Za-z0-9._/-]+(?::[A-Za-z0-9._-]+|@sha256:[a-fA-F0-9]{64})$`)
