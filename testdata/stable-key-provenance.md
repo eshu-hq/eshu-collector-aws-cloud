@@ -373,14 +373,16 @@ allowed patterns, and policy JSON stay excluded on both sides by construction
 ## Wave 1 KMS keys (in-tree scan parity pack)
 
 Input fixture: `testdata/wave1-kms-parity.json`
-(`sha256:bbf5fdb90f47e965945d44d6901e6e5e9c5779038d9bd117748effb41b027c8e`).
+(`sha256:6252c04d301c97eef1caa0587a8a03cb2488b0697ac031b98889f13ae71bf5de`).
 
 Oracle: check out eshu-hq/eshu at commit `b0371c05d54ab19fd03c848d509e55fc506ea81a`,
 add a throwaway test in
 `go/internal/collector/awscloud/service/kms/` that unmarshals the fixture
 `keys` array directly into the scanner-owned `Key` type (the rows use those
-exact Go field names; `RetiringPrincipalType` has no scanner counterpart and
-is ignored), serves them from a fake `Client`, and prints `FactKind` +
+exact Go field names, including the enrichment fields `Tags`,
+`RotationEnabled`, and `PolicyRevisionNames`; `RetiringPrincipalType` has no
+scanner counterpart and is ignored), serves them from a fake `Client`, and
+prints `FactKind` +
 `StableFactKey` per envelope from `Scanner.Scan` over boundary account
 `123456789012`, region `us-east-1`, service `kms`, scope
 `aws:123456789012:us-east-1`, generation
@@ -399,10 +401,12 @@ alias (resource, edge) and two grants — a service-principal grant (resource,
 on-key edge, grantee edge with no target ARN) and a grantee-less grant
 (resource, on-key edge only); multi-region replica key C alone; AWS-managed
 key D with alias (resource, edge). The fixture keys carry no key-policy
-statements, tags, or rotation status, so the oracle emits no
-resource-policy-permission facts and the satellite proves the same 18 keys
-through the full production `listKMS` path over stubbed KMS APIs
-(`internal/live/kms_wave1_parity_test.go`):
+statements, so the oracle emits no resource-policy-permission facts; they do
+carry tags, rotation answers, and policy revision names, which the oracle
+maps onto the key observation exactly as production does. Stable keys hash
+identity only, so the enrichment changes no frozen key below, and the
+satellite proves the same 18 keys through the full production `listKMS` path
+over stubbed KMS APIs (`internal/live/kms_wave1_parity_test.go`):
 
 | # | Kind | Frozen key |
 |---|---|---|
@@ -431,11 +435,12 @@ constants. A hand-copy error on key 17 was caught by the parity test itself
 going red; the corrected tail was verified by mechanical re-extraction of the
 throwaway run output, and every frozen constant was then re-verified present
 in the parity test by script.
-Deliberate satellite deviations are out of fixture scope (both documented in
-`internal/service/kms/NOT_PORTED.md`): key-policy statements, tags, rotation
-status, and policy revision names stay unread where the in-tree scan emits
-them; alias ARNs outside the claimed identity and grants without IDs fail
-where the in-tree mapper trusts the API.
+Deliberate satellite deviations are out of fixture scope (all documented in
+`internal/service/kms/NOT_PORTED.md`): key-policy statements stay underived
+where the in-tree scan emits them; alias ARNs outside the claimed identity
+and grants without IDs fail where the in-tree mapper trusts the API. Tags,
+rotation status, policy revision names, and the joined alias/grant counts
+are in fixture scope and locked by `TestWave1KMSAttributeEquality`.
 
 ## Why this closes the common-mode gap
 

@@ -23,6 +23,25 @@ import (
 // List responses paginate so the production paginators are always exercised.
 // One extra target-less alias rides the second alias page: it can never join
 // a key, proving the production drop path instead of the oracle inputs.
+// Rotation answers come only from answerable rows; a rotation query for any
+// other key fails the stub, proving the production gate skipped the call.
+//
+// wave1KMSRotationAnswerable recomputes the rotation support gate from the
+// fixture row strings, independently of the production SDK-typed helper.
+// Keep in sync with kmsRotationSupported: Disabled and PendingImport keys
+// are never queried.
+func wave1KMSRotationAnswerable(row wave1KMSRow) bool {
+	if row.KeyManager != "CUSTOMER" || row.KeyUsage != "ENCRYPT_DECRYPT" || row.KeySpec != "SYMMETRIC_DEFAULT" {
+		return false
+	}
+	switch row.KeyState {
+	case "PendingDeletion", "PendingReplicaDeletion", "Unavailable", "Creating",
+		"Disabled", "PendingImport":
+		return false
+	}
+	return true
+}
+
 func wave1KMSStubConfig(t *testing.T, fixture wave1KMSFixture) aws.Config {
 	t.Helper()
 
@@ -176,13 +195,13 @@ func wave1KMSStubConfig(t *testing.T, fixture wave1KMSFixture) aws.Config {
 				entries = append(entries, aliasDoc(alias))
 			}
 			entries = append(entries, map[string]any{"AliasName": "alias/wave1-unattached"})
-			if marker == "" {
+			if marker == "" && len(entries) > 2 {
 				serveDoc(map[string]any{"Aliases": entries[:2], "Truncated": true, "NextMarker": "page2"})
 				return
 			}
 			if marker == "page2" {
 				entries = entries[2:]
-			} else {
+			} else if marker != "" {
 				t.Errorf("unexpected ListAliases marker %q", marker)
 				w.WriteHeader(http.StatusBadRequest)
 				return
@@ -217,6 +236,59 @@ func wave1KMSStubConfig(t *testing.T, fixture wave1KMSFixture) aws.Config {
 				return
 			}
 			serveDoc(map[string]any{"Grants": entries, "Truncated": false})
+		case strings.HasSuffix(target, "ListResourceTags"):
+			id, ok := body["KeyId"].(string)
+			if !ok {
+				t.Errorf("stub request missing KeyId")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			row, ok := byID[strings.TrimSpace(id)]
+			if !ok {
+				t.Errorf("unknown key %q", id)
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			entries := []map[string]any{}
+			for key, value := range row.Tags {
+				entries = append(entries, map[string]any{"TagKey": key, "TagValue": value})
+			}
+			serveDoc(map[string]any{"Tags": entries, "Truncated": false})
+		case strings.HasSuffix(target, "GetKeyRotationStatus"):
+			id, ok := body["KeyId"].(string)
+			if !ok {
+				t.Errorf("stub request missing KeyId")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			row, ok := byID[strings.TrimSpace(id)]
+			if !ok {
+				t.Errorf("unknown key %q", id)
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			if !wave1KMSRotationAnswerable(row) {
+				t.Errorf("rotation queried for unanswerable key %q", id)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			serveDoc(map[string]any{"KeyRotationEnabled": row.RotationEnabled})
+		case strings.HasSuffix(target, "ListKeyPolicies"):
+			id, ok := body["KeyId"].(string)
+			if !ok {
+				t.Errorf("stub request missing KeyId")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			row, ok := byID[strings.TrimSpace(id)]
+			if !ok {
+				t.Errorf("unknown key %q", id)
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			names := []string{}
+			names = append(names, row.PolicyRevisionNames...)
+			serveDoc(map[string]any{"PolicyNames": names, "Truncated": false})
 		default:
 			t.Errorf("unexpected KMS request target %q", target)
 			w.WriteHeader(http.StatusNotFound)

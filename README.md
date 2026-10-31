@@ -169,13 +169,20 @@ a reported alias ARN must scope to the claimed identity, while a missing alias A
 still identifies by alias name. ListGrants pages emit typed `aws_kms_grant` resources
 with grant-to-key edges, plus grant-to-grantee edges for named IAM or service
 grantees; grant encryption contexts and constraints stay excluded. Alias or grant
-list denials fail the service read. The reader does not read
-key material, raw policies, tags, or rotation status;
-legacy `alias_count`, `grant_count`, `policy_revision_names`, and
-`rotation_status_known` are therefore absent rather than guessed. The new
-reads require `kms:ListKeys`, `kms:DescribeKey`, `kms:ListAliases`, and
-`kms:ListGrants`, with one DescribeKey and one ListGrants
-call per nonblank listed key ID; live IAM access and call cost remain unverified.
+list denials fail the service read. The reader also reads per-key tags
+(`kms:ListResourceTags`), rotation status (`kms:GetKeyRotationStatus`), and
+policy revision names (`kms:ListKeyPolicies`), emitting `alias_count`,
+`grant_count`, `policy_revision_names`, and `rotation_status_known` /
+`rotation_enabled` (the latter only when known). The reader does not read
+key material or raw policy documents. Rotation is skipped without an API call
+for keys AWS cannot answer (non-customer, non-encrypt/decrypt, non-symmetric,
+pending-deletion/replica-deletion, unavailable, creating, disabled, or
+pending-import); a denied tag read yields nil tags, indistinguishable from an
+untagged key. The new reads require `kms:ListKeys`, `kms:DescribeKey`,
+`kms:ListAliases`, `kms:ListGrants`, `kms:ListResourceTags`,
+`kms:GetKeyRotationStatus`, and `kms:ListKeyPolicies`, with one call of each
+per-key read per nonblank listed key ID (tags, rotation, and policy names add
+up to three calls per key); live IAM access and call cost remain unverified.
 The IAM reader emits typed `aws_iam_role` resources from ListRoles, GetRole,
 ListAttachedRolePolicies, and ListRolePolicies. It binds each regionless
 role ARN to the STS-verified account and partition, and its suffix to the

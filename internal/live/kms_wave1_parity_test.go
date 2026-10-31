@@ -16,8 +16,9 @@ import (
 // to the in-tree oracle keys: every fact the in-tree Scanner.Scan derives for
 // the shared fixture (testdata/wave1-kms-parity.json) has a satellite twin
 // with the identical stable key. The test drives the full production listKMS
-// path (stubbed KMS API: ListKeys plus DescribeKey, ListAliases, and
-// ListGrants) and converts records to facts exactly as CollectReport does.
+// path (stubbed KMS API: ListKeys plus DescribeKey, ListAliases, ListGrants,
+// ListResourceTags, GetKeyRotationStatus, and ListKeyPolicies) and converts
+// records to facts exactly as CollectReport does.
 // Oracle keys come from the in-tree scan; the re-derivation recipe is in
 // testdata/stable-key-provenance.md.
 func TestWave1KMSParityAgainstInTreeOracle(t *testing.T) {
@@ -204,6 +205,46 @@ func TestWave1KMSPayloadBranches(t *testing.T) {
 	}
 }
 
+// assertWave1KMSEnrichment pins the enrichment VALUES the identity-only
+// stable keys cannot see: tags, policy names, alias/grant counts, rotation
+// knowledge, and the absence of rotation_enabled for unanswerable keys.
+// A misattributed tag set, count, policy name, or fabricated rotation answer
+// on any covered key fails here.
+func assertWave1KMSEnrichment(t *testing.T, byID map[string]collector.Record, id string, tags map[string]string, policies []string, aliases, grants int, rotationKnown bool) {
+	t.Helper()
+	key, ok := byID["aws_kms_key\x00"+id]
+	if !ok {
+		t.Fatalf("key %q record missing", id)
+	}
+	if !reflect.DeepEqual(key.Resource.Tags, tags) {
+		t.Errorf("key %q tags = %#v, want %#v", id, key.Resource.Tags, tags)
+	}
+	var gotPolicies []string
+	if raw, present := key.Resource.Attributes["policy_revision_names"]; present {
+		typed, ok := raw.([]string)
+		if !ok {
+			t.Errorf("key %q policy_revision_names has wrong type %T", id, raw)
+		} else {
+			gotPolicies = typed
+		}
+	}
+	if !reflect.DeepEqual(gotPolicies, policies) {
+		t.Errorf("key %q policy_revision_names = %#v, want %#v", id, gotPolicies, policies)
+	}
+	if got := key.Resource.Attributes["alias_count"]; got != aliases {
+		t.Errorf("key %q alias_count = %#v, want %d", id, got, aliases)
+	}
+	if got := key.Resource.Attributes["grant_count"]; got != grants {
+		t.Errorf("key %q grant_count = %#v, want %d", id, got, grants)
+	}
+	if got := key.Resource.Attributes["rotation_status_known"]; got != rotationKnown {
+		t.Errorf("key %q rotation_status_known = %#v, want %v", id, got, rotationKnown)
+	}
+	if value, present := key.Resource.Attributes["rotation_enabled"]; present {
+		t.Errorf("key %q rotation_enabled = %#v, want absent", id, value)
+	}
+}
+
 // TestWave1KMSAttributeEquality pins the key, alias, and grant attribute
 // VALUES the stable-key parity cannot see: keys hash identity only, so a
 // swapped alias_name/target_key_id (or a wrong grantee) would pass every key
@@ -243,10 +284,29 @@ func TestWave1KMSAttributeEquality(t *testing.T) {
 		"signing_algorithms":       []string(nil),
 		"mac_algorithms":           []string(nil),
 		"key_agreement_algorithms": []string(nil),
+		"policy_revision_names":    []string{"default"},
+		"alias_count":              1,
+		"grant_count":              1,
+		"rotation_status_known":    true,
+		"rotation_enabled":         true,
 	}
 	if !reflect.DeepEqual(keyA.Resource.Attributes, wantKeyA) {
 		t.Fatalf("key A attributes = %#v, want %#v", keyA.Resource.Attributes, wantKeyA)
 	}
+	if !reflect.DeepEqual(keyA.Resource.Tags, map[string]string{"env": "wave1"}) {
+		t.Fatalf("key A tags = %#v, want the fixture tag set", keyA.Resource.Tags)
+	}
+
+	assertWave1KMSEnrichment(t, byID,
+		"b1b2c3d4-e5f6-4789-abcd-ef0123456789",
+		map[string]string{"env": "wave1", "stage": "staging"},
+		[]string{"default"}, 1, 2, false)
+	assertWave1KMSEnrichment(t, byID,
+		"c1b2c3d4-e5f6-4789-abcd-ef0123456789",
+		nil, nil, 0, 0, false)
+	assertWave1KMSEnrichment(t, byID,
+		"d1b2c3d4-e5f6-4789-abcd-ef0123456789",
+		nil, []string{"default"}, 1, 0, false)
 
 	aliasA, ok := byID["aws_kms_alias\x00arn:aws:kms:us-east-1:123456789012:alias/wave1-a"]
 	if !ok {

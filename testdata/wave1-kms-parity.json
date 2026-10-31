@@ -22,6 +22,9 @@
       "SigningAlgorithms": null,
       "MACAlgorithms": null,
       "KeyAgreementAlgorithms": null,
+      "Tags": {"env": "wave1"},
+      "RotationEnabled": true,
+      "PolicyRevisionNames": ["default"],
       "Aliases": [
         {
           "Name": "alias/wave1-a",
@@ -63,6 +66,9 @@
       "SigningAlgorithms": ["RSASSA_PSS_SHA_256"],
       "MACAlgorithms": null,
       "KeyAgreementAlgorithms": null,
+      "Tags": {"env": "wave1", "stage": "staging"},
+      "RotationEnabled": false,
+      "PolicyRevisionNames": ["default"],
       "Aliases": [
         {
           "Name": "alias/wave1-b-staging",
@@ -115,6 +121,9 @@
       "SigningAlgorithms": null,
       "MACAlgorithms": ["HMAC_SHA_256"],
       "KeyAgreementAlgorithms": null,
+      "Tags": null,
+      "RotationEnabled": false,
+      "PolicyRevisionNames": [],
       "Aliases": [],
       "Grants": []
     },
@@ -137,6 +146,9 @@
       "SigningAlgorithms": null,
       "MACAlgorithms": null,
       "KeyAgreementAlgorithms": null,
+      "Tags": null,
+      "RotationEnabled": false,
+      "PolicyRevisionNames": ["default"],
       "Aliases": [
         {
           "Name": "alias/aws/wave1",
