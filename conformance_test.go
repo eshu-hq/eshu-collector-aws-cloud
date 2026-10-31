@@ -5,6 +5,7 @@ package collector
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -354,6 +355,30 @@ func TestLoadReportRefusesOversizedInput(t *testing.T) {
 	oversized := strings.NewReader(`{"source":"x","records":[` + strings.Repeat(" ", maxReportBytes+1) + `]}`)
 	if _, err := LoadReport(oversized); err == nil {
 		t.Fatal("LoadReport(oversized) error = nil, want failure")
+	}
+}
+
+type errReader struct{ err error }
+
+func (r errReader) Read([]byte) (int, error) { return 0, r.err }
+
+// TestLoadReportSurfacesReadAndDecodeErrors proves a failing reader and a
+// malformed document fail loudly instead of emitting an empty report.
+func TestLoadReportSurfacesReadAndDecodeErrors(t *testing.T) {
+	t.Parallel()
+
+	if _, err := LoadReport(errReader{err: errors.New("test read failure")}); err == nil {
+		t.Fatal("LoadReport(failing reader) error = nil, want failure")
+	}
+	if _, err := LoadReport(strings.NewReader(`{"source":`)); err == nil {
+		t.Fatal("LoadReport(malformed) error = nil, want failure")
+	}
+	report, err := LoadReport(strings.NewReader(`{"source":"s","records":[]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Source != "s" {
+		t.Fatalf("report.Source = %q, want s", report.Source)
 	}
 }
 
