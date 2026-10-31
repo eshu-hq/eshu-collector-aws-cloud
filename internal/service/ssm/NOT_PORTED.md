@@ -43,3 +43,12 @@ nor name fails where the in-tree mapper trusts the API (locked by
 patterns, and policy JSON stay excluded on both sides by construction
 (locked by `TestWave1SSMParameterAttributeEquality` and the leak check in
 `TestWave1SSMPayloadBranches`).
+
+Runtime IAM need (eshu-hq/eshu#9687): beyond `ssm:DescribeParameters`, every
+parameter read also calls `ssm:ListTagsForResource`, and any single tag-list
+failure fails the whole SSM service read for the claim (the collector keeps
+only a warning). Verified live: the collector role
+(`argocd/eshu/base/xirsarole-aws-cloud-collector.yaml` in iac-eks-eshu)
+already grants both actions, so the overlay was clear when checked
+on 2026-10-31. That clearance is point-in-time: re-check the role file
+before acting on this paragraph, since nothing in this repo watches it.
