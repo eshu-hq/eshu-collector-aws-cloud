@@ -180,12 +180,15 @@ func TestListSSMListsParameters(t *testing.T) {
 	t.Parallel()
 
 	cfg := stubAWSConfig(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasSuffix(r.Header.Get("X-Amz-Target"), "DescribeParameters") {
-			t.Errorf("unexpected SSM target %q", r.Header.Get("X-Amz-Target"))
+		switch target := r.Header.Get("X-Amz-Target"); {
+		case strings.HasSuffix(target, "DescribeParameters"):
+			serveJSON(t, `{"Parameters": [{"Name": "/app/config"}]}`)(w, r)
+		case strings.HasSuffix(target, "ListTagsForResource"):
+			serveJSON(t, `{"TagList": [{"Key": "env", "Value": "wave1"}]}`)(w, r)
+		default:
+			t.Errorf("unexpected SSM target %q", target)
 			w.WriteHeader(http.StatusBadRequest)
-			return
 		}
-		serveJSON(t, `{"Parameters": [{"Name": "/app/config"}]}`)(w, r)
 	}))
 
 	records, err := listSSM(context.Background(), cfg)
@@ -197,5 +200,18 @@ func TestListSSMListsParameters(t *testing.T) {
 	}
 	if records[0].Name != "/app/config" || records[0].Detail != "service=ssm region=us-east-1 kind=parameter" {
 		t.Fatalf("parameter record = %#v", records[0])
+	}
+	resource := records[0].Resource
+	if resource == nil {
+		t.Fatal("parameter resource = nil, want typed SSM emission")
+	}
+	if resource.ResourceType != "aws_ssm_parameter" || resource.ResourceID != "/app/config" || resource.SourceRecordID != "/app/config" {
+		t.Fatalf("parameter resource = %+v, want ARN-less name fallback", resource)
+	}
+	if got := resource.Tags; len(got) != 1 || got["env"] != "wave1" {
+		t.Fatalf("parameter tags = %#v, want per-parameter tag list", got)
+	}
+	if records[0].Relationship != nil {
+		t.Fatalf("parameter relationship = %+v, want nil (no key)", records[0].Relationship)
 	}
 }

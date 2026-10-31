@@ -211,7 +211,10 @@ func listSecretsManager(ctx context.Context, cfg aws.Config) ([]collector.Record
 }
 
 // listSSM mirrors the in-tree ssm scanner: parameter metadata only.
-// Parameter values, history values, and policy JSON stay unread.
+// Parameter values, history values, and policy JSON stay unread. Each
+// DescribeParameters row maps through ssmParameterRecord with its
+// ListTagsForResource tag list, the same two reads the in-tree awssdk client
+// performs per parameter (no OTEL spans).
 func listSSM(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 	client := awsssm.NewFromConfig(cfg)
 	region := cfg.Region
@@ -223,7 +226,15 @@ func listSSM(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("ssm describe parameters: %w", err)
 		}
 		for _, parameter := range page.Parameters {
-			records = append(records, record("", "ssm", region, aws.ToString(parameter.Name), "parameter"))
+			tags, err := listSSMParameterTags(ctx, client, aws.ToString(parameter.Name))
+			if err != nil {
+				return nil, err
+			}
+			recorded, err := ssmParameterRecord(parameter, tags, region)
+			if err != nil {
+				return nil, fmt.Errorf("ssm parameter identity: %w", err)
+			}
+			records = append(records, recorded)
 		}
 	}
 	return records, nil

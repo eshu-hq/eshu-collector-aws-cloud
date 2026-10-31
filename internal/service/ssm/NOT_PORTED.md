@@ -18,3 +18,28 @@ Ported: `doc.go`, `helpers.go`, `relationships.go`, `types.go`.
 - `runtimebind/bind_test.go` — exercises an unported subject above.
 
 Seam: SDK `Envelope` + observation-builder + OTEL + scope surfaces, then re-run the port for the files above.
+
+## Wave 1 emission parity (eshu-hq/eshu#9296)
+
+The files above remain literally unported (no SDK `facts.Envelope`
+replacement), but the live path (`internal/live/ssm_parameter.go` through the
+root `NewResourceFact` / `NewRelationshipFact` seams) already emits the
+scanner's full fact set with in-tree-identical stable keys, proven on the
+shared fixture `testdata/wave1-ssm-parity.json` (5/5 keys, provenance in
+`testdata/stable-key-provenance.md`, Q4(a) in
+`internal/live/ssm_wave1_conformance_test.go`
+(`TestWave1SSMLiveConformance` over real builder output; root
+`ssm_wave1_conformance_test.go` is the schema-admission companion)):
+
+| In-tree file | Live-path coverage |
+|---|---|
+| `scanner.go` (parameter/KMS reads) | `listSSM` in `internal/live/services_data.go` reads the same passes per parameter |
+| `parameterObservation` + `kmsRelationship` | `ssmParameterRecord` in `internal/live/ssm_parameter.go` |
+| `awssdk/client.go` (DescribeParameters, ListTagsForResource) | the same SDK calls in `listSSM` (no OTEL spans) |
+
+Deliberate satellite deviation, out of fixture scope: a row with neither ARN
+nor name fails where the in-tree mapper trusts the API (locked by
+`TestWave1SSMParameterRecordRejectsEmptyIdentity`). Raw descriptions, allowed
+patterns, and policy JSON stay excluded on both sides by construction
+(locked by `TestWave1SSMParameterAttributeEquality` and the leak check in
+`TestWave1SSMPayloadBranches`).
