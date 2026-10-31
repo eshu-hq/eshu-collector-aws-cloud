@@ -6,11 +6,13 @@ package live
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
+	sdk "github.com/eshu-hq/eshu-sdk/collector"
 )
 
 // lane0S3LivePolicyDocument is one public-grant bucket policy for the live
@@ -92,13 +94,14 @@ func TestCollectReportCarriesS3PolicyFacts(t *testing.T) {
 		},
 		Loaders: map[string]Loader{"s3": func(_ context.Context, _ aws.Config, _ VerifiedIdentity) ([]collector.Record, error) {
 			return []collector.Record{{
-				Resource: &collector.LiveResource{Region: "us-east-1", ServiceKind: "s3", ARN: "arn:aws:s3:::assets"},
 				S3Grants: []collector.S3ExternalPrincipalGrantObservation{{
-					BucketARN: "arn:aws:s3:::assets", BucketName: "assets",
+					Boundary:    collector.Boundary{AccountID: "123456789012", Region: "us-east-1", ServiceKind: "s3"},
+					BucketARN:   "arn:aws:s3:::assets", BucketName: "assets",
 					PrincipalKind: "public", PrincipalValue: "*", GrantOutcome: "public", Public: true,
 				}},
 				ResourcePolicyStatements: []collector.ResourcePolicyPermissionObservation{{
-					ResourceARN: "arn:aws:s3:::assets", ResourceType: "aws_s3_bucket",
+					Boundary:     collector.Boundary{AccountID: "123456789012", Region: "us-east-1", ServiceKind: "s3"},
+					ResourceARN:  "arn:aws:s3:::assets", ResourceType: "aws_s3_bucket",
 					StatementSID: "LivePublic", Effect: "Allow", IsPublic: true,
 				}},
 			}}, nil
@@ -115,5 +118,40 @@ func TestCollectReportCarriesS3PolicyFacts(t *testing.T) {
 	}
 	if len(outcome.ResourcePolicyPermissions) != 1 || outcome.ResourcePolicyPermissions[0].Boundary.AccountID != "123456789012" {
 		t.Fatalf("ResourcePolicyPermissions = %+v", outcome.ResourcePolicyPermissions)
+	}
+
+	// Production path: the exact shared function collectLivePlan calls.
+	// Dropping either family from AppendOutcomeFacts fails here instead of
+	// silently emitting zero new-kind facts in production.
+	observedAt := time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC)
+	result := sdk.Result{
+		ProtocolVersion: sdk.ProtocolVersionV1Alpha1,
+		State:           sdk.ResultComplete,
+		Claim: sdk.Claim{
+			ComponentID: collector.ComponentID, InstanceID: "aws-parity-s3",
+			CollectorKind: collector.CollectorKind, SourceSystem: collector.SourceSystem,
+			Scope:       sdk.Scope{ID: "aws:123456789012:us-east-1", Kind: "component"},
+			SourceRunID: "s3-parity-run", GenerationID: "aws:123456789012:us-east-1:s3:1",
+			WorkItemID: "s3-parity-work", FencingToken: "s3-parity-token",
+			Attempt: 1, Deadline: observedAt.Add(time.Hour), ConfigHandle: "component-config:aws-cloud",
+		},
+		Generation: sdk.Generation{ID: "aws:123456789012:us-east-1:s3:1", ObservedAt: observedAt},
+	}
+	if result, err = AppendOutcomeFacts(result, outcome, "aws:s3:us-east-1:s3-parity", collector.DefaultResourceUse()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sdk.NewValidator(collector.Contract()).ValidateResult(result); err != nil {
+		t.Fatalf("SDK rejected pipeline result carrying policy facts: %v", err)
+	}
+	want := map[string]bool{"s3_external_principal_grant": false, "aws_resource_policy_permission": false}
+	for _, fact := range result.Facts {
+		if _, ok := want[fact.Kind]; ok {
+			want[fact.Kind] = true
+		}
+	}
+	for kind, found := range want {
+		if !found {
+			t.Errorf("pipeline result missing emitted fact kind %q", kind)
+		}
 	}
 }
