@@ -194,6 +194,10 @@ func TestWave1ECRAttributeEquality(t *testing.T) {
 	if !reflect.DeepEqual(repositoryA.Resource.Attributes, wantRepositoryA) {
 		t.Fatalf("repository A attributes = %#v, want %#v", repositoryA.Resource.Attributes, wantRepositoryA)
 	}
+	wantTagsA := map[string]string{"env": "wave1"}
+	if !reflect.DeepEqual(repositoryA.Resource.Tags, wantTagsA) {
+		t.Fatalf("repository A tags = %#v, want %#v", repositoryA.Resource.Tags, wantTagsA)
+	}
 
 	repositoryB, ok := byID["aws_ecr_repository\x00arn:aws:ecr:us-east-1:123456789012:repository/wave1-b"]
 	if !ok {
