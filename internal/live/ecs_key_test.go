@@ -88,3 +88,30 @@ func TestRedactECSEnvironmentValueNeverLeaksRaw(t *testing.T) {
 		t.Fatalf("reason = %#v, want unknown_provider_schema", plain["reason"])
 	}
 }
+
+// TestECSSensitiveSourceMirrorsInTreeLaunchPolicy pins reason labels for
+// spellings where whole-vs-segment matching could diverge from the in-tree
+// launch policy (eshu go/internal/redact/policy.go RuleSet.Classify with
+// SchemaUnknown, backed by the identical 37-entry awsSensitiveKeys set).
+// Compound keys that merely contain a sensitive word classify unknown on
+// both sides: neither whole-normalized nor ./[] segments match, and the
+// token-window matcher is CloudFormation-only. Values stay redacted either
+// way; only the label must agree.
+func TestECSSensitiveSourceMirrorsInTreeLaunchPolicy(t *testing.T) {
+	key := ecsParityTestKey(t)
+	cases := []struct{ source, want string }{
+		{"DATABASE_URL", "known_sensitive_key"},
+		{"database-url", "known_sensitive_key"},
+		{"config.auth.token", "known_sensitive_key"},
+		{"ServiceAccessKeyId", "unknown_provider_schema"},
+		{"ApiKeyValue", "unknown_provider_schema"},
+		{"config.database_password", "unknown_provider_schema"},
+		{"X-Auth-Token", "unknown_provider_schema"},
+		{"LOG_LEVEL", "unknown_provider_schema"},
+	}
+	for _, tc := range cases {
+		if got := redactECSEnvironmentValue("v", tc.source, key)["reason"]; got != tc.want {
+			t.Errorf("reason(%q) = %#v, want %q (in-tree agreement)", tc.source, got, tc.want)
+		}
+	}
+}
