@@ -261,6 +261,55 @@ emits them; GetFunction identity mismatches and unsafe image/KMS references
 fail where the in-tree mapper trusts the API; and a mapping-list denial
 degrades to partial plus warning where the in-tree scan fails.
 
+## Wave 1 SSM keys (in-tree scan parity pack)
+
+Input fixture: `testdata/wave1-ssm-parity.json`
+(`sha256:b38444ecffcd1e0442d402434cd9963ab7c98f29477d0a471010a72bcd765914`).
+
+Oracle: check out eshu-hq/eshu at commit `b0371c05d5`
+(Merge pull request #9580), add a throwaway test in
+`go/internal/collector/awscloud/service/ssm/` that unmarshals the fixture
+directly into the scanner-owned types (the rows mirror those structs field for
+field), serves them from a fake `Client`, and prints `FactKind` +
+`StableFactKey` per envelope from `Scanner.Scan` over boundary account
+`123456789012`, region `us-east-1`, service `ssm`, scope
+`aws:123456789012:us-east-1`, generation
+`aws:123456789012:us-east-1:wave1:1`, instance `aws-parity-wave1`, fencing
+token `7`, observed-at `2026-10-30T12:00:00Z`. Command, from the `go/`
+directory of the pinned commit:
+
+```sh
+go test ./internal/collector/awscloud/service/ssm/ \
+  -run 'TestZZWave1SSMOracle' -count=1 -v
+```
+
+The scan emits 5 envelopes in call order: parameter A (resource, KMS edge),
+parameter B (resource, alias-key edge with an empty target ARN), parameter C
+(resource only; no key means no edge). The satellite proves the same 5 keys
+through the full production `listSSM` path over the stubbed SSM API
+(`internal/live/ssm_wave1_parity_test.go`), so DescribeParameters mapping,
+the per-parameter ListTagsForResource enrichment, the ARN-less name fallback,
+and the alias-key edge are covered end to end, not just the builders:
+
+| # | Kind | Frozen key |
+|---|---|---|
+| 00 | aws_resource (parameter A, SecureString) | `7b6bc061…956ff8` |
+| 01 | aws_relationship (parameter->KMS ARN) | `2d7c3fb7…74104c` |
+| 02 | aws_resource (parameter B, alias key) | `39c75ea6…41045e` |
+| 03 | aws_relationship (parameter->alias, empty target ARN) | `1c12ea50…761ad5f` |
+| 04 | aws_resource (parameter C, ARN-less) | `dde48d93…a1fff08b` |
+
+(Full keys are frozen in the test; prefixes above are abbreviated.)
+Derivation on 2026-10-31 returned all 5 keys byte-identical to the frozen
+satellite constants, including the ARN-less name fallback and the padded tag
+key trim (proving the satellite's tag normalization equals the in-tree
+mapper's). The one deliberate satellite deviation is out of fixture scope
+(documented in `internal/service/ssm/NOT_PORTED.md`): a row with neither ARN
+nor name fails where the in-tree mapper trusts the API. Raw descriptions,
+allowed patterns, and policy JSON stay excluded on both sides by construction
+(presence booleans and type/status pairs only, locked by
+`TestWave1SSMParameterAttributeEquality`).
+
 ## Why this closes the common-mode gap
 
 Every parity test still compares its builder against a hardcoded constant, but
