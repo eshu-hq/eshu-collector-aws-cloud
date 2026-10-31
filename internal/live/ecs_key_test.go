@@ -5,12 +5,46 @@ package live
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/eshu-hq/eshu-sdk/collector/marker"
 )
+
+// TestECSSensitiveKeysMatchVendoredInTreeList diffs the satellite
+// ecsSensitiveKeys membership against the vendored in-tree awsSensitiveKeys
+// list, so cross-repo agreement is an in-repo artifact rather than a comment
+// claim. Equal length plus every vendored key present proves set equality.
+//
+// Provenance: testdata/intree-aws-sensitive-keys.txt holds the sorted quoted
+// entries of the awsSensitiveKeys slice in eshu-hq/eshu
+// go/internal/collector/awscloud/redaction.go at commit b0371c05d5, one key
+// per line. Regenerate by extracting that slice's quoted entries, sorting,
+// and writing one per line; the test fails on any drift either direction.
+func TestECSSensitiveKeysMatchVendoredInTreeList(t *testing.T) {
+	t.Parallel()
+
+	raw, err := os.ReadFile("../../testdata/intree-aws-sensitive-keys.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want []string
+	for _, line := range strings.Split(string(raw), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			want = append(want, line)
+		}
+	}
+	if len(want) != len(ecsSensitiveKeys) {
+		t.Fatalf("vendored in-tree keys = %d, ecsSensitiveKeys = %d", len(want), len(ecsSensitiveKeys))
+	}
+	for _, key := range want {
+		if _, ok := ecsSensitiveKeys[key]; !ok {
+			t.Errorf("vendored in-tree key %q missing from ecsSensitiveKeys", key)
+		}
+	}
+}
 
 func ecsKeyTestConfig() map[string]any {
 	return map[string]any{
@@ -92,13 +126,15 @@ func TestRedactECSEnvironmentValueNeverLeaksRaw(t *testing.T) {
 
 // TestECSSensitiveSourceLocalLabels pins reason labels for tricky key
 // spellings under this package's own matching rule (whole-normalized, then
-// ./[] segments). The 37-entry set was diffed byte-identical against the
+// ./[] segments). The 37-entry membership was hand-compared against the
 // in-tree awsSensitiveKeys list (eshu go/internal/collector/awscloud/
-// redaction.go; zero lines either direction), and the normalizer plus the
-// segment rule mirror eshu go/internal/redact/policy.go RuleSet.Classify
-// with SchemaUnknown — including unknown labels for compound keys that
-// merely contain a sensitive word, where the token-window matcher (which is
-// CloudFormation-only) does not apply. Values stay redacted either way.
+// redaction.go) and is diffed by TestECSSensitiveKeysMatchVendoredInTreeList
+// below against the vendored copy in testdata/intree-aws-sensitive-keys.txt.
+// The normalizer plus the segment rule mirror eshu go/internal/redact/
+// policy.go RuleSet.Classify with SchemaUnknown — including unknown labels
+// for compound keys that merely contain a sensitive word, where the
+// token-window matcher (which is CloudFormation-only) does not apply.
+// Values stay redacted either way.
 func TestECSSensitiveSourceLocalLabels(t *testing.T) {
 	key := ecsParityTestKey(t)
 	cases := []struct{ source, want string }{

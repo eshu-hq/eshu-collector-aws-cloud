@@ -18,7 +18,7 @@ referenced by services. It requires `ecs:DescribeTaskDefinition` permission.
 Services link to their reported task definitions and load-balancer targets;
 tasks link to reported ENIs. A target-group ARN takes precedence over a
 classic load-balancer name, matching the legacy scanner; a binding that
-reports neither fails the service record. The legacy scanner records a
+reports neither fails the ECS read for the region. The legacy scanner records a
 task-definition ARN on each task as an attribute
 and anchor, without a separate task-to-definition edge. Task definitions
 carry container definitions with environment values replaced by keyed markers
