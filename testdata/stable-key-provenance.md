@@ -310,6 +310,73 @@ allowed patterns, and policy JSON stay excluded on both sides by construction
 (presence booleans and type/status pairs only, locked by
 `TestWave1SSMParameterAttributeEquality`).
 
+## Wave 1 KMS keys (in-tree scan parity pack)
+
+Input fixture: `testdata/wave1-kms-parity.json`
+(`sha256:bbf5fdb90f47e965945d44d6901e6e5e9c5779038d9bd117748effb41b027c8e`).
+
+Oracle: check out eshu-hq/eshu at commit `b0371c05d54ab19fd03c848d509e55fc506ea81a`,
+add a throwaway test in
+`go/internal/collector/awscloud/service/kms/` that unmarshals the fixture
+`keys` array directly into the scanner-owned `Key` type (the rows use those
+exact Go field names; `RetiringPrincipalType` has no scanner counterpart and
+is ignored), serves them from a fake `Client`, and prints `FactKind` +
+`StableFactKey` per envelope from `Scanner.Scan` over boundary account
+`123456789012`, region `us-east-1`, service `kms`, scope
+`aws:123456789012:us-east-1`, generation
+`aws:123456789012:us-east-1:wave1:1`, instance `aws-parity-wave1`, fencing
+token `7`, observed-at `2026-10-30T12:00:00Z`. Command, from the `go/`
+directory of the pinned commit:
+
+```sh
+go test ./internal/collector/awscloud/service/kms/ \
+  -run 'TestZZWave1KMSOracle' -count=1 -v
+```
+
+The scan emits 18 envelopes in call order: key A with alias (resource, edge)
+and IAM-ARN grant (resource, on-key edge, grantee edge); key B with ARN-less
+alias (resource, edge) and two grants — a service-principal grant (resource,
+on-key edge, grantee edge with no target ARN) and a grantee-less grant
+(resource, on-key edge only); multi-region replica key C alone; AWS-managed
+key D with alias (resource, edge). The fixture keys carry no key-policy
+statements, tags, or rotation status, so the oracle emits no
+resource-policy-permission facts and the satellite proves the same 18 keys
+through the full production `listKMS` path over stubbed KMS APIs
+(`internal/live/kms_wave1_parity_test.go`):
+
+| # | Kind | Frozen key |
+|---|---|---|
+| 00 | aws_resource (key A) | `a166e6f4…8e2450` |
+| 01 | aws_resource (alias A) | `b0e9de72…7eafa0` |
+| 02 | aws_relationship (alias A->key) | `cfd61259…d16d88` |
+| 03 | aws_resource (grant A1) | `b43a2e3a…0bfa22` |
+| 04 | aws_relationship (grant A1->key) | `6ddea314…563fa9` |
+| 05 | aws_relationship (grant A1->grantee) | `548d66f2…eedca8` |
+| 06 | aws_resource (key B) | `930e73fa…c6a4a3` |
+| 07 | aws_resource (alias B, ARN-less) | `a167a0ec…c46c1d` |
+| 08 | aws_relationship (alias B->key) | `5a8efb8c…cb13fe` |
+| 09 | aws_resource (grant B1) | `db6af0a3…74debb` |
+| 10 | aws_relationship (grant B1->key) | `de7e8b73…5deccc` |
+| 11 | aws_relationship (grant B1->grantee, Service) | `3623aa2e…767f33` |
+| 12 | aws_resource (grant B2) | `2ec91ad5…459768` |
+| 13 | aws_relationship (grant B2->key) | `e955de58…f423ac` |
+| 14 | aws_resource (key C, replica) | `76709be6…24e12f` |
+| 15 | aws_resource (key D, AWS-managed) | `2e903168…f204cf` |
+| 16 | aws_resource (alias D) | `7058a3b6…d73969` |
+| 17 | aws_relationship (alias D->key) | `5ed3d2a7…3547c6` |
+
+(Full keys are frozen in the test; prefixes above are abbreviated.)
+Re-execution returned all 18 keys byte-identical to the frozen satellite
+constants. A hand-copy error on key 17 was caught by the parity test itself
+going red; the corrected tail was verified by mechanical re-extraction of the
+throwaway run output, and every frozen constant was then re-verified present
+in the parity test by script.
+Deliberate satellite deviations are out of fixture scope (both documented in
+`internal/service/kms/NOT_PORTED.md`): key-policy statements, tags, rotation
+status, and policy revision names stay unread where the in-tree scan emits
+them; alias ARNs outside the claimed identity and grants without IDs fail
+where the in-tree mapper trusts the API.
+
 ## Why this closes the common-mode gap
 
 Every parity test still compares its builder against a hardcoded constant, but

@@ -157,11 +157,18 @@ matching the legacy scanner. For described keys it verifies the reported ARN
 against the listed key ID and the STS-verified account, partition, and region;
 missing or conflicting DescribeKey identity fails the service read. The resource
 includes only DescribeKey metadata such as manager, state, usage, origin, algorithms,
-creation/deletion dates, and multi-Region configuration. It does not read
-key material, raw policies, aliases, grants, tags, or rotation status;
+creation/deletion dates, and multi-Region configuration. ListAliases pages emit typed
+`aws_kms_alias` resources and alias-to-key relationships joined by target key ID;
+a reported alias ARN must scope to the claimed identity, while a missing alias ARN
+still identifies by alias name. ListGrants pages emit typed `aws_kms_grant` resources
+with grant-to-key edges, plus grant-to-grantee edges for named IAM or service
+grantees; grant encryption contexts and constraints stay excluded. Alias or grant
+list denials fail the service read. The reader does not read
+key material, raw policies, tags, or rotation status;
 legacy `alias_count`, `grant_count`, `policy_revision_names`, and
 `rotation_status_known` are therefore absent rather than guessed. The new
-read requires `kms:ListKeys` and `kms:DescribeKey`, with one DescribeKey
+reads require `kms:ListKeys`, `kms:DescribeKey`, `kms:ListAliases`, and
+`kms:ListGrants`, with one DescribeKey and one ListGrants
 call per nonblank listed key ID; live IAM access and call cost remain unverified.
 The IAM reader emits typed `aws_iam_role` resources from ListRoles, GetRole,
 ListAttachedRolePolicies, and ListRolePolicies. It binds each regionless
