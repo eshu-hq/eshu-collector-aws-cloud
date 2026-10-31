@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -100,6 +101,20 @@ func (c Collector) loaders() map[string]Loader {
 // success that retires good evidence, so CollectReport errors instead.
 func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, error) {
 	registry := c.loaders()
+	if c.Loaders == nil && slices.Contains(config.Services, "ecs") {
+		if config.RedactionKey.IsZero() {
+			return Outcome{}, fmt.Errorf("live ecs requires ESHU_AWS_REDACTION_KEY before source acquisition")
+		}
+		selected := make(map[string]Loader, len(registry)+1)
+		for name, load := range registry {
+			selected[name] = load
+		}
+		key := config.RedactionKey
+		selected["ecs"] = withoutIdentity(func(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
+			return listECS(ctx, cfg, key)
+		})
+		registry = selected
+	}
 	records := []collector.Record{}
 	warnings := []string{}
 	resources := []collector.ResourceObservation{}

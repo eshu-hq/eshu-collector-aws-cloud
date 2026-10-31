@@ -14,7 +14,7 @@ import (
 func TestECSServiceTaskDefinitionRelationshipMatchesLegacy(t *testing.T) {
 	serviceARN := "arn:aws:ecs:us-east-1:123456789012:service/prod/web"
 	definitionARN := "arn:aws:ecs:us-east-1:123456789012:task-definition/web:4"
-	row := ecsServiceRecord(awsecstypes.Service{ServiceArn: aws.String(serviceARN), TaskDefinition: aws.String(" " + definitionARN + " ")}, "us-east-1")
+	row := mustECSServiceRecord(t, awsecstypes.Service{ServiceArn: aws.String(serviceARN), TaskDefinition: aws.String(" " + definitionARN + " ")}, "us-east-1")
 	if row.Relationship == nil {
 		t.Fatal("service task definition relationship missing")
 	}
@@ -33,7 +33,7 @@ func TestECSServiceTaskDefinitionRelationshipRequiresBothARNs(t *testing.T) {
 		{ServiceArn: aws.String("arn:aws:ecs:us-east-1:123456789012:service/prod/web")},
 		{TaskDefinition: aws.String("arn:aws:ecs:us-east-1:123456789012:task-definition/web:4")},
 	} {
-		if row := ecsServiceRecord(service, "us-east-1"); row.Relationship != nil {
+		if row := mustECSServiceRecord(t, service, "us-east-1"); row.Relationship != nil {
 			t.Fatalf("invented relationship: %+v", row.Relationship)
 		}
 	}
