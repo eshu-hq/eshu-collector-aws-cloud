@@ -47,13 +47,34 @@ func TestListAPIGatewayListsRestAndHTTPAPIs(t *testing.T) {
 	if len(records) != 4 {
 		t.Fatalf("record count = %d, want 4 (rest, domain, http, v2 domain)", len(records))
 	}
-	want := map[string]string{
+	wantName := map[string]string{
 		"a1b2c3": "orders-api",
 		"h1":     "orders-http",
 	}
+	wantKind := map[string]string{
+		"a1b2c3":           "aws_apigateway_rest_api",
+		"api.example.com":  "aws_apigateway_domain_name",
+		"h1":               "aws_apigatewayv2_api",
+		"http.example.com": "aws_apigateway_domain_name",
+	}
 	for _, record := range records {
-		if name, ok := want[record.ID]; ok && record.Name != name {
+		if name, ok := wantName[record.ID]; ok && record.Name != name {
 			t.Errorf("API record %q name = %q, want %q", record.ID, record.Name, name)
+		}
+		key := record.ID
+		if _, ok := wantKind[key]; !ok {
+			key = record.Name
+		}
+		kind, ok := wantKind[key]
+		if !ok {
+			t.Errorf("unexpected API record %#v", record)
+			continue
+		}
+		if record.Resource == nil || record.Resource.ResourceType != kind {
+			t.Errorf("API record %q resource = %+v, want type %q", record.ID, record.Resource, kind)
+		}
+		if !record.TypedOnly {
+			t.Errorf("API record %q must set TypedOnly", record.ID)
 		}
 	}
 }
@@ -119,6 +140,12 @@ func TestListCloudWatchLogsListsGroups(t *testing.T) {
 	if records[0].Name != "/app/orders" || records[0].Detail != "service=cloudwatchlogs region=us-east-1 kind=log-group" {
 		t.Fatalf("log group record = %#v", records[0])
 	}
+	if records[0].Resource == nil || records[0].Resource.ResourceType != "aws_cloudwatch_logs_log_group" {
+		t.Fatalf("log group resource = %+v, want typed home", records[0].Resource)
+	}
+	if !records[0].TypedOnly {
+		t.Fatal("log group row must set TypedOnly")
+	}
 }
 
 func TestListEventBridgeListsBusesAndRules(t *testing.T) {
@@ -145,6 +172,23 @@ func TestListEventBridgeListsBusesAndRules(t *testing.T) {
 	}
 	if records[0].Name != "default" || records[1].Name != "hourly" {
 		t.Fatalf("eventbridge records = %#v", records)
+	}
+	wantEBKind := map[string]string{
+		"default": "aws_eventbridge_event_bus",
+		"hourly":  "aws_eventbridge_rule",
+	}
+	for _, record := range records {
+		kind, ok := wantEBKind[record.Name]
+		if !ok {
+			t.Errorf("unexpected eventbridge record %#v", record)
+			continue
+		}
+		if record.Resource == nil || record.Resource.ResourceType != kind {
+			t.Errorf("eventbridge record %q resource = %+v, want type %q", record.Name, record.Resource, kind)
+		}
+		if !record.TypedOnly {
+			t.Errorf("eventbridge record %q must set TypedOnly", record.Name)
+		}
 	}
 }
 
