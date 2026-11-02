@@ -241,7 +241,11 @@ func listRoute53(ctx context.Context, cfg aws.Config) ([]collector.Record, error
 		}
 		for _, zone := range page.HostedZones {
 			zoneID := aws.ToString(zone.Id)
-			records = append(records, record(zoneID, "route53", region, strings.TrimSuffix(aws.ToString(zone.Name), "."), "hosted-zone"))
+			zoneRow := record(zoneID, "route53", region, strings.TrimSuffix(aws.ToString(zone.Name), "."), "hosted-zone")
+			zoneResource := hostedZoneObservation(zone, region)
+			zoneRow.Resource = &zoneResource
+			zoneRow.TypedOnly = true
+			records = append(records, zoneRow)
 			var startName, startID *string
 			var startType route53types.RRType
 			for {

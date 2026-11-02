@@ -29,6 +29,60 @@ func supportedDNSRecordSet(set route53types.ResourceRecordSet) bool {
 	}
 }
 
+// hostedZoneObservation maps one SDK hosted zone onto the typed resource
+// observation the aws_resource seam facts out. The translation mirrors the
+// in-tree hostedZoneObservation field for field, except tags: ListHostedZones
+// carries no tags and the reader makes no extra ListTagsForResource call,
+// so Tags stays nil while identity, visibility, and counts match in-tree.
+func hostedZoneObservation(zone route53types.HostedZone, region string) collector.LiveResource {
+	zoneID := strings.TrimSpace(aws.ToString(zone.Id))
+	name := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(aws.ToString(zone.Name))), ".")
+	var comment string
+	private := false
+	if zone.Config != nil {
+		comment = strings.TrimSpace(aws.ToString(zone.Config.Comment))
+		private = zone.Config.PrivateZone
+	}
+	visibility := "public"
+	if private {
+		visibility = "private"
+	}
+	var count int64
+	if zone.ResourceRecordSetCount != nil {
+		count = *zone.ResourceRecordSetCount
+	}
+	var linked map[string]any
+	if zone.LinkedService != nil {
+		principal := strings.TrimSpace(aws.ToString(zone.LinkedService.ServicePrincipal))
+		description := strings.TrimSpace(aws.ToString(zone.LinkedService.Description))
+		if principal != "" || description != "" {
+			linked = map[string]any{"service_principal": principal, "description": description}
+		}
+	}
+	return collector.LiveResource{
+		Region:       region,
+		ServiceKind:  "route53",
+		ResourceType: "aws_route53_hosted_zone",
+		ResourceID:   zoneID,
+		Name:         strings.TrimSuffix(strings.TrimSpace(aws.ToString(zone.Name)), "."),
+		Attributes: map[string]any{
+			"caller_reference":          strings.TrimSpace(aws.ToString(zone.CallerReference)),
+			"comment":                   comment,
+			"linked_service":            linked,
+			"normalized_name":           name,
+			"private_zone":              private,
+			"record_set_count":          count,
+			"route53_hosted_zone_id":    zoneID,
+			"source_identity_family":    "route53_hosted_zone",
+			"source_identity_version":   "1.0.0",
+			"zone_visibility_evidence":  visibility,
+			"zone_visibility_is_direct": true,
+		},
+		CorrelationAnchors: []string{zoneID, aws.ToString(zone.Name), name},
+		SourceRecordID:     zoneID,
+	}
+}
+
 // dnsRecordObservation maps one SDK record set onto the typed observation the
 // aws_dns_record seam facts out. The translation mirrors the in-tree
 // awssdk.mapper plus recordObservation field for field: names stored as

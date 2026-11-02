@@ -254,3 +254,38 @@ func bindDNSObservation(t *testing.T, observation collector.DNSRecordObservation
 	observation.SourceURI = "aws:route53:us-east-1:dns-parity"
 	return observation
 }
+
+// TestHostedZoneObservationMapsSDKZone pins the zone-to-resource home:
+// a hosted zone becomes an aws_resource observation with the in-tree
+// identity (name, caller reference, visibility, record-set count), so the
+// transitional record kind can be deleted without losing zone truth.
+func TestHostedZoneObservationMapsSDKZone(t *testing.T) {
+	t.Parallel()
+
+	zone := route53types.HostedZone{
+		Id:                     aws.String("/hostedzone/ZWAVE1"),
+		Name:                   aws.String("wave1.example.com."),
+		CallerReference:        aws.String("cf-1"),
+		Config:                 &route53types.HostedZoneConfig{Comment: aws.String("wave1"), PrivateZone: true},
+		ResourceRecordSetCount: aws.Int64(7),
+	}
+	res := hostedZoneObservation(zone, "us-east-1")
+	if res.ResourceID != "/hostedzone/ZWAVE1" || res.ResourceType != "aws_route53_hosted_zone" {
+		t.Fatalf("identity = %+v", res)
+	}
+	if res.Name != "wave1.example.com" {
+		t.Fatalf("name = %q, want trimmed", res.Name)
+	}
+	if res.Attributes["caller_reference"] != "cf-1" || res.Attributes["private_zone"] != true {
+		t.Fatalf("attributes = %v", res.Attributes)
+	}
+	if res.Attributes["record_set_count"] != int64(7) {
+		t.Fatalf("record_set_count = %v, want 7", res.Attributes["record_set_count"])
+	}
+	if res.Attributes["zone_visibility_evidence"] != "private" {
+		t.Fatalf("visibility = %v", res.Attributes["zone_visibility_evidence"])
+	}
+	if len(res.CorrelationAnchors) == 0 || res.SourceRecordID != "/hostedzone/ZWAVE1" {
+		t.Fatalf("anchors = %v source = %q", res.CorrelationAnchors, res.SourceRecordID)
+	}
+}

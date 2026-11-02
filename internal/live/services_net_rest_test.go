@@ -174,6 +174,16 @@ func TestListRoute53ListsZonesAndRecordSets(t *testing.T) {
 	if records[0].Name != "example.com" || records[0].Detail != "service=route53 region=us-east-1 kind=hosted-zone" {
 		t.Fatalf("zone record = %#v", records[0])
 	}
+	if records[0].Resource == nil || !records[0].TypedOnly {
+		t.Fatalf("zone row = %#v, want typed resource home with no transitional record", records[0])
+	}
+	zone := records[0].Resource
+	if zone.ResourceID != "/hostedzone/Z123" || zone.ResourceType != "aws_route53_hosted_zone" || zone.Name != "example.com" {
+		t.Fatalf("zone resource = %+v", zone)
+	}
+	if zone.Attributes["caller_reference"] != "ref" || zone.Attributes["record_set_count"] != int64(0) {
+		t.Fatalf("zone attributes = %v", zone.Attributes)
+	}
 	if records[1].ID != "/hostedzone/Z123/example.com./A" || records[1].Name != "example.com" {
 		t.Fatalf("record-set record = %#v", records[1])
 	}
