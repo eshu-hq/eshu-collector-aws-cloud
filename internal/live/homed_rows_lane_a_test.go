@@ -10,6 +10,7 @@ import (
 	awsapigatewaytypes "github.com/aws/aws-sdk-go-v2/service/apigateway/types"
 	awsapigatewayv2types "github.com/aws/aws-sdk-go-v2/service/apigatewayv2/types"
 	awselbv2types "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
+	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 )
 
 func TestHomeElbv2LoadBalancer(t *testing.T) {
@@ -169,6 +170,36 @@ func TestHomeApigatewayRestAPI(t *testing.T) {
 	}
 	if resource.Tags["team"] != "checkout" {
 		t.Fatalf("REST API tags = %#v", resource.Tags)
+	}
+}
+
+// TestHomeApigatewayRestAPIEnvelopeAdmits is the production regression for
+// eshu-hq/eshu#8852: a rest API carrying an API key source must envelope
+// into an admissible aws_resource fact. api_key_source trips the SDK
+// share-safe guard's api_key substring, failing every claim that carries a
+// rest API (same class as the CWL bearer_token_authentication_enabled abort).
+func TestHomeApigatewayRestAPIEnvelopeAdmits(t *testing.T) {
+	api := awsapigatewaytypes.RestApi{
+		Id:           aws.String("a1b2c3"),
+		Name:         aws.String("orders"),
+		ApiKeySource: "HEADER",
+	}
+	got := apigatewayRestAPIRecord(api, "us-east-1")
+	if got.Resource == nil {
+		t.Fatal("REST API typed resource missing")
+	}
+	observation := collector.ResourceObservation{
+		Boundary: wave1Boundary("123456789012", "us-east-1", got.Resource.ServiceKind),
+		ARN:      got.Resource.ARN, ResourceID: got.Resource.ResourceID,
+		ResourceType: got.Resource.ResourceType, Name: got.Resource.Name,
+		State: got.Resource.State, Tags: got.Resource.Tags,
+		Attributes:         got.Resource.Attributes,
+		CorrelationAnchors: append([]string(nil), got.Resource.CorrelationAnchors...),
+		SourceRecordID:     got.Resource.SourceRecordID,
+		SourceURI:          "aws://123456789012",
+	}
+	if _, err := collector.NewResourceFact(observation); err != nil {
+		t.Fatalf("homed rest API observation must envelope cleanly: %v", err)
 	}
 }
 
