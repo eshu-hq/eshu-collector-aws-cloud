@@ -66,6 +66,9 @@ type Outcome struct {
 	// statement per bucket-policy statement.
 	S3Grants                  []collector.S3ExternalPrincipalGrantObservation
 	ResourcePolicyPermissions []collector.ResourcePolicyPermissionObservation
+	// IAMPermissions carries one normalized metadata-only statement per IAM
+	// identity, trust, or permission-boundary policy statement.
+	IAMPermissions []collector.IAMPermissionObservation
 	// SGPostures carries one aws_security_group_rule posture per
 	// DescribeSecurityGroupRules row; EC2Postures carries one
 	// ec2_instance_posture per DescribeInstances row.
@@ -123,6 +126,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 	s3Postures := []collector.S3BucketPostureObservation{}
 	s3Grants := []collector.S3ExternalPrincipalGrantObservation{}
 	resourcePolicyPermissions := []collector.ResourcePolicyPermissionObservation{}
+	iamPermissions := []collector.IAMPermissionObservation{}
 	sgPostures := []collector.SecurityGroupRuleObservation{}
 	ec2Postures := []collector.EC2InstancePostureObservation{}
 	warningObservations := []collector.WarningObservation{}
@@ -199,6 +203,10 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 					statement.Boundary.AccountID = config.AccountID
 					resourcePolicyPermissions = append(resourcePolicyPermissions, statement)
 				}
+				for _, statement := range item.IAMPermissionStatements {
+					statement.Boundary.AccountID = config.AccountID
+					iamPermissions = append(iamPermissions, statement)
+				}
 				if item.SGPosture != nil {
 					posture := *item.SGPosture
 					posture.Boundary.AccountID = config.AccountID
@@ -251,6 +259,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 		S3Postures:                s3Postures,
 		S3Grants:                  s3Grants,
 		ResourcePolicyPermissions: resourcePolicyPermissions,
+		IAMPermissions:            iamPermissions,
 		SGPostures:                sgPostures,
 		EC2Postures:               ec2Postures,
 	}, nil

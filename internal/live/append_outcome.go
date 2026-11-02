@@ -33,6 +33,9 @@ func AppendOutcomeFacts(result sdk.Result, outcome Outcome, sourceURI string, li
 	if result, err = collector.AppendLiveResourcePolicyPermissions(result, outcome.ResourcePolicyPermissions, sourceURI, limits); err != nil {
 		return result, err
 	}
+	if result, err = collector.AppendLiveIAMPermissions(result, outcome.IAMPermissions, sourceURI, limits); err != nil {
+		return result, err
+	}
 	if result, err = collector.AppendLiveSecurityGroupRulePostures(result, outcome.SGPostures, sourceURI, limits); err != nil {
 		return result, err
 	}

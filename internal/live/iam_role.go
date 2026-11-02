@@ -20,12 +20,19 @@ type iamRoleAPI interface {
 	GetRole(context.Context, *awsiam.GetRoleInput, ...func(*awsiam.Options)) (*awsiam.GetRoleOutput, error)
 	ListAttachedRolePolicies(context.Context, *awsiam.ListAttachedRolePoliciesInput, ...func(*awsiam.Options)) (*awsiam.ListAttachedRolePoliciesOutput, error)
 	ListRolePolicies(context.Context, *awsiam.ListRolePoliciesInput, ...func(*awsiam.Options)) (*awsiam.ListRolePoliciesOutput, error)
+	GetRolePolicy(context.Context, *awsiam.GetRolePolicyInput, ...func(*awsiam.Options)) (*awsiam.GetRolePolicyOutput, error)
+	GetPolicy(context.Context, *awsiam.GetPolicyInput, ...func(*awsiam.Options)) (*awsiam.GetPolicyOutput, error)
+	GetPolicyVersion(context.Context, *awsiam.GetPolicyVersionInput, ...func(*awsiam.Options)) (*awsiam.GetPolicyVersionOutput, error)
 }
 
 // listIAMRoleRecords mirrors the legacy role read sequence. Every mandatory
 // read fails the IAM service scan; a nil GetRole detail uses the listed role.
+// Policy-document reads degrade instead: a denied document keeps the
+// surviving statements behind one warning per document, so a principal never
+// reads back as silently empty.
 func listIAMRoleRecords(ctx context.Context, client iamRoleAPI, region string, identity VerifiedIdentity) ([]collector.Record, error) {
 	rows := []collector.Record{}
+	var denials []optionalDenial
 	pages := awsiam.NewListRolesPaginator(client, &awsiam.ListRolesInput{})
 	for pages.HasMorePages() {
 		page, err := pages.NextPage(ctx)
@@ -57,8 +64,24 @@ func listIAMRoleRecords(ctx context.Context, client iamRoleAPI, region string, i
 			if err != nil {
 				return nil, err
 			}
+			effective := effectiveIAMRole(listed, detail)
+			boundaryARN := ""
+			if effective.PermissionsBoundary != nil {
+				boundaryARN = aws.ToString(effective.PermissionsBoundary.PermissionsBoundaryArn)
+			}
+			statements, denial, err := iamRoleStatements(ctx, client, name, aws.ToString(effective.AssumeRolePolicyDocument), attached, inline, boundaryARN)
+			if err != nil {
+				return nil, err
+			}
+			if denial != nil {
+				denials = append(denials, denial.denials...)
+			}
+			row.IAMPermissionStatements = iamPermissionObservations(row.Resource.ARN, iamPrincipalTypeRole, statements)
 			rows = append(rows, row)
 		}
+	}
+	if len(denials) > 0 {
+		return rows, &optionalReadDenied{denials: denials}
 	}
 	return rows, nil
 }
@@ -93,13 +116,19 @@ func listInlineIAMRolePolicies(ctx context.Context, client iamRoleAPI, name stri
 	return names, nil
 }
 
+// effectiveIAMRole resolves the detail-or-listed role both the resource row
+// and the permission-statement reader use, so the two never diverge.
+func effectiveIAMRole(listed iamtypes.Role, detail *iamtypes.Role) iamtypes.Role {
+	if detail != nil {
+		return *detail
+	}
+	return listed
+}
+
 // iamRoleRecord retains only the legacy role resource's safe metadata fields.
 // It validates provider identity before binding the observation to the claim.
 func iamRoleRecord(listed iamtypes.Role, detail *iamtypes.Role, attached, inline []string, region string, identity VerifiedIdentity) (collector.Record, error) {
-	role := listed
-	if detail != nil {
-		role = *detail
-	}
+	role := effectiveIAMRole(listed, detail)
 	arn := strings.TrimSpace(aws.ToString(role.Arn))
 	if arn == "" {
 		arn = strings.TrimSpace(aws.ToString(listed.Arn))
