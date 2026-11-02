@@ -492,6 +492,9 @@ func TestIAMManagedPolicyTruncationWarnsWithoutSilence(t *testing.T) {
 		if entry.attributes["attached"] != 30 || entry.attributes["read"] != 25 {
 			t.Fatalf("truncation attributes = %v, want attached=30 read=25", entry.attributes)
 		}
+		if want := "managed policy reads capped for role:demo: 25 of 30 attached policies read; remaining statements unavailable"; entry.message != want {
+			t.Fatalf("truncation message = %q, want %q", entry.message, want)
+		}
 	}
 	if !found {
 		t.Fatalf("denials = %+v, want one permission-statements-truncated entry", denied.denials)

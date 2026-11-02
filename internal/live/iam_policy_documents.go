@@ -183,6 +183,8 @@ func boundedIAMManagedPolicyStatements(ctx context.Context, api iamManagedPolicy
 			operation: "GetPolicy",
 			resource:  principal,
 			effect:    "permission-statements-truncated",
+			message: fmt.Sprintf("managed policy reads capped for %s: %d of %d attached policies read; remaining statements unavailable",
+				principal, maxIAMPolicyDocumentsPerPrincipal, len(policyARNs)),
 			attributes: map[string]any{
 				"attached": len(policyARNs),
 				"read":     maxIAMPolicyDocumentsPerPrincipal,
