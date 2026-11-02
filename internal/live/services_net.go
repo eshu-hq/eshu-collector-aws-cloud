@@ -38,7 +38,7 @@ func listAPIGateway(ctx context.Context, cfg aws.Config) ([]collector.Record, er
 			return nil, fmt.Errorf("apigateway get rest APIs: %w", err)
 		}
 		for _, api := range page.Items {
-			records = append(records, record(aws.ToString(api.Id), "apigateway", region, aws.ToString(api.Name), "rest-api"))
+			records = append(records, apigatewayRestAPIRecord(api, region))
 		}
 	}
 	domains := awsapigateway.NewGetDomainNamesPaginator(v1, &awsapigateway.GetDomainNamesInput{})
@@ -48,7 +48,7 @@ func listAPIGateway(ctx context.Context, cfg aws.Config) ([]collector.Record, er
 			return nil, fmt.Errorf("apigateway get domain names: %w", err)
 		}
 		for _, domain := range page.Items {
-			records = append(records, record("", "apigateway", region, aws.ToString(domain.DomainName), "domain-name"))
+			records = append(records, apigatewayRestDomainNameRecord(domain, region))
 		}
 	}
 	var nextToken *string
@@ -58,7 +58,7 @@ func listAPIGateway(ctx context.Context, cfg aws.Config) ([]collector.Record, er
 			return nil, fmt.Errorf("apigatewayv2 get APIs: %w", err)
 		}
 		for _, api := range page.Items {
-			records = append(records, record(aws.ToString(api.ApiId), "apigateway", region, aws.ToString(api.Name), "http-api"))
+			records = append(records, apigatewayV2APIRecord(api, region))
 		}
 		if page.NextToken == nil || aws.ToString(page.NextToken) == "" {
 			break
@@ -72,7 +72,7 @@ func listAPIGateway(ctx context.Context, cfg aws.Config) ([]collector.Record, er
 			return nil, fmt.Errorf("apigatewayv2 get domain names: %w", err)
 		}
 		for _, domain := range page.Items {
-			records = append(records, record(aws.ToString(domain.DomainNameArn), "apigateway", region, aws.ToString(domain.DomainName), "domain-name"))
+			records = append(records, apigatewayV2DomainNameRecord(domain, region))
 		}
 		if page.NextToken == nil || aws.ToString(page.NextToken) == "" {
 			break
