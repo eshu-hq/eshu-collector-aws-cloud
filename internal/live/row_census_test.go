@@ -12,8 +12,10 @@ import (
 // pair the satellite collectors can list must have a typed home (a prove
 // func below), a legacy parity citation, or a pinned waiver. PR-D (deletion
 // of the transitional snapshot/record kinds) is gated on this census having
-// zero unwaived gaps: a new listed row without a home fails
-// TestRowCensusComplete until it gains one of the three.
+// zero unwaived gaps. This file is a manually-maintained pinned inventory
+// (verified 52/52 at this head): lister diffs must extend it by process.
+// The gate pins the inventory against silent shrinkage or drift; it does
+// not enumerate call sites.
 
 // censusProved maps a listed row to the test proving its typed home through
 // the production builder. Non-nil prove is compile-enforced: referencing a
@@ -36,7 +38,11 @@ var censusProved = []struct {
 	{"eventbridge", "rule", func(t *testing.T) { TestHomeEventBridgeRule(t) }},
 	{"iam", "policy", func(t *testing.T) { TestHomeIAMPolicy(t) }},
 	{"iam", "instance-profile", func(t *testing.T) { TestHomeIAMInstanceProfile(t) }},
-	{"iam", "oidc-provider", func(t *testing.T) { TestHomeIAMOIDCProvider(t) }},
+	{"iam", "oidc-provider", func(t *testing.T) {
+		TestHomeIAMOIDCProvider(t)
+		TestListIAMOIDCProvidersEnrichRows(t)
+		TestListIAMOIDCProvidersDenialKeepsBareRows(t)
+	}},
 	{"dynamodb", "table", func(t *testing.T) { TestHomeDynamoDBTable(t) }},
 	{"secretsmanager", "secret", func(t *testing.T) { TestHomeSecretsManagerSecret(t) }},
 	{"route53", "hosted-zone", func(t *testing.T) { TestHostedZoneObservationMapsSDKZone(t) }},
@@ -93,9 +99,8 @@ var censusLegacy = []struct {
 }
 
 // censusTotalPairs is the distinct (service, kind) inventory from the
-// record() call-site census (drive 8852). A new listed row must land in
-// censusProved, censusLegacy, or censusWaived, and this test fails until it
-// does.
+// record() call-site census (drive 8852). Extend one of the three lists
+// when a lister adds a row; the count pins the inventory.
 const censusTotalPairs = 52
 
 func TestRowCensusHomes(t *testing.T) {

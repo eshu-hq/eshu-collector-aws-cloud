@@ -214,14 +214,47 @@ func listIAM(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]
 			records = append(records, iamInstanceProfileRecord(profile, region))
 		}
 	}
+	oidcRecords, oidcDenial, err := listIAMOIDCProviderRecords(ctx, client, region)
+	if err != nil {
+		return nil, err
+	}
+	records = append(records, oidcRecords...)
+	return records, combineOptionalDenials(roleDenial, userDenial, oidcDenial)
+}
+
+// listIAMOIDCProviderRecords enriches every listed provider with one
+// GetOpenIDConnectProvider read for its URL and client/thumbprint lists. A
+// denied Get keeps the bare typed row behind an optional denial so one
+// missing permission never drops the whole IAM slice; other failures stay
+// fatal. Callers merge the returned denial with their own.
+func listIAMOIDCProviderRecords(ctx context.Context, client *awsiam.Client, region string) ([]collector.Record, *optionalReadDenied, error) {
 	providers, err := client.ListOpenIDConnectProviders(ctx, &awsiam.ListOpenIDConnectProvidersInput{})
 	if err != nil {
-		return nil, fmt.Errorf("iam list OIDC providers: %w", err)
+		return nil, nil, fmt.Errorf("iam list OIDC providers: %w", err)
 	}
+	records := []collector.Record{}
+	var denial *optionalReadDenied
 	for _, provider := range providers.OpenIDConnectProviderList {
-		records = append(records, iamOIDCProviderRecord(aws.ToString(provider.Arn), "", nil, nil, region))
+		arn := aws.ToString(provider.Arn)
+		url, clientIDs, thumbprints := "", []string(nil), []string(nil)
+		detail, err := client.GetOpenIDConnectProvider(ctx, &awsiam.GetOpenIDConnectProviderInput{OpenIDConnectProviderArn: provider.Arn})
+		if err != nil {
+			if !isIAMPolicyDenial(err) {
+				return nil, nil, fmt.Errorf("iam get OIDC provider: %w", err)
+			}
+			denial = &optionalReadDenied{denials: []optionalDenial{{
+				operation: "GetOpenIDConnectProvider",
+				resource:  arn,
+				effect:    "oidc-provider-enrichment-unavailable",
+			}}}
+		} else if detail != nil {
+			url = strings.TrimSpace(aws.ToString(detail.Url))
+			clientIDs = append([]string(nil), detail.ClientIDList...)
+			thumbprints = append([]string(nil), detail.ThumbprintList...)
+		}
+		records = append(records, iamOIDCProviderRecord(arn, url, clientIDs, thumbprints, region))
 	}
-	return records, nil
+	return records, denial, nil
 }
 
 // listRoute53 mirrors the in-tree route53 scanner: hosted zones and their

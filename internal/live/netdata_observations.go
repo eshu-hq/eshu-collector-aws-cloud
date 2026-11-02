@@ -286,9 +286,9 @@ func iamInstanceProfileRecord(profile iamtypes.InstanceProfile, region string) c
 // envelopes (iam/secrets_observations.go:53), but the satellite Record has
 // no principal slot, so the row is homed as a Resource mirroring the
 // eks_oidc.go:134 precedent: provider identity plus the URL fingerprint and
-// client/thumbprint counts in Attributes. The listing makes no
-// GetOpenIDConnectProvider call, so enrichment rows carry an empty URL and
-// zero counts until that read lands.
+// client/thumbprint counts in Attributes. The listing enriches each row with
+// one GetOpenIDConnectProvider read; a denied Get keeps the bare row (empty
+// URL, zero counts) behind an optional denial.
 func iamOIDCProviderRecord(providerARN, url string, clientIDs, thumbprints []string, region string) collector.Record {
 	arn := strings.TrimSpace(providerARN)
 	name := lastSegment(arn, "/")

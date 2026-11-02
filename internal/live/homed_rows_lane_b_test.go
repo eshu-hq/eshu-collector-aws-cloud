@@ -4,12 +4,17 @@
 package live
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	cloudwatchlogstypes "github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	eventbridgetypes "github.com/aws/aws-sdk-go-v2/service/eventbridge/types"
+	awsiam "github.com/aws/aws-sdk-go-v2/service/iam"
 	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	secretstypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
 )
@@ -278,5 +283,94 @@ func TestHomeSecretsManagerSecret(t *testing.T) {
 	}
 	if !rotation {
 		t.Fatalf("secret rotation-lambda edge missing = %#v", got.Relationships)
+	}
+}
+
+// iamOIDCTestServer serves ListOpenIDConnectProviders plus a scripted
+// GetOpenIDConnectProvider outcome: "ok" enriches, an error code denies.
+func iamOIDCTestServer(t *testing.T, getOutcome string, calls *map[string]int) *httptest.Server {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Error(err)
+			return
+		}
+		action := r.Form.Get("Action")
+		(*calls)[action]++
+		w.Header().Set("Content-Type", "text/xml")
+		switch action {
+		case "ListOpenIDConnectProviders":
+			_, _ = w.Write([]byte(`<ListOpenIDConnectProvidersResponse><ListOpenIDConnectProvidersResult><OpenIDConnectProviderList><member><Arn>arn:aws:iam::123456789012:oidc-provider/example.com</Arn></member></OpenIDConnectProviderList></ListOpenIDConnectProvidersResult></ListOpenIDConnectProvidersResponse>`))
+		case "GetOpenIDConnectProvider":
+			if getOutcome != "ok" {
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte(fmt.Sprintf(`<ErrorResponse><Error><Code>%s</Code><Message>denied</Message></Error></ErrorResponse>`, getOutcome)))
+				return
+			}
+			_, _ = w.Write([]byte(`<GetOpenIDConnectProviderResponse><GetOpenIDConnectProviderResult><Url>https://example.com</Url><ClientIDList><member>sts.amazonaws.com</member></ClientIDList><ThumbprintList><member>abc123</member></ThumbprintList></GetOpenIDConnectProviderResult></GetOpenIDConnectProviderResponse>`))
+		default:
+			t.Errorf("unexpected AWS action %q", action)
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+func iamOIDCTestClient(t *testing.T, server *httptest.Server) *awsiam.Client {
+	t.Helper()
+	return awsiam.NewFromConfig(aws.Config{
+		Region: "us-east-1", BaseEndpoint: aws.String(server.URL), HTTPClient: server.Client(), RetryMaxAttempts: 1,
+		Credentials: aws.CredentialsProviderFunc(func(context.Context) (aws.Credentials, error) {
+			return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
+		}),
+	})
+}
+
+func TestListIAMOIDCProvidersEnrichRows(t *testing.T) {
+	calls := map[string]int{}
+	server := iamOIDCTestServer(t, "ok", &calls)
+	rows, _, err := listIAMOIDCProviderRecords(context.Background(), iamOIDCTestClient(t, server), "us-east-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("OIDC rows = %d, want 1", len(rows))
+	}
+	resource := rows[0].Resource
+	if resource == nil {
+		t.Fatal("OIDC provider typed resource missing")
+	}
+	if resource.Attributes["issuer_url"] != "https://example.com" ||
+		resource.Attributes["client_id_count"] != 1 ||
+		resource.Attributes["thumbprint_count"] != 1 {
+		t.Fatalf("OIDC provider enrichment = %#v", resource.Attributes)
+	}
+	if !rows[0].TypedOnly {
+		t.Fatal("OIDC provider row must set TypedOnly")
+	}
+	if calls["GetOpenIDConnectProvider"] != 1 {
+		t.Fatalf("Get calls = %d, want 1", calls["GetOpenIDConnectProvider"])
+	}
+}
+
+func TestListIAMOIDCProvidersDenialKeepsBareRows(t *testing.T) {
+	calls := map[string]int{}
+	server := iamOIDCTestServer(t, "AccessDenied", &calls)
+	rows, oidcDenial, err := listIAMOIDCProviderRecords(context.Background(), iamOIDCTestClient(t, server), "us-east-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if oidcDenial == nil || len(oidcDenial.denials) != 1 {
+		t.Fatalf("expected one optional denial, got %#v", oidcDenial)
+	}
+	if oidcDenial.denials[0].operation != "GetOpenIDConnectProvider" {
+		t.Fatalf("denial operation = %#v", oidcDenial.denials[0])
+	}
+	if len(rows) != 1 || rows[0].Resource == nil {
+		t.Fatalf("denial must keep the bare typed row, got %#v", rows)
+	}
+	if rows[0].Resource.Attributes["issuer_url"] != "" {
+		t.Fatalf("denied OIDC row must carry an empty URL, got %#v", rows[0].Resource.Attributes)
 	}
 }
