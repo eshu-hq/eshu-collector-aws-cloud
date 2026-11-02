@@ -39,5 +39,8 @@ func AppendOutcomeFacts(result sdk.Result, outcome Outcome, sourceURI string, li
 	if result, err = collector.AppendLiveEC2InstancePostures(result, outcome.EC2Postures, sourceURI, limits); err != nil {
 		return result, err
 	}
+	if result, err = collector.AppendLiveDNSRecords(result, outcome.DNSRecords, sourceURI, limits); err != nil {
+		return result, err
+	}
 	return collector.AppendLiveWarnings(result, outcome.WarningObservations, sourceURI, limits)
 }

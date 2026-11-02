@@ -442,6 +442,55 @@ and grants without IDs fail where the in-tree mapper trusts the API. Tags,
 rotation status, policy revision names, and the joined alias/grant counts
 are in fixture scope and locked by `TestWave1KMSAttributeEquality`.
 
+## Wave 1 Route53 keys (in-tree scan parity pack)
+
+Input fixture: `testdata/wave1-route53-parity.json`
+(`sha256:ecee1870a92436ca0fac4ab47d7b46c8a309eebb237b82a3f5fc6307314891b2`).
+
+Oracle: check out eshu-hq/eshu at `origin/main`, add a throwaway program
+that unmarshals the fixture directly into the scanner-owned types (the rows
+use those exact Go field names), serves them from a fake `Client`, and prints
+`FactKind` + `StableFactKey` per envelope from `Scanner.Scan` over boundary
+account `123456789012`, region `us-east-1`, service `route53`, scope
+`aws:123456789012:us-east-1`, generation
+`aws:123456789012:us-east-1:wave1:1`, instance `aws-parity-wave1`, fencing
+token `7`, observed-at `2026-10-30T12:00:00Z`:
+
+```sh
+go run ./dnsoverifier testdata/wave1-route53-parity.json
+```
+
+The scan emits 7 envelopes in fixture order: the hosted-zone resource, then
+one `aws_dns_record` per supported row; NS, SOA, MX, and TXT rows are
+filtered by `supportedRecord`. The satellite proves the same 6 DNS keys
+through the full production `listRoute53` mapping (`dnsRecordObservation`
+plus `NewDNSRecordFact` over bridged AWS SDK inputs in
+`internal/live/route53_wave1_parity_test.go`). The hosted-zone resource
+envelope is out of scope: the satellite keeps the zone as a transitional
+record while the in-tree scan emits a resource fact from a different
+identity, so only the 6 DNS keys are asserted and the zone key is frozen in
+the oracle-matching test only. The full output is vendored at
+`testdata/wave1-route53-oracle.txt` so the claim stays checkable without
+eshu-repo access; `TestWave1Route53OracleOutputMatchesFrozenKeys` fails on
+any drift between the vendored output and the frozen constants.
+
+| # | Kind | Satellite frozen test | Frozen key |
+|---|---|---|---|
+| 00 | aws_resource (hosted zone) | oracle-match only | `76779564…af4802ca` |
+| 01 | aws_dns_record (weighted A) | parity | `5c04a10b…309cb` |
+| 02 | aws_dns_record (apex alias A) | parity | `f7e7608a…28c31ef3d` |
+| 03 | aws_dns_record (geo CNAME) | parity | `c5678b2b…49df3f8f33` |
+| 04 | aws_dns_record (latency/failover AAAA) | parity | `8e4d4814…e3f885037` |
+| 05 | aws_dns_record (multivalue A) | parity | `6d429f36…7b8985d9ba` |
+| 06 | aws_dns_record (CIDR A) | parity | `f6e0a048…52b930f77c` |
+
+(Full keys are frozen in the two tests; prefixes above are abbreviated.)
+Derivation returned all 7 keys byte-identical to the frozen satellite
+constants on two consecutive runs, including the alias-target identity and
+the weighted set-identifier suffix. The oracle ran against sources verified
+content-identical to `origin/main` (`git diff HEAD origin/main --stat --
+go/` empty over the oracle closure and manifests).
+
 ## Why this closes the common-mode gap
 
 Every parity test still compares its builder against a hardcoded constant, but
