@@ -82,8 +82,9 @@ func listAPIGateway(ctx context.Context, cfg aws.Config) ([]collector.Record, er
 	return records, nil
 }
 
-// listCloudFront mirrors the in-tree cloudfront scanner: distribution
-// metadata only.
+// listCloudFront mirrors the in-tree cloudfront scanner: distributions as
+// typed homes. Tags stay nil because the listing makes no
+// ListTagsForResource call.
 func listCloudFront(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 	client := awscloudfront.NewFromConfig(cfg)
 	region := cfg.Region
@@ -98,11 +99,7 @@ func listCloudFront(ctx context.Context, cfg aws.Config) ([]collector.Record, er
 			continue
 		}
 		for _, distribution := range page.DistributionList.Items {
-			name := aws.ToString(distribution.DomainName)
-			if name == "" {
-				name = aws.ToString(distribution.Id)
-			}
-			records = append(records, record(aws.ToString(distribution.ARN), "cloudfront", region, name, "distribution"))
+			records = append(records, cloudFrontDistributionRecord(distribution, region))
 		}
 	}
 	return records, nil
@@ -315,13 +312,17 @@ func listRoute53(ctx context.Context, cfg aws.Config) ([]collector.Record, error
 	return records, nil
 }
 
-// listSNS mirrors the in-tree sns scanner: topics and their subscriptions.
-// Subscription endpoints (emails, phone numbers, URLs) stay unrecorded:
-// only the protocol and the subscription ARN identify a subscription.
+// listSNS mirrors the in-tree sns scanner: topics as typed homes and their
+// subscriptions as delivers-to edges. Each topic carries one
+// GetTopicAttributes read for its display name and delivery attributes; a
+// denied attributes read keeps the bare typed topic behind an optional
+// denial, while other failures stay fatal. Non-ARN endpoints (emails,
+// phone numbers, URLs) produce no edge, matching the in-tree skip.
 func listSNS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 	client := awssns.NewFromConfig(cfg)
 	region := cfg.Region
 	records := []collector.Record{}
+	var denials []optionalDenial
 	topics := awssns.NewListTopicsPaginator(client, &awssns.ListTopicsInput{})
 	for topics.HasMorePages() {
 		page, err := topics.NextPage(ctx)
@@ -329,8 +330,22 @@ func listSNS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("sns list topics: %w", err)
 		}
 		for _, topic := range page.Topics {
-			arn := aws.ToString(topic.TopicArn)
-			records = append(records, record(arn, "sns", region, lastSegment(arn, ":"), "topic"))
+			arn := strings.TrimSpace(aws.ToString(topic.TopicArn))
+			attrs := map[string]string{}
+			detail, err := client.GetTopicAttributes(ctx, &awssns.GetTopicAttributesInput{TopicArn: topic.TopicArn})
+			if err != nil {
+				if !isSNSDenied(err) {
+					return nil, fmt.Errorf("sns get topic attributes: %w", err)
+				}
+				denials = append(denials, optionalDenial{
+					operation: "GetTopicAttributes",
+					resource:  arn,
+					effect:    "sns-topic-enrichment-unavailable",
+				})
+			} else if detail != nil {
+				attrs = detail.Attributes
+			}
+			row := snsTopicRecord(arn, attrs, region)
 			subscriptions := awssns.NewListSubscriptionsByTopicPaginator(client, &awssns.ListSubscriptionsByTopicInput{TopicArn: topic.TopicArn})
 			for subscriptions.HasMorePages() {
 				subscriptionPage, err := subscriptions.NextPage(ctx)
@@ -338,12 +353,18 @@ func listSNS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 					return nil, fmt.Errorf("sns list subscriptions: %w", err)
 				}
 				for _, subscription := range subscriptionPage.Subscriptions {
-					records = append(records, record(aws.ToString(subscription.SubscriptionArn), "sns", region, aws.ToString(subscription.Protocol), "subscription"))
+					if edge, ok := snsSubscriptionRelationship(arn, subscription, region); ok {
+						row.Relationships = append(row.Relationships, edge)
+					}
 				}
 			}
+			records = append(records, row)
 		}
 	}
-	return records, nil
+	if len(denials) == 0 {
+		return records, nil
+	}
+	return records, &optionalReadDenied{denials: denials}
 }
 
 // listSQS mirrors the in-tree sqs scanner: queue inventory. Message bodies,

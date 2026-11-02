@@ -116,6 +116,14 @@ func TestListCloudFrontListsDistributions(t *testing.T) {
 	if records[1].Name != "E456" {
 		t.Errorf("second distribution name = %q, want id fallback", records[1].Name)
 	}
+	for i, rec := range records {
+		if rec.Resource == nil || rec.Resource.ResourceType != "aws_cloudfront_distribution" {
+			t.Errorf("distribution %d resource = %+v, want typed home", i, rec.Resource)
+		}
+		if !rec.TypedOnly {
+			t.Errorf("distribution %d row must set TypedOnly", i)
+		}
+	}
 }
 
 func TestListCloudWatchLogsListsGroups(t *testing.T) {
