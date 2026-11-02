@@ -288,7 +288,7 @@ func TestHomeSecretsManagerSecret(t *testing.T) {
 
 // iamOIDCTestServer serves ListOpenIDConnectProviders plus a scripted
 // GetOpenIDConnectProvider outcome: "ok" enriches, an error code denies.
-func iamOIDCTestServer(t *testing.T, getOutcome string, calls *map[string]int) *httptest.Server {
+func iamOIDCTestServer(t *testing.T, getOutcome string, calls *map[string]int, arns []string) *httptest.Server {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		serve := func(body string) {
@@ -305,7 +305,11 @@ func iamOIDCTestServer(t *testing.T, getOutcome string, calls *map[string]int) *
 		w.Header().Set("Content-Type", "text/xml")
 		switch action {
 		case "ListOpenIDConnectProviders":
-			serve(`<ListOpenIDConnectProvidersResponse><ListOpenIDConnectProvidersResult><OpenIDConnectProviderList><member><Arn>arn:aws:iam::123456789012:oidc-provider/example.com</Arn></member></OpenIDConnectProviderList></ListOpenIDConnectProvidersResult></ListOpenIDConnectProvidersResponse>`)
+			members := ""
+			for _, arn := range arns {
+				members += `<member><Arn>` + arn + `</Arn></member>`
+			}
+			serve(`<ListOpenIDConnectProvidersResponse><ListOpenIDConnectProvidersResult><OpenIDConnectProviderList>` + members + `</OpenIDConnectProviderList></ListOpenIDConnectProvidersResult></ListOpenIDConnectProvidersResponse>`)
 		case "GetOpenIDConnectProvider":
 			if getOutcome != "ok" {
 				w.WriteHeader(http.StatusForbidden)
@@ -334,7 +338,7 @@ func iamOIDCTestClient(t *testing.T, server *httptest.Server) *awsiam.Client {
 
 func TestListIAMOIDCProvidersEnrichRows(t *testing.T) {
 	calls := map[string]int{}
-	server := iamOIDCTestServer(t, "ok", &calls)
+	server := iamOIDCTestServer(t, "ok", &calls, []string{"arn:aws:iam::123456789012:oidc-provider/example.com"})
 	rows, noDenial, err := listIAMOIDCProviderRecords(context.Background(), iamOIDCTestClient(t, server), "us-east-1")
 	if err != nil {
 		t.Fatal(err)
@@ -364,7 +368,7 @@ func TestListIAMOIDCProvidersEnrichRows(t *testing.T) {
 
 func TestListIAMOIDCProvidersDenialKeepsBareRows(t *testing.T) {
 	calls := map[string]int{}
-	server := iamOIDCTestServer(t, "AccessDenied", &calls)
+	server := iamOIDCTestServer(t, "AccessDenied", &calls, []string{"arn:aws:iam::123456789012:oidc-provider/example.com"})
 	rows, oidcDenial, err := listIAMOIDCProviderRecords(context.Background(), iamOIDCTestClient(t, server), "us-east-1")
 	if err != nil {
 		t.Fatal(err)
@@ -380,5 +384,33 @@ func TestListIAMOIDCProvidersDenialKeepsBareRows(t *testing.T) {
 	}
 	if rows[0].Resource.Attributes["issuer_url"] != "" {
 		t.Fatalf("denied OIDC row must carry an empty URL, got %#v", rows[0].Resource.Attributes)
+	}
+}
+
+func TestListIAMOIDCProvidersDenialAccumulatesAcrossProviders(t *testing.T) {
+	arns := []string{
+		"arn:aws:iam::123456789012:oidc-provider/one.example.com",
+		"arn:aws:iam::123456789012:oidc-provider/two.example.com",
+	}
+	calls := map[string]int{}
+	server := iamOIDCTestServer(t, "AccessDenied", &calls, arns)
+	rows, oidcDenial, err := listIAMOIDCProviderRecords(context.Background(), iamOIDCTestClient(t, server), "us-east-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("OIDC rows = %d, want 2", len(rows))
+	}
+	if oidcDenial == nil || len(oidcDenial.denials) != 2 {
+		t.Fatalf("expected one denial per provider, got %#v", oidcDenial)
+	}
+	seen := map[string]bool{}
+	for _, denial := range oidcDenial.denials {
+		seen[denial.resource] = true
+	}
+	for _, arn := range arns {
+		if !seen[arn] {
+			t.Errorf("missing denial for %q (got %v)", arn, seen)
+		}
 	}
 }

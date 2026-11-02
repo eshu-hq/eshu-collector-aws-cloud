@@ -233,7 +233,7 @@ func listIAMOIDCProviderRecords(ctx context.Context, client *awsiam.Client, regi
 		return nil, nil, fmt.Errorf("iam list OIDC providers: %w", err)
 	}
 	records := []collector.Record{}
-	var denial *optionalReadDenied
+	var denials []optionalDenial
 	for _, provider := range providers.OpenIDConnectProviderList {
 		arn := aws.ToString(provider.Arn)
 		url, clientIDs, thumbprints := "", []string(nil), []string(nil)
@@ -242,11 +242,11 @@ func listIAMOIDCProviderRecords(ctx context.Context, client *awsiam.Client, regi
 			if !isIAMPolicyDenial(err) {
 				return nil, nil, fmt.Errorf("iam get OIDC provider: %w", err)
 			}
-			denial = &optionalReadDenied{denials: []optionalDenial{{
+			denials = append(denials, optionalDenial{
 				operation: "GetOpenIDConnectProvider",
 				resource:  arn,
 				effect:    "oidc-provider-enrichment-unavailable",
-			}}}
+			})
 		} else if detail != nil {
 			url = strings.TrimSpace(aws.ToString(detail.Url))
 			clientIDs = append([]string(nil), detail.ClientIDList...)
@@ -254,7 +254,10 @@ func listIAMOIDCProviderRecords(ctx context.Context, client *awsiam.Client, regi
 		}
 		records = append(records, iamOIDCProviderRecord(arn, url, clientIDs, thumbprints, region))
 	}
-	return records, denial, nil
+	if len(denials) == 0 {
+		return records, nil, nil
+	}
+	return records, &optionalReadDenied{denials: denials}, nil
 }
 
 // listRoute53 mirrors the in-tree route53 scanner: hosted zones and their

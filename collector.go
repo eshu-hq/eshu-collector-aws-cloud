@@ -214,8 +214,8 @@ func Collect(claim sdk.Claim, report Report, opts CollectOptions) (sdk.Result, e
 	}
 	// TypedOnly suppresses transitional emission before any fact is built:
 	// the opt-in path carries no placeholder records, so the budget check
-	// evaluates an empty set and freshness still compares the report
-	// digest, but no transitional facts are emitted.
+	// evaluates an empty set and the report digest is still computed but
+	// the unchanged short-circuit cannot match an empty record set.
 	records := report.Records
 	if opts.TypedOnly {
 		records = nil
