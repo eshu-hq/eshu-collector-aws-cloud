@@ -57,6 +57,8 @@ func TestListIAMListsRolesUsersPoliciesProfilesProviders(t *testing.T) {
 			serve(envelope("ListInstanceProfiles", `<InstanceProfiles><member><InstanceProfileName>web</InstanceProfileName><Arn>arn:aws:iam::123456789012:instance-profile/web</Arn><Path>/</Path><InstanceProfileId>F1</InstanceProfileId><CreateDate>2024-01-01T00:00:00Z</CreateDate></member></InstanceProfiles>`))
 		case "ListOpenIDConnectProviders":
 			serve(envelope("ListOpenIDConnectProviders", `<OpenIDConnectProviderList><member><Arn>arn:aws:iam::123456789012:oidc-provider/example.com</Arn></member></OpenIDConnectProviderList>`))
+		case "GetOpenIDConnectProvider":
+			serve(envelope("GetOpenIDConnectProvider", `<Url>https://example.com</Url><ClientIDList><member>sts.amazonaws.com</member></ClientIDList><ThumbprintList><member>abc123</member></ThumbprintList>`))
 		default:
 			t.Errorf("unexpected IAM action %q", r.Form.Get("Action"))
 			w.WriteHeader(http.StatusBadRequest)
@@ -85,6 +87,14 @@ func TestListIAMListsRolesUsersPoliciesProfilesProviders(t *testing.T) {
 		}
 		if len(record.IAMPermissionStatements) != 2 {
 			t.Errorf("reader permission statements = %+v, want inline + managed", record.IAMPermissionStatements)
+		}
+	}
+	for _, record := range records {
+		if record.Resource == nil || record.Resource.ResourceID != "arn:aws:iam::123456789012:oidc-provider/example.com" {
+			continue
+		}
+		if record.Resource.Attributes["issuer_url"] != "https://example.com" {
+			t.Errorf("provider row lacks enriched issuer URL = %+v", record.Resource)
 		}
 	}
 }
