@@ -6,6 +6,9 @@ package live
 import (
 	"context"
 	"testing"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 )
 
 // TestIAMManagedPolicyFanoutBoundedAt25 pins the per-principal document cap:
@@ -145,5 +148,33 @@ func TestIAMManagedPolicyWithoutDefaultVersionWarns(t *testing.T) {
 	}
 	if len(rows) != 1 {
 		t.Fatalf("rows = %d, want the surviving row kept", len(rows))
+	}
+}
+
+// TestIAMUserPolicyDenialWarnsWithoutSilence mirrors the role denial
+// contract on the user path: a denied inline read keeps the surviving
+// statements and records one warning.
+func TestIAMUserPolicyDenialWarnsWithoutSilence(t *testing.T) {
+	t.Parallel()
+
+	arn := "arn:aws:iam::123456789012:user/deploy"
+	api := &fakeIAMPermissionUserAPI{
+		user:    iamtypes.User{Arn: aws.String(arn), UserName: aws.String("deploy"), Path: aws.String("/")},
+		inline:  []string{"inline-deploy"},
+		byName:  map[string]string{"inline-deploy": iamPermissionInlineDocument},
+		byARN:   map[string]string{iamPermissionManagedARN: iamPermissionManagedDocument},
+		denyGet: map[string]bool{"inline-deploy": true},
+	}
+	rows, err := listIAMUserRecords(context.Background(), api, "us-east-1",
+		VerifiedIdentity{AccountID: "123456789012", Partition: "aws"})
+	denied, ok := err.(*optionalReadDenied)
+	if !ok || len(denied.denials) != 1 {
+		t.Fatalf("denial = %+v err=%v, want one optional denial", denied, err)
+	}
+	if entry := denied.denials[0]; entry.operation != "GetUserPolicy" || entry.resource != "user:deploy" {
+		t.Fatalf("denial entry = %+v, want GetUserPolicy on user:deploy", entry)
+	}
+	if len(rows) != 1 || len(rows[0].IAMPermissionStatements) == 0 {
+		t.Fatalf("surviving rows = %+v, want managed statements kept", rows)
 	}
 }
