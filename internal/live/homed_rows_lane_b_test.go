@@ -291,6 +291,11 @@ func TestHomeSecretsManagerSecret(t *testing.T) {
 func iamOIDCTestServer(t *testing.T, getOutcome string, calls *map[string]int) *httptest.Server {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		serve := func(body string) {
+			if _, err := w.Write([]byte(body)); err != nil {
+				t.Errorf("write fixture response: %v", err)
+			}
+		}
 		if err := r.ParseForm(); err != nil {
 			t.Error(err)
 			return
@@ -300,14 +305,14 @@ func iamOIDCTestServer(t *testing.T, getOutcome string, calls *map[string]int) *
 		w.Header().Set("Content-Type", "text/xml")
 		switch action {
 		case "ListOpenIDConnectProviders":
-			_, _ = w.Write([]byte(`<ListOpenIDConnectProvidersResponse><ListOpenIDConnectProvidersResult><OpenIDConnectProviderList><member><Arn>arn:aws:iam::123456789012:oidc-provider/example.com</Arn></member></OpenIDConnectProviderList></ListOpenIDConnectProvidersResult></ListOpenIDConnectProvidersResponse>`))
+			serve(`<ListOpenIDConnectProvidersResponse><ListOpenIDConnectProvidersResult><OpenIDConnectProviderList><member><Arn>arn:aws:iam::123456789012:oidc-provider/example.com</Arn></member></OpenIDConnectProviderList></ListOpenIDConnectProvidersResult></ListOpenIDConnectProvidersResponse>`)
 		case "GetOpenIDConnectProvider":
 			if getOutcome != "ok" {
 				w.WriteHeader(http.StatusForbidden)
-				_, _ = w.Write([]byte(fmt.Sprintf(`<ErrorResponse><Error><Code>%s</Code><Message>denied</Message></Error></ErrorResponse>`, getOutcome)))
+				serve(fmt.Sprintf(`<ErrorResponse><Error><Code>%s</Code><Message>denied</Message></Error></ErrorResponse>`, getOutcome))
 				return
 			}
-			_, _ = w.Write([]byte(`<GetOpenIDConnectProviderResponse><GetOpenIDConnectProviderResult><Url>https://example.com</Url><ClientIDList><member>sts.amazonaws.com</member></ClientIDList><ThumbprintList><member>abc123</member></ThumbprintList></GetOpenIDConnectProviderResult></GetOpenIDConnectProviderResponse>`))
+			serve(`<GetOpenIDConnectProviderResponse><GetOpenIDConnectProviderResult><Url>https://example.com</Url><ClientIDList><member>sts.amazonaws.com</member></ClientIDList><ThumbprintList><member>abc123</member></ThumbprintList></GetOpenIDConnectProviderResult></GetOpenIDConnectProviderResponse>`)
 		default:
 			t.Errorf("unexpected AWS action %q", action)
 			w.WriteHeader(http.StatusBadRequest)
@@ -330,9 +335,12 @@ func iamOIDCTestClient(t *testing.T, server *httptest.Server) *awsiam.Client {
 func TestListIAMOIDCProvidersEnrichRows(t *testing.T) {
 	calls := map[string]int{}
 	server := iamOIDCTestServer(t, "ok", &calls)
-	rows, _, err := listIAMOIDCProviderRecords(context.Background(), iamOIDCTestClient(t, server), "us-east-1")
+	rows, noDenial, err := listIAMOIDCProviderRecords(context.Background(), iamOIDCTestClient(t, server), "us-east-1")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if noDenial != nil {
+		t.Fatalf("expected no denial on the enrich path, got %#v", noDenial)
 	}
 	if len(rows) != 1 {
 		t.Fatalf("OIDC rows = %d, want 1", len(rows))
