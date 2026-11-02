@@ -18,7 +18,9 @@ type Health struct {
 	Alive bool `json:"alive"`
 	// LastSuccessAt is the last complete-claim timestamp, zero when none.
 	LastSuccessAt time.Time `json:"last_success_at,omitempty"`
-	// LastDigest is the last emitted report digest for freshness comparison.
+	// LastDigest is the last emitted evidence digest for freshness
+	// comparison: the typed-evidence digest on the live path, the report
+	// snapshot digest in file mode.
 	LastDigest string `json:"last_digest,omitempty"`
 	// ConsecutiveFailures counts failures since the last success.
 	ConsecutiveFailures int `json:"consecutive_failures"`

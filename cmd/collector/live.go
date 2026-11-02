@@ -18,19 +18,22 @@ import (
 
 // collectLivePlan runs a bounded AWS claim and appends typed resource evidence
 // from successful service reads. Failed services leave the claim partial.
-func collectLivePlan(plan stdioPlan) (sdk.Result, error) {
+// It also reports the typed-evidence digest so freshness keys off typed
+// facts instead of the transitional snapshot fact; a previous digest that
+// matches short-circuits to unchanged with no facts.
+func collectLivePlan(plan stdioPlan) (sdk.Result, string, error) {
 	return collectLivePlanWithLookup(plan, os.LookupEnv)
 }
 
-func collectLivePlanWithLookup(plan stdioPlan, lookup func(string) (string, bool)) (sdk.Result, error) {
+func collectLivePlanWithLookup(plan stdioPlan, lookup func(string) (string, bool)) (sdk.Result, string, error) {
 	key, err := resolveLiveRedactionKey(plan.live, lookup)
 	if err != nil {
-		return sdk.Result{}, err
+		return sdk.Result{}, "", err
 	}
 	plan.live.RedactionKey = key
 	outcome, err := live.Collector{AssumeRole: live.AssumeScopeRole}.CollectReport(context.Background(), plan.live)
 	if err != nil {
-		return sdk.Result{}, err
+		return sdk.Result{}, "", err
 	}
 	opts := liveCollectOptions(plan)
 	var result sdk.Result
@@ -40,9 +43,16 @@ func collectLivePlanWithLookup(plan stdioPlan, lookup func(string) (string, bool
 		result, err = collector.CollectPartial(plan.claim, outcome.Report, opts, strings.Join(outcome.Warnings, "; "))
 	}
 	if err != nil {
-		return sdk.Result{}, err
+		return sdk.Result{}, "", err
 	}
-	return live.AppendOutcomeFacts(result, outcome, plan.live.SourceURI, plan.live.Limits)
+	result, outcomeDigest, err := live.AppendOutcomeFacts(result, outcome, plan.live.SourceURI, plan.live.Limits)
+	if err != nil {
+		return sdk.Result{}, "", err
+	}
+	if unchanged, done := unchangedOutcome(plan.claim, plan.live.PreviousDigest, outcomeDigest); done {
+		return unchanged, "", nil
+	}
+	return result, outcomeDigest, nil
 }
 
 // resolveLiveRedactionKey obtains deployment key material only at the command
@@ -72,9 +82,10 @@ func resolveLiveRedactionKey(config live.Config, lookup func(string) (string, bo
 	return key, nil
 }
 
-// liveCollectOptions disables placeholder-only freshness until the digest
-// includes typed resources and failed service pairs. File mode keeps its
-// existing unchanged behavior.
+// liveCollectOptions drops the placeholder previous digest: live freshness
+// compares the typed-evidence digest at the plan level instead (see
+// unchangedOutcome), so the report-digest short-circuit in Collect never
+// fires on the live path. File mode keeps its existing unchanged behavior.
 func liveCollectOptions(plan stdioPlan) collector.CollectOptions {
 	return collector.CollectOptions{
 		ObservedAt: time.Now().UTC(),
