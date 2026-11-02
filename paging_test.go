@@ -108,8 +108,9 @@ func TestPaginateSinglePageFinalEnvelope(t *testing.T) {
 
 // TestPaginateFirstPageCarriesContinuation proves an over-budget v1alpha3
 // result emits page zero with a resume cursor the host accepts: nonempty
-// cursor, More true, gapless index, declared total, and no statuses yet
-// (the host sums per-page statuses, so only the final page carries them).
+// cursor, More true, gapless index, declared total, and the result statuses
+// intact (the host validates each page standalone, so every page carries
+// them; reassembly sums per-page statuses).
 func TestPaginateFirstPageCarriesContinuation(t *testing.T) {
 	t.Parallel()
 
@@ -132,8 +133,8 @@ func TestPaginateFirstPageCarriesContinuation(t *testing.T) {
 	if page == nil || !page.More || page.Cursor == "" || page.PageIndex != 0 || page.TotalFacts != 3 {
 		t.Fatalf("first page = %+v, want continuation at index 0 with total 3", page)
 	}
-	if len(out.Statuses) != 0 {
-		t.Fatalf("non-final page statuses = %d, want none (host sums per page)", len(out.Statuses))
+	if len(out.Statuses) != 1 {
+		t.Fatalf("non-final page statuses = %d, want the outcome status (each page validates standalone)", len(out.Statuses))
 	}
 	if len(out.Facts) == 0 || len(out.Facts) == len(facts) {
 		t.Fatalf("first page facts = %d, want a strict prefix of %d", len(out.Facts), len(facts))
@@ -188,6 +189,11 @@ func TestPaginateContinuationResumesWithPinnedGeneration(t *testing.T) {
 	}
 	if secondPage == nil {
 		t.Fatal("resumed page = nil, want page 1")
+	}
+	// Intermediate pages must validate standalone on the host, so they
+	// carry the outcome statuses just like the first and final pages.
+	if secondPage.More && len(second.Statuses) == 0 {
+		t.Fatal("intermediate resumed page carries no statuses, want outcome preserved")
 	}
 	// Walk every cursor to the final page and reassemble the fact stream.
 	var reassembled []sdk.Fact

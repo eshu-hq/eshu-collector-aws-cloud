@@ -245,11 +245,14 @@ func effectivePageBound(maxPageBytes int64) int64 {
 // v1alpha3 it stamps the negotiated protocol, splits completable results
 // into bounded pages, and serves either page zero (minting the resume
 // cursor) or the cursored page (verifying the cursor digest against the
-// re-collected facts and pinning the first page's generation). Only the
-// final page carries statuses, because the host sums per-page statuses. A
-// single fact larger than the bound becomes a terminal page-budget result;
-// source drift across calls is a hard error so the host retries the claim
-// from page zero instead of committing a torn generation.
+// re-collected facts and pinning the first page's generation). Every page
+// carries the result statuses: the host validates each page as a standalone
+// result, so stripping them from non-final pages fails partial claims on
+// page zero (the host sums per-page statuses on reassembly, so the warning
+// status repeats once per page). A single fact larger than the bound
+// becomes a terminal page-budget result; source drift across calls is a
+// hard error so the host retries the claim from page zero instead of
+// committing a torn generation.
 func PaginateResult(result sdk.Result, protocol string, continuation *PageContinuation, maxPageBytes int64) (sdk.Result, *ResultPage, error) {
 	if strings.TrimSpace(protocol) != ProtocolVersionV1Alpha3 {
 		if continuation != nil && strings.TrimSpace(continuation.Cursor) != "" {
@@ -299,7 +302,10 @@ func emitFirstPage(result sdk.Result, pages [][]sdk.Fact) (sdk.Result, *ResultPa
 		return sdk.Result{}, nil, err
 	}
 	result.Facts = pages[0]
-	result.Statuses = nil
+	// Statuses ride every page, not just the final one: the host validates
+	// each page as a standalone result, so a partial first page without its
+	// warning status fails the whole claim (eshu-hq/eshu#8852 production
+	// proof). Reassembly sums per-page statuses by design.
 	return result, &ResultPage{Cursor: cursor, More: true, PageIndex: 0, TotalFacts: total}, nil
 }
 
@@ -348,7 +354,8 @@ func emitResumePage(result sdk.Result, pages [][]sdk.Fact, continuation *PageCon
 	if err != nil {
 		return sdk.Result{}, nil, err
 	}
-	result.Statuses = nil
+	// Same every-page statuses rule as emitFirstPage: intermediate pages
+	// must validate standalone on the host.
 	return result, &ResultPage{Cursor: next, More: true, PageIndex: index, TotalFacts: cursor.TotalFacts}, nil
 }
 

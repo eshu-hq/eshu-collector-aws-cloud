@@ -171,3 +171,49 @@ func TestPageCursorRejectsGarbage(t *testing.T) {
 		t.Fatal("decodePageCursor(wrong version) error = nil, want failure")
 	}
 }
+
+// TestPaginatePartialPagesValidateStandalone is the production regression
+// for eshu-hq/eshu#8852: the host validates every v1alpha3 page as a
+// standalone result, so a multi-page partial claim whose non-final pages
+// carry no status fails closed on page zero with invalid_result
+// (terminal, zero facts admitted). Every emitted page must therefore pass
+// the pinned SDK validator on its own.
+func TestPaginatePartialPagesValidateStandalone(t *testing.T) {
+	t.Parallel()
+
+	observedAt := testObservedAt()
+	claim := testClaim()
+	facts := []sdk.Fact{
+		sizedFact("a", 300, observedAt),
+		sizedFact("b", 300, observedAt),
+		sizedFact("c", 300, observedAt),
+	}
+	result := sdk.Result{
+		ProtocolVersion: ProtocolVersionV1Alpha3,
+		State:           sdk.ResultPartial,
+		Claim:           claim,
+		Generation:      sdk.Generation{ID: claim.GenerationID, ObservedAt: observedAt},
+		Facts:           facts,
+		Statuses:        []sdk.Status{{Class: sdk.StatusWarning, Partial: true, WarningCount: 1, FactCount: len(facts)}},
+	}
+	oneWire, err := FactWireBytes(facts[0])
+	if err != nil {
+		t.Fatalf("FactWireBytes error = %v", err)
+	}
+	// Bound fits a strict prefix: first page carries facts but, pre-fix,
+	// no statuses.
+	out, page, err := PaginateResult(result, ProtocolVersionV1Alpha3, nil, int64(oneWire+oneWire/2))
+	if err != nil {
+		t.Fatalf("PaginateResult error = %v", err)
+	}
+	if page == nil || !page.More {
+		t.Fatalf("page = %+v, want a multi-page first page", page)
+	}
+	contract := sdk.Contract{ProtocolVersion: ProtocolVersionV1Alpha3, Facts: []sdk.FactDeclaration{
+		{Kind: FactKindRecord, SchemaVersions: []string{"1.0.0"}, SourceConfidence: []sdk.SourceConfidence{sdk.SourceConfidenceObserved}},
+	}}
+	validator := sdk.NewValidator(contract)
+	if _, err := validator.ValidateResult(out); err != nil {
+		t.Fatalf("first page must validate standalone: %v", err)
+	}
+}
