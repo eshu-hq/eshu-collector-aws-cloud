@@ -74,6 +74,10 @@ type Outcome struct {
 	SGPostures  []collector.SecurityGroupRuleObservation
 	EC2Postures []collector.EC2InstancePostureObservation
 	RDSPostures []collector.RDSPostureObservation
+	// DNSRecords carries one aws_dns_record observation per supported
+	// ListResourceRecordSets row; the live Route 53 reader filters the
+	// rows the in-tree scanner skips (NS, SOA, MX, TXT, SRV).
+	DNSRecords []collector.DNSRecordObservation
 }
 
 func (c Collector) now() time.Time {
@@ -129,6 +133,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 	sgPostures := []collector.SecurityGroupRuleObservation{}
 	ec2Postures := []collector.EC2InstancePostureObservation{}
 	rdsPostures := []collector.RDSPostureObservation{}
+	dnsRecords := []collector.DNSRecordObservation{}
 	warningObservations := []collector.WarningObservation{}
 	ordinaryFailure := false
 	for i, region := range config.Regions {
@@ -218,6 +223,11 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 					posture.Boundary.AccountID = config.AccountID
 					rdsPostures = append(rdsPostures, posture)
 				}
+				if item.DNSRecord != nil {
+					dnsRecord := *item.DNSRecord
+					dnsRecord.Boundary.AccountID = config.AccountID
+					dnsRecords = append(dnsRecords, dnsRecord)
+				}
 				if !item.TypedOnly {
 					records = append(records, item)
 				}
@@ -263,6 +273,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 		SGPostures:                sgPostures,
 		EC2Postures:               ec2Postures,
 		RDSPostures:               rdsPostures,
+		DNSRecords:                dnsRecords,
 	}, nil
 }
 

@@ -239,7 +239,15 @@ func listRoute53(ctx context.Context, cfg aws.Config) ([]collector.Record, error
 					return nil, fmt.Errorf("route53 list resource record sets: %w", err)
 				}
 				for _, set := range sets.ResourceRecordSets {
-					records = append(records, record(zoneID+"/"+aws.ToString(set.Name)+"/"+string(set.Type), "route53", region, strings.TrimSuffix(aws.ToString(set.Name), "."), "record-set"))
+					row := record(zoneID+"/"+aws.ToString(set.Name)+"/"+string(set.Type), "route53", region, strings.TrimSuffix(aws.ToString(set.Name), "."), "record-set")
+					if supportedDNSRecordSet(set) {
+						observation, err := dnsRecordObservation(set, zone, region)
+						if err != nil {
+							return nil, fmt.Errorf("route53 map resource record set: %w", err)
+						}
+						row.DNSRecord = observation
+					}
+					records = append(records, row)
 				}
 				if !sets.IsTruncated {
 					break

@@ -1,0 +1,95 @@
+{
+  "description": "Wave 1 Route53 parity inputs (eshu-hq/eshu#8852). Rows mirror the in-tree post-mapper scanner types (go/internal/collector/awscloud/service/route53/types.go) using those exact Go field names; the satellite test bridges the same rows into AWS SDK inputs. The in-tree oracle unmarshals this file directly into the scanner-owned structs, serves them from a fake Client, and prints FactKind + StableFactKey per envelope from Scanner.Scan; the satellite proves the same aws_dns_record keys through the production dnsRecordObservation mapper plus NewDNSRecordFact. The hosted-zone resource envelope is out of scope: the satellite keeps the zone as a transitional record while the in-tree scan emits a resource fact from a different identity. No real identifiers: all values are synthetic (192.0.2.0/24 is TEST-NET-1, 2001:db8::/32 is documentation space).",
+  "scope_id": "aws:123456789012:us-east-1",
+  "generation_id": "aws:123456789012:us-east-1:wave1:1",
+  "collector_instance_id": "aws-parity-wave1",
+  "hosted_zone": {
+    "ID": "/hostedzone/ZWAVE1",
+    "Name": "wave1.example.com.",
+    "CallerReference": "wave1-caller-ref",
+    "Comment": "wave1 parity zone",
+    "Private": false,
+    "ResourceRecordSetCount": 10
+  },
+  "record_sets": [
+    {
+      "Name": "api.wave1.example.com.",
+      "Type": "A",
+      "SetIdentifier": "w1",
+      "TTL": 300,
+      "Values": ["192.0.2.10"],
+      "Weight": 10,
+      "HealthCheckID": "hc-1"
+    },
+    {
+      "Name": "wave1.example.com.",
+      "Type": "A",
+      "AliasTarget": {
+        "DNSName": "dualstack.wave1-123.us-east-1.elb.amazonaws.com.",
+        "HostedZoneID": "Z35SXDOTRQ7X7K",
+        "EvaluateTargetHealth": true
+      }
+    },
+    {
+      "Name": "cdn.wave1.example.com.",
+      "Type": "CNAME",
+      "TTL": 60,
+      "Values": ["d123.cloudfront.net."],
+      "GeoLocation": {
+        "ContinentCode": "NA",
+        "CountryCode": "US",
+        "SubdivisionCode": "CA"
+      }
+    },
+    {
+      "Name": "v6.wave1.example.com.",
+      "Type": "AAAA",
+      "TTL": 300,
+      "Values": ["2001:db8::10"],
+      "Region": "us-east-1",
+      "Failover": "PRIMARY"
+    },
+    {
+      "Name": "multi.wave1.example.com.",
+      "Type": "A",
+      "TTL": 60,
+      "Values": ["192.0.2.11", "192.0.2.12"],
+      "MultiValueAnswer": true
+    },
+    {
+      "Name": "cidr.wave1.example.com.",
+      "Type": "A",
+      "TTL": 300,
+      "Values": ["192.0.2.13"],
+      "TrafficPolicyInstanceID": "tpi-1",
+      "CIDRRouting": {
+        "CollectionID": "cidr-1",
+        "LocationName": "loc-a"
+      }
+    },
+    {
+      "Name": "wave1.example.com.",
+      "Type": "NS",
+      "TTL": 172800,
+      "Values": ["ns-1.awsdns-1.com."]
+    },
+    {
+      "Name": "wave1.example.com.",
+      "Type": "SOA",
+      "TTL": 900,
+      "Values": ["ns-1.awsdns-1.com. hostmaster.wave1.example.com. 1 7200 900 1209600 86400"]
+    },
+    {
+      "Name": "mail.wave1.example.com.",
+      "Type": "MX",
+      "TTL": 300,
+      "Values": ["10 mail.wave1.example.com."]
+    },
+    {
+      "Name": "txt.wave1.example.com.",
+      "Type": "TXT",
+      "TTL": 300,
+      "Values": ["\"v=spf1 -all\""]
+    }
+  ]
+}

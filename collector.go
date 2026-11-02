@@ -124,6 +124,10 @@ type Record struct {
 	// DescribeDBInstances or DescribeDBClusters row. The live RDS reader
 	// sets it; Collect fans it out through AppendLiveRDSPostures.
 	RDSPosture *RDSPostureObservation `json:"-"`
+	// DNSRecord carries one normalized Route 53 record-set observation from
+	// a ListResourceRecordSets row. The live Route 53 reader sets it for
+	// supported rows only; Collect fans it out through AppendLiveDNSRecords.
+	DNSRecord *DNSRecordObservation `json:"-"`
 	// ImageReference carries a typed image digest and tag from DescribeImages.
 	ImageReference *LiveImageReference `json:"-"`
 	// Relationship carries one typed edge from a live AWS read.
