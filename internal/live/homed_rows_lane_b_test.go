@@ -17,6 +17,7 @@ import (
 	awsiam "github.com/aws/aws-sdk-go-v2/service/iam"
 	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	secretstypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
+	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 )
 
 func TestHomeSQSQueue(t *testing.T) {
@@ -412,5 +413,39 @@ func TestListIAMOIDCProvidersDenialAccumulatesAcrossProviders(t *testing.T) {
 		if !seen[arn] {
 			t.Errorf("missing denial for %q (got %v)", arn, seen)
 		}
+	}
+}
+
+// TestHomeCloudWatchLogsLogGroupEnvelopeAdmits is the production regression
+// for eshu-hq/eshu#8852: a DescribeLogGroups row carrying the bearer-token
+// authentication flag must envelope into an admissible aws_resource fact.
+// The lane record builder alone never runs the SDK share-safe guard, so a
+// record-level test stays green while every live claim exits 1 with
+// launch_failure (proven in ops-qa: the full-scope replay fails on
+// attributes.bearer_token_authentication_enabled).
+func TestHomeCloudWatchLogsLogGroupEnvelopeAdmits(t *testing.T) {
+	group := cloudwatchlogstypes.LogGroup{
+		Arn:                              aws.String("arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/orders:*"),
+		LogGroupName:                     aws.String("/aws/lambda/orders"),
+		KmsKeyId:                         aws.String("arn:aws:kms:us-east-1:123456789012:key/aaa111"),
+		RetentionInDays:                  aws.Int32(30),
+		BearerTokenAuthenticationEnabled: aws.Bool(true),
+	}
+	got := cloudWatchLogsLogGroupRecord(group, "us-east-1")
+	if got.Resource == nil {
+		t.Fatal("log group typed resource missing")
+	}
+	observation := collector.ResourceObservation{
+		Boundary: wave1Boundary("123456789012", "us-east-1", got.Resource.ServiceKind),
+		ARN:      got.Resource.ARN, ResourceID: got.Resource.ResourceID,
+		ResourceType: got.Resource.ResourceType, Name: got.Resource.Name,
+		State: got.Resource.State, Tags: got.Resource.Tags,
+		Attributes:         got.Resource.Attributes,
+		CorrelationAnchors: append([]string(nil), got.Resource.CorrelationAnchors...),
+		SourceRecordID:     got.Resource.SourceRecordID,
+		SourceURI:          "aws://123456789012",
+	}
+	if _, err := collector.NewResourceFact(observation); err != nil {
+		t.Fatalf("homed log-group observation must envelope cleanly: %v", err)
 	}
 }
