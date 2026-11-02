@@ -33,7 +33,7 @@ const (
 	iamPolicyResourceType                              = catalog.ResourceTypeIAMPolicy
 	iamInstanceProfileResourceType                     = catalog.ResourceTypeIAMInstanceProfile
 	iamRoleInInstanceProfileRelationship               = catalog.RelationshipIAMRoleInInstanceProfile
-	iamOIDCProviderResourceType                        = catalog.ResourceTypeEKSOIDCProvider
+	iamOIDCProviderResourceType                        = catalog.ResourceTypeIAMOIDCProvider
 	dynamoDBTableResourceType                          = catalog.ResourceTypeDynamoDBTable
 	dynamoDBTableUsesKMSKeyRelationship                = catalog.RelationshipDynamoDBTableUsesKMSKey
 	secretsManagerSecretResourceType                   = catalog.ResourceTypeSecretsManagerSecret

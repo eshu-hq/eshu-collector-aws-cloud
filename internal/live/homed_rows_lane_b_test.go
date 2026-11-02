@@ -194,7 +194,7 @@ func TestHomeIAMOIDCProvider(t *testing.T) {
 	if got.Resource == nil {
 		t.Fatal("OIDC provider typed resource missing")
 	}
-	if got.Resource.ResourceType != "aws_eks_oidc_provider" {
+	if got.Resource.ResourceType != "aws_iam_oidc_provider" {
 		t.Fatalf("OIDC provider resource type = %q", got.Resource.ResourceType)
 	}
 	if got.Resource.Attributes["client_id_count"] != 1 || got.Resource.Attributes["thumbprint_count"] != 1 {

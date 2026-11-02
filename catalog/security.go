@@ -25,6 +25,12 @@ const (
 	ResourceTypeIAMInstanceProfile = awsv1.ResourceTypeIAMInstanceProfile
 	// ResourceTypeIAMPrincipal identifies a principal from an IAM trust policy.
 	ResourceTypeIAMPrincipal = awsv1.ResourceTypeIAMPrincipal
+	// ResourceTypeIAMOIDCProvider identifies an IAM OIDC provider. The
+	// pinned factschema has no constant for it (in-tree emits OIDC
+	// providers as posture principals, not resources), so the satellite
+	// owns this value; it must not reuse ResourceTypeEKSOIDCProvider,
+	// which is EKS-cluster-associated identity.
+	ResourceTypeIAMOIDCProvider = "aws_iam_oidc_provider"
 )
 
 const (
