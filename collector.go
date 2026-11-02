@@ -120,6 +120,10 @@ type Record struct {
 	// row. The live EC2 reader sets it; Collect fans it out through
 	// AppendLiveEC2InstancePostures.
 	EC2Posture *EC2InstancePostureObservation `json:"-"`
+	// RDSPosture carries one derived instance or cluster posture from a
+	// DescribeDBInstances or DescribeDBClusters row. The live RDS reader
+	// sets it; Collect fans it out through AppendLiveRDSPostures.
+	RDSPosture *RDSPostureObservation `json:"-"`
 	// ImageReference carries a typed image digest and tag from DescribeImages.
 	ImageReference *LiveImageReference `json:"-"`
 	// Relationship carries one typed edge from a live AWS read.

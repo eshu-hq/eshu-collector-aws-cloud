@@ -115,7 +115,7 @@ importable only inside this module, satisfying `boundary_test.go`).
 | `resource_policy_permission_envelope.go` | root package | `aws_resource_policy_permission` |
 | `ec2_posture_envelope.go` | root package | `ec2_instance_posture` |
 | `s3_posture_envelope.go` | root package | `s3_bucket_posture` |
-| `posture_envelope.go` (RDS) | root package | `rds_instance_posture` |
+| `rds_posture_envelope.go`, `rds_posture_collection.go` | root package | `rds_instance_posture` |
 | `s3_external_principal_grant_envelope.go` | root package | `s3_external_principal_grant` |
 | `extractor.go`, `factschema_helpers.go`, `redaction.go`, `scan_status.go`, `apicall.go` | root package (helpers) + `health.go` for status | redaction must keep the `secret`-field behavior the redaction test locks |
 | `recordpolicy/` (`policy.go`) | `recordpolicy/` | per-record bounds |
@@ -178,6 +178,14 @@ importable only inside this module, satisfying `boundary_test.go`).
    fact set holds 25/25 stable-key parity against the in-tree scanner on the
    shared fixture testdata/wave1-ec2-parity.json (provenance in
    testdata/stable-key-provenance.md; Q4(a) in ec2_wave1_conformance_test.go).
+   The RDS `DescribeDBInstances` and `DescribeDBClusters` pages emit one
+   metadata-only `rds_instance_posture` per listed instance or cluster,
+   alongside minimum typed resource identity for those rows and DB subnet
+   groups. The posture omits endpoint addresses, usernames, database names,
+   credentials, and security parameters; the SDK source URI is the validated
+   configured source URI, since the legacy RDS envelope omits it. RDS tags
+   and full enrichment parity remain unfinished; no extra RDS API calls were
+   added for this slice (Q4(a) in rds_wave1_conformance_test.go).
    Remaining: other services, real host grant proof, and replacement of
    placeholder conformance fixtures. ECR repository observations use the existing
    DescribeRepositories pages plus ListTagsForResource per ARN. ECR image

@@ -68,9 +68,12 @@ type Outcome struct {
 	ResourcePolicyPermissions []collector.ResourcePolicyPermissionObservation
 	// SGPostures carries one aws_security_group_rule posture per
 	// DescribeSecurityGroupRules row; EC2Postures carries one
-	// ec2_instance_posture per DescribeInstances row.
+	// ec2_instance_posture per DescribeInstances row; RDSPostures carries
+	// one rds_instance_posture per DescribeDBInstances or
+	// DescribeDBClusters row.
 	SGPostures  []collector.SecurityGroupRuleObservation
 	EC2Postures []collector.EC2InstancePostureObservation
+	RDSPostures []collector.RDSPostureObservation
 }
 
 func (c Collector) now() time.Time {
@@ -125,6 +128,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 	resourcePolicyPermissions := []collector.ResourcePolicyPermissionObservation{}
 	sgPostures := []collector.SecurityGroupRuleObservation{}
 	ec2Postures := []collector.EC2InstancePostureObservation{}
+	rdsPostures := []collector.RDSPostureObservation{}
 	warningObservations := []collector.WarningObservation{}
 	ordinaryFailure := false
 	for i, region := range config.Regions {
@@ -209,6 +213,11 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 					posture.Boundary.AccountID = config.AccountID
 					ec2Postures = append(ec2Postures, posture)
 				}
+				if item.RDSPosture != nil {
+					posture := *item.RDSPosture
+					posture.Boundary.AccountID = config.AccountID
+					rdsPostures = append(rdsPostures, posture)
+				}
 				if !item.TypedOnly {
 					records = append(records, item)
 				}
@@ -253,6 +262,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 		ResourcePolicyPermissions: resourcePolicyPermissions,
 		SGPostures:                sgPostures,
 		EC2Postures:               ec2Postures,
+		RDSPostures:               rdsPostures,
 	}, nil
 }
 

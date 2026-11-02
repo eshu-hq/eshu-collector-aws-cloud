@@ -240,6 +240,10 @@ verified partition. Instance identity observations carry state and launch AMI
 ID from the same `DescribeInstances` response. These edges, subnet-to-VPC,
 volume-to-KMS, and instance-to-AMI are the typed EC2 relationships currently
 emitted. AMI identities are deduplicated by ID within each regional EC2 scan.
+The live RDS reader emits typed resource identity for DB instances, clusters,
+and subnet groups from the existing describe pages, plus one metadata-only
+`rds_instance_posture` fact per instance or cluster; the posture excludes
+endpoint addresses, database names, usernames, and security parameter values.
 One bounded `DescribeImages` call per scan (at most 100 distinct image IDs,
 deprecated images included) stamps the reported typed image fields
 (`platform_details`, `platform`, `architecture`, `creation_date`,
