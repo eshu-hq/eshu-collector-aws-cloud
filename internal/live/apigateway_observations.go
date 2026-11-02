@@ -46,13 +46,20 @@ func apigatewayRestAPIRecord(api awsapigatewaytypes.RestApi, region string) coll
 		State:        strings.TrimSpace(string(api.ApiStatus)),
 		Tags:         apigatewayCloneStringMap(api.Tags),
 		Attributes: map[string]any{
-			"api_id":                       apiID,
-			"api_kind":                     "rest",
-			"description":                  strings.TrimSpace(aws.ToString(api.Description)),
-			"created_date":                 apigatewayTimeOrNil(api.CreatedDate),
-			"version":                      strings.TrimSpace(aws.ToString(api.Version)),
-			"api_status":                   strings.TrimSpace(string(api.ApiStatus)),
-			"api_key_source":               strings.TrimSpace(string(api.ApiKeySource)),
+			"api_id":       apiID,
+			"api_kind":     "rest",
+			"description":  strings.TrimSpace(aws.ToString(api.Description)),
+			"created_date": apigatewayTimeOrNil(api.CreatedDate),
+			"version":      strings.TrimSpace(aws.ToString(api.Version)),
+			"api_status":   strings.TrimSpace(string(api.ApiStatus)),
+			// No api_key_source: the in-tree restAPIObservation carries
+			// that string, but the SDK share-safe guard rejects the
+			// api_key substring and the host intake would reject the fact
+			// too, failing every claim that carries a rest API
+			// (eshu-hq/eshu#8852 production proof, same class as the CWL
+			// bearer flag). One-field exception to the
+			// mirrors-in-tree-fields rule; restore via the SDK allowlist
+			// follow-up, not by re-adding the key here.
 			"disable_execute_api_endpoint": api.DisableExecuteApiEndpoint,
 			"endpoint_types":               endpointTypes,
 			"vpc_endpoint_ids":             vpcEndpointIDs,
