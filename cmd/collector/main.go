@@ -77,6 +77,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) err
 	// fails the run instead of emitting late evidence.
 	monitor := collector.NewMonitor()
 	var result sdk.Result
+	var outcomeDigest string
 	var err error
 	// emitProtocol selects the wire output: file mode keeps the legacy
 	// v1alpha1 single-shot shape, while --sdk-stdio emits whatever the
@@ -91,7 +92,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) err
 			limits = plan.limits
 			emitProtocol = plan.protocol
 			emitContinuation = plan.continuation
-			result, err = runWithTimeout(func() (sdk.Result, error) {
+			result, outcomeDigest, err = runCollectWithTimeout(func() (sdk.Result, string, error) {
 				return collectStdioPlan(plan)
 			}, limits)
 		}
@@ -115,17 +116,13 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) err
 		logHealth(stderr, health, resource)
 		return err
 	}
-	// Only Complete/Partial with a snapshot digest move LastSuccessAt.
+	// Only Complete/Partial with a recorded digest move LastSuccessAt.
 	// Terminal outcomes observe as failures (propagating the failure
 	// class), and Unchanged outcomes leave the last good digest alone. A
-	// non-final page carries no snapshot fact (Collect appends it last),
-	// so it observes nothing, exactly like an unchanged check.
-	digest := ""
-	for _, fact := range result.Facts {
-		if fact.Kind == collector.FactKindSnapshot {
-			digest = fact.StableKey
-		}
-	}
+	// non-final page records nothing. The digest comes from the live
+	// typed-evidence path when one ran; file mode keeps the exact legacy
+	// snapshot-fact scan.
+	digest := healthDigest(outcomeDigest, result, page)
 	if result.State == sdk.ResultTerminal {
 		monitor.ObserveFailure(terminalCause(result))
 	} else if digest != "" {
@@ -231,6 +228,30 @@ func runWithTimeout(work func() (sdk.Result, error), limits collector.ResourceUs
 	}
 }
 
+// runCollectWithTimeout is the digest-carrying form of runWithTimeout for
+// the SDK stdio path: the typed-evidence digest travels back through the
+// channel alongside the result, so no shared variable crosses the timeout
+// goroutine boundary.
+func runCollectWithTimeout(work func() (sdk.Result, string, error), limits collector.ResourceUse) (sdk.Result, string, error) {
+	type outcome struct {
+		result sdk.Result
+		digest string
+		err    error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		result, digest, err := work()
+		done <- outcome{result: result, digest: digest, err: err}
+	}()
+	timeout := time.Duration(limits.ClaimTimeoutSeconds) * time.Second
+	select {
+	case finished := <-done:
+		return finished.result, finished.digest, finished.err
+	case <-time.After(timeout):
+		return sdk.Result{}, "", fmt.Errorf("claim wall-time bound of %d seconds exceeded", limits.ClaimTimeoutSeconds)
+	}
+}
+
 // stdioPlan is a parsed SDK host request: everything parseSDKStdio learns
 // from stdin before the wall-time bound starts covering the collection. A
 // request with source.input runs the local file mode; a host activation
@@ -332,13 +353,13 @@ func parseSDKStdio(stdin io.Reader) (stdioPlan, error) {
 // collectStdioPlan runs the file read and Collect for a parsed request
 // under the caller's wall-time bound. Live-mode plans list live AWS
 // resources and Collect the built report instead.
-func collectStdioPlan(plan stdioPlan) (sdk.Result, error) {
+func collectStdioPlan(plan stdioPlan) (sdk.Result, string, error) {
 	if plan.liveMode {
 		return collectLivePlan(plan)
 	}
 	file, err := os.Open(plan.inputPath)
 	if err != nil {
-		return sdk.Result{}, err
+		return sdk.Result{}, "", err
 	}
 	defer func() {
 		// The input is consumed end-to-end before Close; a close error
@@ -350,14 +371,18 @@ func collectStdioPlan(plan stdioPlan) (sdk.Result, error) {
 	}()
 	report, err := collector.LoadReport(file)
 	if err != nil {
-		return sdk.Result{}, err
+		return sdk.Result{}, "", err
 	}
-	return collector.Collect(plan.claim, report, collector.CollectOptions{
+	result, err := collector.Collect(plan.claim, report, collector.CollectOptions{
 		ObservedAt:     time.Now().UTC(),
 		SourceURI:      plan.sourceURI,
 		PreviousDigest: plan.previousDigest,
 		Limits:         plan.limits,
 	})
+	if err != nil {
+		return sdk.Result{}, "", err
+	}
+	return result, "", nil
 }
 
 func demoClaim() sdk.Claim {

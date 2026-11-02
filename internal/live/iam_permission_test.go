@@ -355,7 +355,7 @@ func TestCollectReportCarriesIAMPermissions(t *testing.T) {
 		},
 		Generation: sdk.Generation{ID: "aws:123456789012:us-east-1:iam:1", ObservedAt: observedAt},
 	}
-	if result, err = AppendOutcomeFacts(result, outcome, "aws:iam:us-east-1:iam-parity", collector.DefaultResourceUse()); err != nil {
+	if result, _, err = AppendOutcomeFacts(result, outcome, "aws:iam:us-east-1:iam-parity", collector.DefaultResourceUse()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := sdk.NewValidator(collector.Contract()).ValidateResult(result); err != nil {

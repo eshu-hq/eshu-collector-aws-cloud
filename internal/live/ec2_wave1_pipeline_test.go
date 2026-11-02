@@ -76,7 +76,7 @@ func TestWave1EC2PipelineFansOutPostures(t *testing.T) {
 	sourceURI := "aws:ec2:us-east-1:wave1-parity"
 	limits := collector.DefaultResourceUse()
 	// Production path: the exact shared function collectLivePlan calls.
-	if result, err = AppendOutcomeFacts(result, outcome, sourceURI, limits); err != nil {
+	if result, _, err = AppendOutcomeFacts(result, outcome, sourceURI, limits); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := sdk.NewValidator(collector.Contract()).ValidateResult(result); err != nil {
