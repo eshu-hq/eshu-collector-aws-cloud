@@ -212,14 +212,21 @@ func Collect(claim sdk.Claim, report Report, opts CollectOptions) (sdk.Result, e
 	if err := checkSourceURI(opts.SourceURI); err != nil {
 		return sdk.Result{}, err
 	}
-	if len(report.Records) > limits.MaxRecordsPerClaim {
+	// TypedOnly suppresses transitional emission before any budget or
+	// freshness read: the opt-in path carries no placeholder records, so
+	// record budgets and report-digest freshness have nothing to evaluate.
+	records := report.Records
+	if opts.TypedOnly {
+		records = nil
+	}
+	if len(records) > limits.MaxRecordsPerClaim {
 		return terminalResult(claim, observedAt, "record-budget-exceeded"), nil
 	}
 	// PreviousDigest accepts the last emitted snapshot stable key (the
 	// LastDigest the Monitor reports) or the raw report digest; either
 	// match means the source has not moved since the last emission.
 	digest := Digest(report)
-	if opts.PreviousDigest != "" && len(report.Records) > 0 &&
+	if opts.PreviousDigest != "" && len(records) > 0 &&
 		(opts.PreviousDigest == digest || opts.PreviousDigest == "snapshot:"+digest) {
 		return sdk.Result{
 			ProtocolVersion: sdk.ProtocolVersionV1Alpha1,
@@ -231,8 +238,8 @@ func Collect(claim sdk.Claim, report Report, opts CollectOptions) (sdk.Result, e
 	}
 
 	seen := map[string]bool{}
-	facts := make([]sdk.Fact, 0, len(report.Records)+1)
-	for _, record := range report.Records {
+	facts := make([]sdk.Fact, 0, len(records)+1)
+	for _, record := range records {
 		key := "record:" + record.ID
 		if seen[key] {
 			continue
@@ -278,23 +285,25 @@ func Collect(claim sdk.Claim, report Report, opts CollectOptions) (sdk.Result, e
 	if encoded, err := json.Marshal(snapshotPayload); err != nil || len(encoded) > limits.MaxPayloadBytes {
 		return terminalResult(claim, observedAt, "payload-budget-exceeded"), nil
 	}
-	snapshotKey := "snapshot:" + Digest(report)
-	facts = append(facts, sdk.Fact{
-		Kind:             FactKindSnapshot,
-		SchemaVersion:    "1.0.0",
-		StableKey:        snapshotKey,
-		SourceConfidence: sdk.SourceConfidenceReported,
-		ObservedAt:       observedAt,
-		SourceRef: sdk.SourceRef{
-			SourceSystem: SourceSystem,
-			ScopeID:      claim.Scope.ID,
-			GenerationID: claim.GenerationID,
-			FactKey:      snapshotKey,
-			URI:          opts.SourceURI,
-			RecordID:     "snapshot",
-		},
-		Payload: snapshotPayload,
-	})
+	if !opts.TypedOnly {
+		snapshotKey := "snapshot:" + Digest(report)
+		facts = append(facts, sdk.Fact{
+			Kind:             FactKindSnapshot,
+			SchemaVersion:    "1.0.0",
+			StableKey:        snapshotKey,
+			SourceConfidence: sdk.SourceConfidenceReported,
+			ObservedAt:       observedAt,
+			SourceRef: sdk.SourceRef{
+				SourceSystem: SourceSystem,
+				ScopeID:      claim.Scope.ID,
+				GenerationID: claim.GenerationID,
+				FactKey:      snapshotKey,
+				URI:          opts.SourceURI,
+				RecordID:     "snapshot",
+			},
+			Payload: snapshotPayload,
+		})
+	}
 	return sdk.Result{
 		ProtocolVersion: sdk.ProtocolVersionV1Alpha1,
 		State:           sdk.ResultComplete,
@@ -333,23 +342,25 @@ func CollectPartial(claim sdk.Claim, report Report, opts CollectOptions, failure
 	}
 	observedAt := result.Generation.ObservedAt
 	warningKey := "warning:partial:" + claim.GenerationID
-	result.Facts = append(result.Facts, sdk.Fact{
-		Kind:             FactKindWarning,
-		SchemaVersion:    "1.0.0",
-		StableKey:        warningKey,
-		SourceConfidence: sdk.SourceConfidenceReported,
-		ObservedAt:       observedAt,
-		SourceRef: sdk.SourceRef{
-			SourceSystem: SourceSystem,
-			ScopeID:      claim.Scope.ID,
-			GenerationID: claim.GenerationID,
-			FactKey:      warningKey,
-			URI:          opts.SourceURI + "#partial",
-			RecordID:     "partial",
-		},
-		Payload:    warningPayload,
-		Redactions: warningRedactions,
-	})
+	if !opts.TypedOnly {
+		result.Facts = append(result.Facts, sdk.Fact{
+			Kind:             FactKindWarning,
+			SchemaVersion:    "1.0.0",
+			StableKey:        warningKey,
+			SourceConfidence: sdk.SourceConfidenceReported,
+			ObservedAt:       observedAt,
+			SourceRef: sdk.SourceRef{
+				SourceSystem: SourceSystem,
+				ScopeID:      claim.Scope.ID,
+				GenerationID: claim.GenerationID,
+				FactKey:      warningKey,
+				URI:          opts.SourceURI + "#partial",
+				RecordID:     "partial",
+			},
+			Payload:    warningPayload,
+			Redactions: warningRedactions,
+		})
+	}
 	result.State = sdk.ResultPartial
 	result.Statuses = append(result.Statuses, sdk.Status{Class: sdk.StatusWarning, Partial: true, WarningCount: 1, FactCount: len(result.Facts)})
 	return result, nil
