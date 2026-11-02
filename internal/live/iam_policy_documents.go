@@ -91,7 +91,7 @@ func iamRoleStatements(ctx context.Context, api iamRolePolicyAPI, roleName, rawT
 		statements = append(statements, normalized...)
 	}
 
-	managed, denial, err := boundedIAMManagedPolicyStatements(ctx, api, attached)
+	managed, denial, err := boundedIAMManagedPolicyStatements(ctx, api, attached, "role:"+roleName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -142,7 +142,7 @@ func iamUserStatements(ctx context.Context, api iamUserPolicyAPI, userName strin
 		statements = append(statements, normalized...)
 	}
 
-	managed, denial, err := boundedIAMManagedPolicyStatements(ctx, api, attached)
+	managed, denial, err := boundedIAMManagedPolicyStatements(ctx, api, attached, "user:"+userName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -170,12 +170,24 @@ func iamUserStatements(ctx context.Context, api iamUserPolicyAPI, userName strin
 // policy documents up to maxIAMPolicyDocumentsPerPrincipal. Splitting the
 // cap and iteration out keeps the per-principal fan-out bound unit testable:
 // at most cap documents are fetched regardless of how many ARNs attach.
-func boundedIAMManagedPolicyStatements(ctx context.Context, api iamManagedPolicyAPI, policyARNs []string) ([]iamservice.PolicyStatement, *optionalReadDenied, error) {
+// Attachments past the cap are not dropped silently: one truncation denial
+// names the principal and the attached/read counts, so "25 of 30" never
+// reads back as complete evidence.
+func boundedIAMManagedPolicyStatements(ctx context.Context, api iamManagedPolicyAPI, policyARNs []string, principal string) ([]iamservice.PolicyStatement, *optionalReadDenied, error) {
 	var statements []iamservice.PolicyStatement
 	var denials []optionalDenial
 	limit := len(policyARNs)
 	if limit > maxIAMPolicyDocumentsPerPrincipal {
 		limit = maxIAMPolicyDocumentsPerPrincipal
+		denials = append(denials, optionalDenial{
+			operation: "GetPolicy",
+			resource:  principal,
+			effect:    "permission-statements-truncated",
+			attributes: map[string]any{
+				"attached": len(policyARNs),
+				"read":     maxIAMPolicyDocumentsPerPrincipal,
+			},
+		})
 	}
 	for i := 0; i < limit; i++ {
 		policyARN := strings.TrimSpace(policyARNs[i])
@@ -268,7 +280,7 @@ func getIAMManagedPolicyDocument(ctx context.Context, api iamManagedPolicyAPI, p
 	}
 	versionID := strings.TrimSpace(aws.ToString(policyOut.Policy.DefaultVersionId))
 	if versionID == "" {
-		return "", nil, nil
+		return "", &optionalDenial{operation: "GetPolicyVersion", resource: "policy:" + policyARN, effect: "permission-statements-unavailable"}, nil
 	}
 	versionOut, err := api.GetPolicyVersion(ctx, &awsiam.GetPolicyVersionInput{PolicyArn: aws.String(policyARN), VersionId: aws.String(versionID)})
 	if err != nil {

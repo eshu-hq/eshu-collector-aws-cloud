@@ -31,8 +31,8 @@ func supportedDNSRecordSet(set route53types.ResourceRecordSet) bool {
 
 // dnsRecordObservation maps one SDK record set onto the typed observation the
 // aws_dns_record seam facts out. The translation mirrors the in-tree
-// awssdk.mapper plus recordObservation field for field: trimmed names,
-// blank values dropped, nil geo/CIDR sections staying zero, and the source
+// awssdk.mapper plus recordObservation field for field: names stored as
+// reported, blank values dropped, nil geo/CIDR sections staying zero, and the source
 // record id left empty so the seam applies its in-tree-mirrored default. It
 // adds no AWS API call. A supported row without DNS identity is a read
 // failure, not a silent skip.

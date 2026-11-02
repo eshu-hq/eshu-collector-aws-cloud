@@ -36,14 +36,15 @@ const iamPermissionManagedARN = "arn:aws:iam::123456789012:policy/assets-write"
 // fakeIAMPermissionRoleAPI serves scripted policy documents behind the full
 // role read sequence: names/ARNs first, documents only on explicit fetch.
 type fakeIAMPermissionRoleAPI struct {
-	listed   iamtypes.Role
-	detail   *iamtypes.Role
-	attached []string
-	inline   []string
-	inlineBy map[string]string
-	managed  map[string]string
-	denyGet  map[string]bool
-	getCalls int
+	listed           iamtypes.Role
+	detail           *iamtypes.Role
+	attached         []string
+	inline           []string
+	inlineBy         map[string]string
+	managed          map[string]string
+	denyGet          map[string]bool
+	noDefaultVersion map[string]bool
+	getCalls         int
 }
 
 func (f *fakeIAMPermissionRoleAPI) ListRoles(context.Context, *awsiam.ListRolesInput, ...func(*awsiam.Options)) (*awsiam.ListRolesOutput, error) {
@@ -77,6 +78,9 @@ func (f *fakeIAMPermissionRoleAPI) GetPolicy(_ context.Context, in *awsiam.GetPo
 	f.getCalls++
 	if f.denyGet[aws.ToString(in.PolicyArn)] {
 		return nil, &smithy.GenericAPIError{Code: "AccessDenied", Message: "denied"}
+	}
+	if f.noDefaultVersion[aws.ToString(in.PolicyArn)] {
+		return &awsiam.GetPolicyOutput{Policy: &iamtypes.Policy{}}, nil
 	}
 	return &awsiam.GetPolicyOutput{Policy: &iamtypes.Policy{DefaultVersionId: aws.String("v1")}}, nil
 }
@@ -181,7 +185,8 @@ func TestIAMRoleInlineAndManagedPoliciesYieldPermissionStatements(t *testing.T) 
 }
 
 // TestIAMManagedPolicyFanoutBoundedAt25 pins the per-principal document cap:
-// 30 attachments must cost at most 25 GetPolicy reads.
+// 30 attachments must cost at most 25 GetPolicy reads. The five skipped
+// attachments are reported through the truncation warning, not silence.
 func TestIAMManagedPolicyFanoutBoundedAt25(t *testing.T) {
 	t.Parallel()
 
@@ -196,8 +201,18 @@ func TestIAMManagedPolicyFanoutBoundedAt25(t *testing.T) {
 	api.inlineBy = map[string]string{}
 	rows, err := listIAMRoleRecords(context.Background(), api, "us-east-1",
 		VerifiedIdentity{AccountID: "123456789012", Partition: "aws"})
-	if err != nil {
-		t.Fatal(err)
+	denied, ok := err.(*optionalReadDenied)
+	if !ok {
+		t.Fatalf("fanout err = %v, want the truncation denial carrier", err)
+	}
+	found := false
+	for _, entry := range denied.denials {
+		if entry.effect == "permission-statements-truncated" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("denials = %+v, want the truncation entry", denied.denials)
 	}
 	if api.getCalls != 25 {
 		t.Fatalf("GetPolicy calls = %d, want bounded 25", api.getCalls)
@@ -440,5 +455,78 @@ func TestIAMPermissionStatementsDeterministicAcrossReads(t *testing.T) {
 	}
 	if !reflect.DeepEqual(first[0].IAMPermissionStatements, second[0].IAMPermissionStatements) {
 		t.Fatalf("retry changed statements:\nfirst=%+v\nsecond=%+v", first[0].IAMPermissionStatements, second[0].IAMPermissionStatements)
+	}
+}
+
+// TestIAMManagedPolicyTruncationWarnsWithoutSilence pins the cap
+// contract: attachments past the per-principal document cap keep their
+// surviving statements and record one truncation warning, so "25 of 30"
+// never reads back as a complete "all".
+func TestIAMManagedPolicyTruncationWarnsWithoutSilence(t *testing.T) {
+	t.Parallel()
+
+	api := iamPermissionRoleFixture()
+	api.attached = nil
+	for i := 0; i < 30; i++ {
+		arn := iamPermissionManagedARN + "-extra"
+		api.attached = append(api.attached, arn)
+	}
+	api.managed[iamPermissionManagedARN+"-extra"] = iamPermissionManagedDocument
+	api.inline = nil
+	api.inlineBy = map[string]string{}
+	rows, err := listIAMRoleRecords(context.Background(), api, "us-east-1",
+		VerifiedIdentity{AccountID: "123456789012", Partition: "aws"})
+	denied, ok := err.(*optionalReadDenied)
+	if !ok {
+		t.Fatalf("truncation err = %v, want one optional denial", err)
+	}
+	found := false
+	for _, entry := range denied.denials {
+		if entry.effect != "permission-statements-truncated" {
+			continue
+		}
+		found = true
+		if entry.resource != "role:demo" {
+			t.Fatalf("truncation resource = %q, want role:demo", entry.resource)
+		}
+		if entry.attributes["attached"] != 30 || entry.attributes["read"] != 25 {
+			t.Fatalf("truncation attributes = %v, want attached=30 read=25", entry.attributes)
+		}
+	}
+	if !found {
+		t.Fatalf("denials = %+v, want one permission-statements-truncated entry", denied.denials)
+	}
+	if len(rows) != 1 || len(rows[0].IAMPermissionStatements) != 25 {
+		t.Fatalf("surviving statements = %+v, want 25 kept", rows[0].IAMPermissionStatements)
+	}
+}
+
+// TestIAMManagedPolicyWithoutDefaultVersionWarns pins the unreadable
+// policy contract: a managed policy with no default version cannot yield
+// statements, so it records one warning instead of vanishing silently.
+func TestIAMManagedPolicyWithoutDefaultVersionWarns(t *testing.T) {
+	t.Parallel()
+
+	api := iamPermissionRoleFixture()
+	api.inline = nil
+	api.inlineBy = map[string]string{}
+	api.noDefaultVersion = map[string]bool{iamPermissionManagedARN: true}
+	rows, err := listIAMRoleRecords(context.Background(), api, "us-east-1",
+		VerifiedIdentity{AccountID: "123456789012", Partition: "aws"})
+	denied, ok := err.(*optionalReadDenied)
+	if !ok {
+		t.Fatalf("missing-version err = %v, want one optional denial", err)
+	}
+	found := false
+	for _, entry := range denied.denials {
+		if entry.effect == "permission-statements-unavailable" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("denials = %+v, want one permission-statements-unavailable entry", denied.denials)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows = %d, want the surviving row kept", len(rows))
 	}
 }
