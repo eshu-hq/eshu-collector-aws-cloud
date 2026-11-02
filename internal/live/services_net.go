@@ -5,6 +5,7 @@ package live
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -167,19 +168,34 @@ func listEventBridge(ctx context.Context, cfg aws.Config) ([]collector.Record, e
 
 // listIAM mirrors the in-tree iam scanner's read surface (roles, users,
 // customer-managed policies, instance profiles, OIDC providers) as
-// metadata-only records. Policy documents stay unread.
+// metadata-only records. Policy documents are read only to project their
+// normalized statements; raw JSON never reaches the records.
 func listIAM(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]collector.Record, error) {
 	client := awsiam.NewFromConfig(cfg)
 	region := cfg.Region
 	records, err := listIAMRoleRecords(ctx, client, region, identity)
+	var roleDenial *optionalReadDenied
 	if err != nil {
-		return nil, err
+		var denied *optionalReadDenied
+		if !errors.As(err, &denied) || len(denied.denials) == 0 {
+			return nil, err
+		}
+		roleDenial = denied
 	}
 	userRecords, err := listIAMUserRecords(ctx, client, region, identity)
+	var userDenial *optionalReadDenied
 	if err != nil {
-		return nil, err
+		var denied *optionalReadDenied
+		if !errors.As(err, &denied) || len(denied.denials) == 0 {
+			return nil, err
+		}
+		userDenial = denied
 	}
 	records = append(records, userRecords...)
+	denialErr := combineOptionalDenials(roleDenial, userDenial)
+	if denialErr != nil {
+		return records, denialErr
+	}
 	policies := awsiam.NewListPoliciesPaginator(client, &awsiam.ListPoliciesInput{Scope: iamtypes.PolicyScopeTypeLocal})
 	for policies.HasMorePages() {
 		page, err := policies.NextPage(ctx)
@@ -239,7 +255,15 @@ func listRoute53(ctx context.Context, cfg aws.Config) ([]collector.Record, error
 					return nil, fmt.Errorf("route53 list resource record sets: %w", err)
 				}
 				for _, set := range sets.ResourceRecordSets {
-					records = append(records, record(zoneID+"/"+aws.ToString(set.Name)+"/"+string(set.Type), "route53", region, strings.TrimSuffix(aws.ToString(set.Name), "."), "record-set"))
+					row := record(zoneID+"/"+aws.ToString(set.Name)+"/"+string(set.Type), "route53", region, strings.TrimSuffix(aws.ToString(set.Name), "."), "record-set")
+					if supportedDNSRecordSet(set) {
+						observation, err := dnsRecordObservation(set, zone, region)
+						if err != nil {
+							return nil, fmt.Errorf("route53 map resource record set: %w", err)
+						}
+						row.DNSRecord = observation
+					}
+					records = append(records, row)
 				}
 				if !sets.IsTruncated {
 					break

@@ -1,0 +1,22 @@
+# Wave 1 Route53 oracle output (eshu-hq/eshu#8852).
+#
+# Independent in-tree Scanner.Scan re-execution over
+# testdata/wave1-route53-parity.json (sha256:ecee1870a92436ca0fac4ab47d7b46c8a309eebb237b82a3f5fc6307314891b2),
+# served from a fake Client with boundary account 123456789012, region
+# us-east-1, service route53, scope aws:123456789012:us-east-1, generation
+# aws:123456789012:us-east-1:wave1:1, instance aws-parity-wave1, fencing
+# token 7, observed-at 2026-10-30T12:00:00Z.
+#
+# The scan emits 7 envelopes in fixture order: the hosted-zone resource,
+# then one aws_dns_record per supported row; NS, SOA, MX, and TXT rows are
+# filtered by supportedRecord. The satellite freezes the 6 DNS keys in
+# internal/live/route53_wave1_parity_test.go; the zone resource key is
+# frozen here only (the satellite keeps the zone as a transitional record).
+# Re-derivation recipe: testdata/stable-key-provenance.md.
+ORACLE 0 kind=aws_resource key=767795649e31f526d373dae899fa2c66e7cd20b36f3bf66cba92daf4802ca300
+ORACLE 1 kind=aws_dns_record key=5c04a10b2f648315742f148c3a7e491fed16fb950e482f6ead1f83794ab309cb
+ORACLE 2 kind=aws_dns_record key=f7e7608a0814cb20b905af0ddc81489181b275b9c22cd1ad39cd97628c31ef3d
+ORACLE 3 kind=aws_dns_record key=c5678b2bbb19bc0c96c0aec59f0a0b0b033524ddec7873fecf09e649df3f8f33
+ORACLE 4 kind=aws_dns_record key=8e4d4814bd3c2112cc3bd816dbde60565903ede371da7ceecca87e2e3f885037
+ORACLE 5 kind=aws_dns_record key=6d429f36aa188a60cac370c204432bde292165dc4f0a21f544d12c7b8985d9ba
+ORACLE 6 kind=aws_dns_record key=f6e0a0482f39f7513a95e3b6d0b813da90432b13eb01c8b62c260d52b930f77c

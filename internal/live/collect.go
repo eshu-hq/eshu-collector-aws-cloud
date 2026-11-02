@@ -66,11 +66,21 @@ type Outcome struct {
 	// statement per bucket-policy statement.
 	S3Grants                  []collector.S3ExternalPrincipalGrantObservation
 	ResourcePolicyPermissions []collector.ResourcePolicyPermissionObservation
+	// IAMPermissions carries one normalized metadata-only statement per IAM
+	// identity, trust, or permission-boundary policy statement.
+	IAMPermissions []collector.IAMPermissionObservation
 	// SGPostures carries one aws_security_group_rule posture per
 	// DescribeSecurityGroupRules row; EC2Postures carries one
-	// ec2_instance_posture per DescribeInstances row.
+	// ec2_instance_posture per DescribeInstances row; RDSPostures carries
+	// one rds_instance_posture per DescribeDBInstances or
+	// DescribeDBClusters row.
 	SGPostures  []collector.SecurityGroupRuleObservation
 	EC2Postures []collector.EC2InstancePostureObservation
+	RDSPostures []collector.RDSPostureObservation
+	// DNSRecords carries one aws_dns_record observation per supported
+	// ListResourceRecordSets row; the live Route 53 reader filters the
+	// rows the in-tree scanner skips (NS, SOA, MX, TXT, SRV).
+	DNSRecords []collector.DNSRecordObservation
 }
 
 func (c Collector) now() time.Time {
@@ -123,8 +133,11 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 	s3Postures := []collector.S3BucketPostureObservation{}
 	s3Grants := []collector.S3ExternalPrincipalGrantObservation{}
 	resourcePolicyPermissions := []collector.ResourcePolicyPermissionObservation{}
+	iamPermissions := []collector.IAMPermissionObservation{}
 	sgPostures := []collector.SecurityGroupRuleObservation{}
 	ec2Postures := []collector.EC2InstancePostureObservation{}
+	rdsPostures := []collector.RDSPostureObservation{}
+	dnsRecords := []collector.DNSRecordObservation{}
 	warningObservations := []collector.WarningObservation{}
 	ordinaryFailure := false
 	for i, region := range config.Regions {
@@ -199,6 +212,10 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 					statement.Boundary.AccountID = config.AccountID
 					resourcePolicyPermissions = append(resourcePolicyPermissions, statement)
 				}
+				for _, statement := range item.IAMPermissionStatements {
+					statement.Boundary.AccountID = config.AccountID
+					iamPermissions = append(iamPermissions, statement)
+				}
 				if item.SGPosture != nil {
 					posture := *item.SGPosture
 					posture.Boundary.AccountID = config.AccountID
@@ -208,6 +225,16 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 					posture := *item.EC2Posture
 					posture.Boundary.AccountID = config.AccountID
 					ec2Postures = append(ec2Postures, posture)
+				}
+				if item.RDSPosture != nil {
+					posture := *item.RDSPosture
+					posture.Boundary.AccountID = config.AccountID
+					rdsPostures = append(rdsPostures, posture)
+				}
+				if item.DNSRecord != nil {
+					dnsRecord := *item.DNSRecord
+					dnsRecord.Boundary.AccountID = config.AccountID
+					dnsRecords = append(dnsRecords, dnsRecord)
 				}
 				if !item.TypedOnly {
 					records = append(records, item)
@@ -251,8 +278,11 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 		S3Postures:                s3Postures,
 		S3Grants:                  s3Grants,
 		ResourcePolicyPermissions: resourcePolicyPermissions,
+		IAMPermissions:            iamPermissions,
 		SGPostures:                sgPostures,
 		EC2Postures:               ec2Postures,
+		RDSPostures:               rdsPostures,
+		DNSRecords:                dnsRecords,
 	}, nil
 }
 
