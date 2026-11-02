@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/eshu-hq/eshu-collector-aws-cloud/catalog"
 )
 
 func TestListIAMListsRolesUsersPoliciesProfilesProviders(t *testing.T) {
@@ -142,8 +144,10 @@ func TestListSNSListsTopicsAndSubscriptions(t *testing.T) {
 		switch r.Form.Get("Action") {
 		case "ListTopics":
 			serve(`<ListTopicsResponse><ListTopicsResult><Topics><member><TopicArn>arn:aws:sns:us-east-1:123456789012:orders</TopicArn></member></Topics></ListTopicsResult><ResponseMetadata><RequestId>r</RequestId></ResponseMetadata></ListTopicsResponse>`)
+		case "GetTopicAttributes":
+			serve(`<GetTopicAttributesResponse><GetTopicAttributesResult><Attributes><entry><key>DisplayName</key><value>orders</value></entry></Attributes></GetTopicAttributesResult><ResponseMetadata><RequestId>r</RequestId></ResponseMetadata></GetTopicAttributesResponse>`)
 		case "ListSubscriptionsByTopic":
-			serve(`<ListSubscriptionsByTopicResponse><ListSubscriptionsByTopicResult><Subscriptions><member><SubscriptionArn>arn:aws:sns:us-east-1:123456789012:orders:sub1</SubscriptionArn><Protocol>https</Protocol></member></Subscriptions></ListSubscriptionsByTopicResult><ResponseMetadata><RequestId>r</RequestId></ResponseMetadata></ListSubscriptionsByTopicResponse>`)
+			serve(`<ListSubscriptionsByTopicResponse><ListSubscriptionsByTopicResult><Subscriptions><member><SubscriptionArn>arn:aws:sns:us-east-1:123456789012:orders:sub1</SubscriptionArn><Protocol>lambda</Protocol><Endpoint>arn:aws:lambda:us-east-1:123456789012:function:notify</Endpoint></member></Subscriptions></ListSubscriptionsByTopicResult><ResponseMetadata><RequestId>r</RequestId></ResponseMetadata></ListSubscriptionsByTopicResponse>`)
 		default:
 			t.Errorf("unexpected SNS action %q", r.Form.Get("Action"))
 			w.WriteHeader(http.StatusBadRequest)
@@ -154,11 +158,20 @@ func TestListSNSListsTopicsAndSubscriptions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(records) != 2 {
-		t.Fatalf("record count = %d, want 2 (topic, subscription)", len(records))
+	if len(records) != 1 {
+		t.Fatalf("record count = %d, want 1 topic row carrying its subscription edges", len(records))
 	}
-	if records[0].Name != "orders" || records[1].Name != "https" {
-		t.Fatalf("sns records = %#v", records)
+	if records[0].Name != "orders" {
+		t.Fatalf("sns topic name = %q, want display name", records[0].Name)
+	}
+	if records[0].Resource == nil || records[0].Resource.ResourceType != "aws_sns_topic" {
+		t.Fatalf("sns topic resource = %+v, want typed home", records[0].Resource)
+	}
+	if !records[0].TypedOnly {
+		t.Fatal("sns topic row must set TypedOnly")
+	}
+	if len(records[0].Relationships) != 1 || records[0].Relationships[0].RelationshipType != catalog.RelationshipSNSTopicDeliversToResource {
+		t.Fatalf("sns subscription edges = %+v, want one delivers_to relationship", records[0].Relationships)
 	}
 }
 

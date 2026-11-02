@@ -44,6 +44,9 @@ var censusProved = []struct {
 		TestListIAMOIDCProvidersDenialKeepsBareRows(t)
 	}},
 	{"dynamodb", "table", func(t *testing.T) { TestHomeDynamoDBTable(t) }},
+	{"cloudfront", "distribution", func(t *testing.T) { TestHomeCloudFrontDistribution(t) }},
+	{"sns", "topic", func(t *testing.T) { TestHomeSNSTopic(t) }},
+	{"sns", "subscription", func(t *testing.T) { TestHomeSNSSubscription(t) }},
 	{"secretsmanager", "secret", func(t *testing.T) { TestHomeSecretsManagerSecret(t) }},
 	{"route53", "hosted-zone", func(t *testing.T) { TestHostedZoneObservationMapsSDKZone(t) }},
 }
@@ -51,11 +54,11 @@ var censusProved = []struct {
 // censusWaived pins listed rows with intentionally no satellite typed home.
 // This set is closed: adding a waiver needs a linked issue or peer-lane
 // reference, and TestRowCensusWaiversClosed fails on any other change.
-var censusWaived = map[string]string{
-	"cloudfront/distribution": "peer lane origin/drive/8852-cloudfront-typed owns the home (verify-only; no takeover)",
-	"sns/topic":               "peer lane origin/drive/8852-sns-endpoint-edges owns the home (verify-only; no takeover)",
-	"sns/subscription":        "peer lane origin/drive/8852-sns-endpoint-edges owns the home (verify-only; no takeover)",
-}
+// censusWaived pins listed rows with intentionally no satellite typed home.
+// The cloudfront/sns waivers lifted when the peer lanes were retired
+// abandoned: the arbiter waived no-takeover for the custodial successor
+// homes (drive/8852-peer-homes), which moved to censusProved above.
+var censusWaived = map[string]string{}
 
 // censusLegacy cites the pre-existing parity test covering each older typed
 // home. Names are documentation; the cited tests themselves guard the rows.
@@ -110,11 +113,7 @@ func TestRowCensusHomes(t *testing.T) {
 }
 
 func TestRowCensusWaiversClosed(t *testing.T) {
-	want := map[string]string{
-		"cloudfront/distribution": "peer lane origin/drive/8852-cloudfront-typed owns the home (verify-only; no takeover)",
-		"sns/topic":               "peer lane origin/drive/8852-sns-endpoint-edges owns the home (verify-only; no takeover)",
-		"sns/subscription":        "peer lane origin/drive/8852-sns-endpoint-edges owns the home (verify-only; no takeover)",
-	}
+	want := map[string]string{}
 	if !reflect.DeepEqual(censusWaived, want) {
 		t.Fatalf("waiver set changed = %#v, want %#v", censusWaived, want)
 	}
