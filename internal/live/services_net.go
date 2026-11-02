@@ -38,7 +38,7 @@ func listAPIGateway(ctx context.Context, cfg aws.Config) ([]collector.Record, er
 			return nil, fmt.Errorf("apigateway get rest APIs: %w", err)
 		}
 		for _, api := range page.Items {
-			records = append(records, record(aws.ToString(api.Id), "apigateway", region, aws.ToString(api.Name), "rest-api"))
+			records = append(records, apigatewayRestAPIRecord(api, region))
 		}
 	}
 	domains := awsapigateway.NewGetDomainNamesPaginator(v1, &awsapigateway.GetDomainNamesInput{})
@@ -48,7 +48,7 @@ func listAPIGateway(ctx context.Context, cfg aws.Config) ([]collector.Record, er
 			return nil, fmt.Errorf("apigateway get domain names: %w", err)
 		}
 		for _, domain := range page.Items {
-			records = append(records, record("", "apigateway", region, aws.ToString(domain.DomainName), "domain-name"))
+			records = append(records, apigatewayRestDomainNameRecord(domain, region))
 		}
 	}
 	var nextToken *string
@@ -58,7 +58,7 @@ func listAPIGateway(ctx context.Context, cfg aws.Config) ([]collector.Record, er
 			return nil, fmt.Errorf("apigatewayv2 get APIs: %w", err)
 		}
 		for _, api := range page.Items {
-			records = append(records, record(aws.ToString(api.ApiId), "apigateway", region, aws.ToString(api.Name), "http-api"))
+			records = append(records, apigatewayV2APIRecord(api, region))
 		}
 		if page.NextToken == nil || aws.ToString(page.NextToken) == "" {
 			break
@@ -72,7 +72,7 @@ func listAPIGateway(ctx context.Context, cfg aws.Config) ([]collector.Record, er
 			return nil, fmt.Errorf("apigatewayv2 get domain names: %w", err)
 		}
 		for _, domain := range page.Items {
-			records = append(records, record(aws.ToString(domain.DomainNameArn), "apigateway", region, aws.ToString(domain.DomainName), "domain-name"))
+			records = append(records, apigatewayV2DomainNameRecord(domain, region))
 		}
 		if page.NextToken == nil || aws.ToString(page.NextToken) == "" {
 			break
@@ -121,8 +121,7 @@ func listCloudWatchLogs(ctx context.Context, cfg aws.Config) ([]collector.Record
 			return nil, fmt.Errorf("cloudwatchlogs describe log groups: %w", err)
 		}
 		for _, group := range page.LogGroups {
-			name := aws.ToString(group.LogGroupName)
-			records = append(records, record(aws.ToString(group.Arn), "cloudwatchlogs", region, name, "log-group"))
+			records = append(records, cloudWatchLogsLogGroupRecord(group, region))
 		}
 	}
 	return records, nil
@@ -141,8 +140,7 @@ func listEventBridge(ctx context.Context, cfg aws.Config) ([]collector.Record, e
 			return nil, fmt.Errorf("eventbridge list event buses: %w", err)
 		}
 		for _, bus := range page.EventBuses {
-			name := aws.ToString(bus.Name)
-			records = append(records, record(aws.ToString(bus.Arn), "eventbridge", region, name, "event-bus"))
+			records = append(records, eventBridgeEventBusRecord(bus, region))
 			var ruleToken *string
 			for {
 				rules, err := client.ListRules(ctx, &awseventbridge.ListRulesInput{EventBusName: bus.Name, NextToken: ruleToken})
@@ -150,7 +148,7 @@ func listEventBridge(ctx context.Context, cfg aws.Config) ([]collector.Record, e
 					return nil, fmt.Errorf("eventbridge list rules: %w", err)
 				}
 				for _, rule := range rules.Rules {
-					records = append(records, record(aws.ToString(rule.Arn), "eventbridge", region, aws.ToString(rule.Name), "rule"))
+					records = append(records, eventBridgeRuleRecord(aws.ToString(bus.Arn), aws.ToString(bus.Name), rule, region))
 				}
 				if rules.NextToken == nil || aws.ToString(rules.NextToken) == "" {
 					break
@@ -203,7 +201,7 @@ func listIAM(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]
 			return nil, fmt.Errorf("iam list policies: %w", err)
 		}
 		for _, policy := range page.Policies {
-			records = append(records, record(aws.ToString(policy.Arn), "iam", region, aws.ToString(policy.PolicyName), "policy"))
+			records = append(records, iamPolicyRecord(policy, region))
 		}
 	}
 	profiles := awsiam.NewListInstanceProfilesPaginator(client, &awsiam.ListInstanceProfilesInput{})
@@ -213,18 +211,53 @@ func listIAM(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]
 			return nil, fmt.Errorf("iam list instance profiles: %w", err)
 		}
 		for _, profile := range page.InstanceProfiles {
-			records = append(records, record(aws.ToString(profile.Arn), "iam", region, aws.ToString(profile.InstanceProfileName), "instance-profile"))
+			records = append(records, iamInstanceProfileRecord(profile, region))
 		}
 	}
+	oidcRecords, oidcDenial, err := listIAMOIDCProviderRecords(ctx, client, region)
+	if err != nil {
+		return nil, err
+	}
+	records = append(records, oidcRecords...)
+	return records, combineOptionalDenials(roleDenial, userDenial, oidcDenial)
+}
+
+// listIAMOIDCProviderRecords enriches every listed provider with one
+// GetOpenIDConnectProvider read for its URL and client/thumbprint lists. A
+// denied Get keeps the bare typed row behind an optional denial so one
+// missing permission never drops the whole IAM slice; other failures stay
+// fatal. Callers merge the returned denial with their own.
+func listIAMOIDCProviderRecords(ctx context.Context, client *awsiam.Client, region string) ([]collector.Record, *optionalReadDenied, error) {
 	providers, err := client.ListOpenIDConnectProviders(ctx, &awsiam.ListOpenIDConnectProvidersInput{})
 	if err != nil {
-		return nil, fmt.Errorf("iam list OIDC providers: %w", err)
+		return nil, nil, fmt.Errorf("iam list OIDC providers: %w", err)
 	}
+	records := []collector.Record{}
+	var denials []optionalDenial
 	for _, provider := range providers.OpenIDConnectProviderList {
 		arn := aws.ToString(provider.Arn)
-		records = append(records, record(arn, "iam", region, lastSegment(arn, "/"), "oidc-provider"))
+		url, clientIDs, thumbprints := "", []string(nil), []string(nil)
+		detail, err := client.GetOpenIDConnectProvider(ctx, &awsiam.GetOpenIDConnectProviderInput{OpenIDConnectProviderArn: provider.Arn})
+		if err != nil {
+			if !isIAMPolicyDenial(err) {
+				return nil, nil, fmt.Errorf("iam get OIDC provider: %w", err)
+			}
+			denials = append(denials, optionalDenial{
+				operation: "GetOpenIDConnectProvider",
+				resource:  arn,
+				effect:    "oidc-provider-enrichment-unavailable",
+			})
+		} else if detail != nil {
+			url = strings.TrimSpace(aws.ToString(detail.Url))
+			clientIDs = append([]string(nil), detail.ClientIDList...)
+			thumbprints = append([]string(nil), detail.ThumbprintList...)
+		}
+		records = append(records, iamOIDCProviderRecord(arn, url, clientIDs, thumbprints, region))
 	}
-	return records, nil
+	if len(denials) == 0 {
+		return records, nil, nil
+	}
+	return records, &optionalReadDenied{denials: denials}, nil
 }
 
 // listRoute53 mirrors the in-tree route53 scanner: hosted zones and their
@@ -241,7 +274,11 @@ func listRoute53(ctx context.Context, cfg aws.Config) ([]collector.Record, error
 		}
 		for _, zone := range page.HostedZones {
 			zoneID := aws.ToString(zone.Id)
-			records = append(records, record(zoneID, "route53", region, strings.TrimSuffix(aws.ToString(zone.Name), "."), "hosted-zone"))
+			zoneRow := record(zoneID, "route53", region, strings.TrimSuffix(aws.ToString(zone.Name), "."), "hosted-zone")
+			zoneResource := hostedZoneObservation(zone, region)
+			zoneRow.Resource = &zoneResource
+			zoneRow.TypedOnly = true
+			records = append(records, zoneRow)
 			var startName, startID *string
 			var startType route53types.RRType
 			for {
@@ -322,7 +359,7 @@ func listSQS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("sqs list queues: %w", err)
 		}
 		for _, url := range page.QueueUrls {
-			records = append(records, record(url, "sqs", region, lastSegment(url, "/"), "queue"))
+			records = append(records, sqsQueueRecord(url, region))
 		}
 	}
 	return records, nil

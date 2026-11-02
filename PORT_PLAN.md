@@ -93,10 +93,17 @@ encoder and no checked-in schema exist for it. The remaining port work:
 
 1. Ports the scanners below so `Collect` emits the seamed kinds from live
    reads (Wave 1 deployed partials first, then Wave 2 specialty kinds).
-2. Deletes the 3 transitional kinds from `Contract()`, `manifest.yaml`,
-   `collector.go` constants, and every test that references them.
-3. Replaces `testdata/*.json` + `Report`/`LoadReport` with the AWS source
-   shape and rewrites the placeholder conformance fixtures to AWS facts.
+   Hosted zones already have a typed `aws_resource` home; per-row homes for
+   the remaining services land in their own lanes, not here.
+2. Deletes the 3 transitional kinds from `Contract()` and `manifest.yaml`
+   only after the row-home census reaches zero unwaived gaps (PR-D gate,
+   #8852). File-mode `Collect`/`CollectPartial` keep emitting them until
+   then; the constants and the snapshot-digest fallback stay for file mode.
+   A `TypedOnly` opt-in suppresses transitional emission for parity tests
+   while production keeps dual emission.
+3. Keeps `testdata/*.json` + `Report`/`LoadReport` for the file-mode path.
+   Live-path conformance fixtures assert typed facts; the placeholder
+   conformance assertions that remain are file-mode only.
 
 ## Package map
 

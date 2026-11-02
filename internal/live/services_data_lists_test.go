@@ -75,6 +75,12 @@ func TestListDynamoDBListsTables(t *testing.T) {
 	if records[0].ID != "arn:aws:dynamodb:us-east-1:123456789012:table/orders" || records[0].Name != "orders" {
 		t.Fatalf("table record = %#v", records[0])
 	}
+	if records[0].Resource == nil || records[0].Resource.ResourceType != "aws_dynamodb_table" {
+		t.Fatalf("table resource = %+v, want typed home", records[0].Resource)
+	}
+	if !records[0].TypedOnly {
+		t.Fatal("table row must set TypedOnly")
+	}
 	if records[0].Detail != "service=dynamodb region=us-east-1 kind=table" {
 		t.Fatalf("table detail = %q", records[0].Detail)
 	}
@@ -118,6 +124,12 @@ func TestListSecretsManagerListsSecrets(t *testing.T) {
 	}
 	if records[0].ID != "arn:aws:secretsmanager:us-east-1:123456789012:secret:api-key" || records[0].Name != "api-key" {
 		t.Fatalf("secret record = %#v", records[0])
+	}
+	if records[0].Resource == nil || records[0].Resource.ResourceType != "aws_secretsmanager_secret" {
+		t.Fatalf("secret resource = %+v, want typed home", records[0].Resource)
+	}
+	if !records[0].TypedOnly {
+		t.Fatal("secret row must set TypedOnly")
 	}
 }
 

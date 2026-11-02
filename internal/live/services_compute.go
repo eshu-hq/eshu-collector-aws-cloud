@@ -326,7 +326,7 @@ func listELBV2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) 
 			return nil, fmt.Errorf("elbv2 describe load balancers: %w", err)
 		}
 		for _, balancer := range page.LoadBalancers {
-			records = append(records, record(aws.ToString(balancer.LoadBalancerArn), "elbv2", region, aws.ToString(balancer.LoadBalancerName), "load-balancer"))
+			records = append(records, elbv2LoadBalancerRecord(balancer, region))
 			listeners := awselbv2.NewDescribeListenersPaginator(client, &awselbv2.DescribeListenersInput{
 				LoadBalancerArn: balancer.LoadBalancerArn,
 			})
@@ -336,8 +336,7 @@ func listELBV2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) 
 					return nil, fmt.Errorf("elbv2 describe listeners: %w", err)
 				}
 				for _, listener := range listenerPage.Listeners {
-					arn := aws.ToString(listener.ListenerArn)
-					records = append(records, record(arn, "elbv2", region, lastSegment(arn, "/"), "listener"))
+					records = append(records, elbv2ListenerRecord(listener, region))
 					rules := awselbv2.NewDescribeRulesPaginator(client, &awselbv2.DescribeRulesInput{
 						ListenerArn: listener.ListenerArn,
 					})
@@ -347,8 +346,7 @@ func listELBV2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) 
 							return nil, fmt.Errorf("elbv2 describe rules: %w", err)
 						}
 						for _, rule := range rulePage.Rules {
-							ruleARN := aws.ToString(rule.RuleArn)
-							records = append(records, record(ruleARN, "elbv2", region, lastSegment(ruleARN, "/"), "rule"))
+							records = append(records, elbv2RuleRecord(aws.ToString(listener.ListenerArn), rule, region))
 						}
 					}
 				}
@@ -362,7 +360,7 @@ func listELBV2(ctx context.Context, cfg aws.Config) ([]collector.Record, error) 
 			return nil, fmt.Errorf("elbv2 describe target groups: %w", err)
 		}
 		for _, group := range page.TargetGroups {
-			records = append(records, record(aws.ToString(group.TargetGroupArn), "elbv2", region, aws.ToString(group.TargetGroupName), "target-group"))
+			records = append(records, elbv2TargetGroupRecord(group, region))
 		}
 	}
 	return records, nil

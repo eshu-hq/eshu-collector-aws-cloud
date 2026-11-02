@@ -6,6 +6,7 @@ package live
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -103,4 +104,78 @@ func TestAppendOutcomeFactsReturnsTypedEvidenceDigest(t *testing.T) {
 	}
 
 	_ = first
+}
+
+// TestTypedOnlyOptInPreservesTypedEvidence proves the PR-D opt-in is
+// behavior-neutral on typed truth: the same outcome appended after a
+// dual-mode Collect and after a TypedOnly Collect yields identical typed
+// fact keys and an identical digest, differing only in transitional facts.
+func TestTypedOnlyOptInPreservesTypedEvidence(t *testing.T) {
+	t.Parallel()
+
+	observedAt := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
+	claim := sdk.Claim{
+		ComponentID: collector.ComponentID, InstanceID: "aws-parity-typedd-only",
+		CollectorKind: collector.CollectorKind, SourceSystem: collector.SourceSystem,
+		Scope:       sdk.Scope{ID: "aws:123456789012:us-east-1", Kind: "component"},
+		SourceRunID: "typed-only-run", GenerationID: "aws:123456789012:us-east-1:typed-only:1",
+		WorkItemID: "typed-only-work", FencingToken: "typed-only-token",
+		Attempt: 1, Deadline: observedAt.Add(time.Hour), ConfigHandle: "component-config:aws-cloud",
+	}
+	report := collector.Report{
+		GeneratedAt: observedAt, Source: "aws",
+		Records: []collector.Record{{
+			ID: "aws:route53:us-east-1:typed-only", Name: "example.com.",
+			Detail: "service=route53 region=us-east-1 kind=record-set",
+		}},
+	}
+	opts := func(typedOnly bool) collector.CollectOptions {
+		return collector.CollectOptions{ObservedAt: observedAt, SourceURI: "aws:route53:us-east-1:typed-only", TypedOnly: typedOnly, Limits: collector.DefaultResourceUse()}
+	}
+	outcome := Outcome{
+		DNSRecords: []collector.DNSRecordObservation{{
+			Boundary:     collector.Boundary{AccountID: "123456789012", Region: "us-east-1", ServiceKind: "route53"},
+			HostedZoneID: "/hostedzone/Z123", RecordName: "example.com.", RecordType: "A",
+		}},
+	}
+	dual, err := collector.Collect(claim, report, opts(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dual, dualDigest, err := AppendOutcomeFacts(dual, outcome, "aws:route53:us-east-1:typed-only", collector.DefaultResourceUse())
+	if err != nil {
+		t.Fatal(err)
+	}
+	typed, err := collector.Collect(claim, report, opts(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(typed.Facts) != 0 {
+		t.Fatalf("typed-only facts = %d, want 0 transitional", len(typed.Facts))
+	}
+	typed, typedDigest, err := AppendOutcomeFacts(typed, outcome, "aws:route53:us-east-1:typed-only", collector.DefaultResourceUse())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dualDigest == "" || typedDigest == "" {
+		t.Fatal("empty digest on a non-empty typed outcome")
+	}
+	if dualDigest != typedDigest {
+		t.Fatalf("digest moved under opt-in: %q vs %q", dualDigest, typedDigest)
+	}
+	typedKeys := func(result sdk.Result) []string {
+		var keys []string
+		for _, fact := range result.Facts {
+			switch fact.Kind {
+			case collector.FactKindSnapshot, collector.FactKindRecord, collector.FactKindWarning:
+				continue
+			}
+			keys = append(keys, fact.Kind+"\x00"+fact.StableKey)
+		}
+		sort.Strings(keys)
+		return keys
+	}
+	if !reflect.DeepEqual(typedKeys(dual), typedKeys(typed)) {
+		t.Fatalf("typed keys moved under opt-in:\ndual=%v\ntyped=%v", typedKeys(dual), typedKeys(typed))
+	}
 }

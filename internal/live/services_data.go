@@ -37,7 +37,7 @@ func listDynamoDB(ctx context.Context, cfg aws.Config) ([]collector.Record, erro
 			if described.Table == nil {
 				continue
 			}
-			records = append(records, record(aws.ToString(described.Table.TableArn), "dynamodb", region, aws.ToString(described.Table.TableName), "table"))
+			records = append(records, dynamoDBTableRecord(*described.Table, region))
 		}
 	}
 	return records, nil
@@ -226,7 +226,7 @@ func listSecretsManager(ctx context.Context, cfg aws.Config) ([]collector.Record
 			return nil, fmt.Errorf("secretsmanager list secrets: %w", err)
 		}
 		for _, secret := range page.SecretList {
-			records = append(records, record(aws.ToString(secret.ARN), "secretsmanager", region, aws.ToString(secret.Name), "secret"))
+			records = append(records, secretsManagerSecretRecord(secret, region))
 		}
 	}
 	return records, nil

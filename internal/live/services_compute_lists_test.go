@@ -89,20 +89,29 @@ func TestListELBV2ListsBalancersListenersRulesTargetGroups(t *testing.T) {
 	if len(records) != 4 {
 		t.Fatalf("record count = %d, want 4 (balancer, listener, rule, target group)", len(records))
 	}
-	want := map[string]string{
-		"arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/orders/abc":          "orders",
-		"arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/orders/abc/def":          "def",
-		"arn:aws:elasticloadbalancing:us-east-1:123456789012:listener-rule/app/orders/abc/def/ghi": "ghi",
-		"arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/orders-tg/jkl":            "orders-tg",
+	want := map[string]struct {
+		name string
+		kind string
+	}{
+		"arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/orders/abc":          {"orders", "aws_elbv2_load_balancer"},
+		"arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/orders/abc/def":          {"def", "aws_elbv2_listener"},
+		"arn:aws:elasticloadbalancing:us-east-1:123456789012:listener-rule/app/orders/abc/def/ghi": {"ghi", "aws_elbv2_rule"},
+		"arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/orders-tg/jkl":            {"orders-tg", "aws_elbv2_target_group"},
 	}
 	for _, record := range records {
-		name, ok := want[record.ID]
+		wantRow, ok := want[record.ID]
 		if !ok {
 			t.Errorf("unexpected ELBv2 record %#v", record)
 			continue
 		}
-		if record.Name != name {
-			t.Errorf("ELBv2 record %q name = %q, want %q", record.ID, record.Name, name)
+		if record.Name != wantRow.name {
+			t.Errorf("ELBv2 record %q name = %q, want %q", record.ID, record.Name, wantRow.name)
+		}
+		if record.Resource == nil || record.Resource.ResourceType != wantRow.kind {
+			t.Errorf("ELBv2 record %q resource = %+v, want type %q", record.ID, record.Resource, wantRow.kind)
+		}
+		if !record.TypedOnly {
+			t.Errorf("ELBv2 record %q must set TypedOnly", record.ID)
 		}
 		delete(want, record.ID)
 	}

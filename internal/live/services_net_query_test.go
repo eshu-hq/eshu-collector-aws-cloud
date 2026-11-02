@@ -57,6 +57,8 @@ func TestListIAMListsRolesUsersPoliciesProfilesProviders(t *testing.T) {
 			serve(envelope("ListInstanceProfiles", `<InstanceProfiles><member><InstanceProfileName>web</InstanceProfileName><Arn>arn:aws:iam::123456789012:instance-profile/web</Arn><Path>/</Path><InstanceProfileId>F1</InstanceProfileId><CreateDate>2024-01-01T00:00:00Z</CreateDate></member></InstanceProfiles>`))
 		case "ListOpenIDConnectProviders":
 			serve(envelope("ListOpenIDConnectProviders", `<OpenIDConnectProviderList><member><Arn>arn:aws:iam::123456789012:oidc-provider/example.com</Arn></member></OpenIDConnectProviderList>`))
+		case "GetOpenIDConnectProvider":
+			serve(envelope("GetOpenIDConnectProvider", `<Url>https://example.com</Url><ClientIDList><member>sts.amazonaws.com</member></ClientIDList><ThumbprintList><member>abc123</member></ThumbprintList>`))
 		default:
 			t.Errorf("unexpected IAM action %q", r.Form.Get("Action"))
 			w.WriteHeader(http.StatusBadRequest)
@@ -79,12 +81,46 @@ func TestListIAMListsRolesUsersPoliciesProfilesProviders(t *testing.T) {
 			t.Errorf("missing IAM record %q (got %v)", want, names)
 		}
 	}
+	// Role and user rows keep dual emission (TypedOnly unset) until PR-D
+	// deletes the transitional kinds; every row below carries its typed
+	// home regardless.
+	wantIAMHome := map[string]struct {
+		kind      string
+		typedOnly bool
+	}{
+		"reader":        {"aws_iam_role", false},
+		"deployer":      {"aws_iam_user", false},
+		"team-boundary": {"aws_iam_policy", true},
+		"web":           {"aws_iam_instance_profile", true},
+		"example.com":   {"aws_iam_oidc_provider", true},
+	}
+	for _, record := range records {
+		home, ok := wantIAMHome[record.Name]
+		if !ok {
+			t.Errorf("unexpected IAM record %#v", record)
+			continue
+		}
+		if record.Resource == nil || record.Resource.ResourceType != home.kind {
+			t.Errorf("IAM record %q resource = %+v, want type %q", record.Name, record.Resource, home.kind)
+		}
+		if record.TypedOnly != home.typedOnly {
+			t.Errorf("IAM record %q TypedOnly = %v, want %v", record.Name, record.TypedOnly, home.typedOnly)
+		}
+	}
 	for _, record := range records {
 		if record.Name != "reader" {
 			continue
 		}
 		if len(record.IAMPermissionStatements) != 2 {
 			t.Errorf("reader permission statements = %+v, want inline + managed", record.IAMPermissionStatements)
+		}
+	}
+	for _, record := range records {
+		if record.Resource == nil || record.Resource.ResourceID != "arn:aws:iam::123456789012:oidc-provider/example.com" {
+			continue
+		}
+		if record.Resource.Attributes["issuer_url"] != "https://example.com" {
+			t.Errorf("provider row lacks enriched issuer URL = %+v", record.Resource)
 		}
 	}
 }
@@ -147,5 +183,11 @@ func TestListSQSListsQueues(t *testing.T) {
 	}
 	if records[0].Name != "orders" || !strings.Contains(records[0].ID, "sqs.us-east-1") {
 		t.Fatalf("sqs record = %#v", records[0])
+	}
+	if records[0].Resource == nil || records[0].Resource.ResourceType != "aws_sqs_queue" {
+		t.Fatalf("sqs resource = %+v, want typed home", records[0].Resource)
+	}
+	if !records[0].TypedOnly {
+		t.Fatal("sqs row must set TypedOnly")
 	}
 }

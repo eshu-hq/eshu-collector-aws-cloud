@@ -115,6 +115,12 @@ type CollectOptions struct {
 	ObservedAt     time.Time
 	SourceURI      string
 	PreviousDigest string
+	// TypedOnly suppresses every transitional placeholder fact (snapshot,
+	// record, warning) while leaving statuses untouched. Production keeps
+	// dual emission until the row census reaches zero unwaived gaps; the
+	// flag exists solely for parity and digest tests that prove the typed
+	// path is unaffected by transitional emission.
+	TypedOnly bool
 	// Limits bounds one claim's emission. Each non-positive field selects
 	// its DefaultResourceUse value, so a partially customized Limits keeps
 	// the caller's values and only the gaps fall back to defaults; the zero
