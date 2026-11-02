@@ -5,6 +5,7 @@ package live
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -167,19 +168,34 @@ func listEventBridge(ctx context.Context, cfg aws.Config) ([]collector.Record, e
 
 // listIAM mirrors the in-tree iam scanner's read surface (roles, users,
 // customer-managed policies, instance profiles, OIDC providers) as
-// metadata-only records. Policy documents stay unread.
+// metadata-only records. Policy documents are read only to project their
+// normalized statements; raw JSON never reaches the records.
 func listIAM(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]collector.Record, error) {
 	client := awsiam.NewFromConfig(cfg)
 	region := cfg.Region
 	records, err := listIAMRoleRecords(ctx, client, region, identity)
+	var roleDenial *optionalReadDenied
 	if err != nil {
-		return nil, err
+		var denied *optionalReadDenied
+		if !errors.As(err, &denied) || len(denied.denials) == 0 {
+			return nil, err
+		}
+		roleDenial = denied
 	}
 	userRecords, err := listIAMUserRecords(ctx, client, region, identity)
+	var userDenial *optionalReadDenied
 	if err != nil {
-		return nil, err
+		var denied *optionalReadDenied
+		if !errors.As(err, &denied) || len(denied.denials) == 0 {
+			return nil, err
+		}
+		userDenial = denied
 	}
 	records = append(records, userRecords...)
+	denialErr := combineOptionalDenials(roleDenial, userDenial)
+	if denialErr != nil {
+		return records, denialErr
+	}
 	policies := awsiam.NewListPoliciesPaginator(client, &awsiam.ListPoliciesInput{Scope: iamtypes.PolicyScopeTypeLocal})
 	for policies.HasMorePages() {
 		page, err := policies.NextPage(ctx)

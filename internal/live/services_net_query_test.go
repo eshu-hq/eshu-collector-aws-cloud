@@ -37,6 +37,12 @@ func TestListIAMListsRolesUsersPoliciesProfilesProviders(t *testing.T) {
 			serve(envelope("ListAttachedRolePolicies", `<AttachedPolicies><member><PolicyName>ReadOnly</PolicyName><PolicyArn>arn:aws:iam::aws:policy/ReadOnlyAccess</PolicyArn></member></AttachedPolicies>`))
 		case "ListRolePolicies":
 			serve(envelope("ListRolePolicies", `<PolicyNames><member>inline-reader</member></PolicyNames>`))
+		case "GetRolePolicy":
+			serve(envelope("GetRolePolicy", `<RoleName>reader</RoleName><PolicyName>inline-reader</PolicyName><PolicyDocument>{"Version":"2012-10-17","Statement":{"Effect":"Allow","Action":"s3:GetObject","Resource":"*"}}</PolicyDocument>`))
+		case "GetPolicy":
+			serve(envelope("GetPolicy", `<Policy><PolicyName>ReadOnly</PolicyName><PolicyId>P1</PolicyId><Arn>arn:aws:iam::aws:policy/ReadOnlyAccess</Arn><Path>/</Path><DefaultVersionId>v1</DefaultVersionId><AttachmentCount>1</AttachmentCount></Policy>`))
+		case "GetPolicyVersion":
+			serve(envelope("GetPolicyVersion", `<PolicyVersion><Document>{"Version":"2012-10-17","Statement":{"Effect":"Allow","Action":"s3:ListBucket","Resource":"*"}}</Document><VersionId>v1</VersionId><IsDefaultVersion>true</IsDefaultVersion><CreateDate>2024-01-01T00:00:00Z</CreateDate></PolicyVersion>`))
 		case "ListUsers":
 			serve(envelope("ListUsers", `<Users><member><UserName>deployer</UserName><Arn>arn:aws:iam::123456789012:user/deployer</Arn><Path>/</Path><UserId>U1</UserId><CreateDate>2024-01-01T00:00:00Z</CreateDate></member></Users>`))
 		case "GetUser":
@@ -71,6 +77,14 @@ func TestListIAMListsRolesUsersPoliciesProfilesProviders(t *testing.T) {
 	for _, want := range []string{"reader", "deployer", "team-boundary", "web", "example.com"} {
 		if !names[want] {
 			t.Errorf("missing IAM record %q (got %v)", want, names)
+		}
+	}
+	for _, record := range records {
+		if record.Name != "reader" {
+			continue
+		}
+		if len(record.IAMPermissionStatements) != 2 {
+			t.Errorf("reader permission statements = %+v, want inline + managed", record.IAMPermissionStatements)
 		}
 	}
 }

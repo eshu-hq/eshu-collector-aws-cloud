@@ -91,6 +91,21 @@ func (f *fakeIAMRoleAPI) ListRolePolicies(_ context.Context, _ *awsiam.ListRoleP
 	return &awsiam.ListRolePoliciesOutput{PolicyNames: []string{"inline-read"}}, nil
 }
 
+func (f *fakeIAMRoleAPI) GetRolePolicy(_ context.Context, _ *awsiam.GetRolePolicyInput, _ ...func(*awsiam.Options)) (*awsiam.GetRolePolicyOutput, error) {
+	f.calls = append(f.calls, "GetRolePolicy")
+	return &awsiam.GetRolePolicyOutput{}, nil
+}
+
+func (f *fakeIAMRoleAPI) GetPolicy(_ context.Context, _ *awsiam.GetPolicyInput, _ ...func(*awsiam.Options)) (*awsiam.GetPolicyOutput, error) {
+	f.calls = append(f.calls, "GetPolicy")
+	return &awsiam.GetPolicyOutput{Policy: &iamtypes.Policy{DefaultVersionId: aws.String("v1")}}, nil
+}
+
+func (f *fakeIAMRoleAPI) GetPolicyVersion(_ context.Context, _ *awsiam.GetPolicyVersionInput, _ ...func(*awsiam.Options)) (*awsiam.GetPolicyVersionOutput, error) {
+	f.calls = append(f.calls, "GetPolicyVersion")
+	return &awsiam.GetPolicyVersionOutput{}, nil
+}
+
 func TestIAMRoleReadMissingDetailAndDenial(t *testing.T) {
 	arn := "arn:aws:iam::123456789012:role/demo"
 	listed := iamtypes.Role{Arn: aws.String(arn), RoleName: aws.String("demo"), Path: aws.String("/listed/")}
@@ -100,7 +115,9 @@ func TestIAMRoleReadMissingDetailAndDenial(t *testing.T) {
 	if err != nil || len(rows) != 1 || rows[0].Resource == nil || rows[0].Resource.Attributes["path"] != "/listed/" {
 		t.Fatalf("missing detail must retain listed metadata: rows=%+v err=%v", rows, err)
 	}
-	if len(client.calls) != 4 {
+	// The sequence now extends past the four name/ARN reads: one inline
+	// document fetch plus the managed GetPolicy + GetPolicyVersion pair.
+	if len(client.calls) != 7 {
 		t.Fatalf("read sequence = %v", client.calls)
 	}
 	client.getErr = errors.New("AccessDenied")

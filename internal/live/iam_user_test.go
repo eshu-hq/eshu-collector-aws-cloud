@@ -32,6 +32,18 @@ func (f fakeIAMUserAPI) ListUserPolicies(context.Context, *awsiam.ListUserPolici
 	return &awsiam.ListUserPoliciesOutput{}, nil
 }
 
+func (f fakeIAMUserAPI) GetUserPolicy(context.Context, *awsiam.GetUserPolicyInput, ...func(*awsiam.Options)) (*awsiam.GetUserPolicyOutput, error) {
+	return &awsiam.GetUserPolicyOutput{}, nil
+}
+
+func (f fakeIAMUserAPI) GetPolicy(context.Context, *awsiam.GetPolicyInput, ...func(*awsiam.Options)) (*awsiam.GetPolicyOutput, error) {
+	return &awsiam.GetPolicyOutput{}, nil
+}
+
+func (f fakeIAMUserAPI) GetPolicyVersion(context.Context, *awsiam.GetPolicyVersionInput, ...func(*awsiam.Options)) (*awsiam.GetPolicyVersionOutput, error) {
+	return &awsiam.GetPolicyVersionOutput{}, nil
+}
+
 func TestIAMUserResourceGlobalAndNilPolicies(t *testing.T) {
 	arn := "arn:aws:iam::123456789012:user/team/demo"
 	api := fakeIAMUserAPI{user: iamtypes.User{Arn: aws.String(arn), UserName: aws.String("demo"), Path: aws.String("/team/")}}

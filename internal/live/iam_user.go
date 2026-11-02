@@ -20,12 +20,18 @@ type iamUserAPI interface {
 	GetUser(context.Context, *awsiam.GetUserInput, ...func(*awsiam.Options)) (*awsiam.GetUserOutput, error)
 	ListAttachedUserPolicies(context.Context, *awsiam.ListAttachedUserPoliciesInput, ...func(*awsiam.Options)) (*awsiam.ListAttachedUserPoliciesOutput, error)
 	ListUserPolicies(context.Context, *awsiam.ListUserPoliciesInput, ...func(*awsiam.Options)) (*awsiam.ListUserPoliciesOutput, error)
+	GetUserPolicy(context.Context, *awsiam.GetUserPolicyInput, ...func(*awsiam.Options)) (*awsiam.GetUserPolicyOutput, error)
+	GetPolicy(context.Context, *awsiam.GetPolicyInput, ...func(*awsiam.Options)) (*awsiam.GetPolicyOutput, error)
+	GetPolicyVersion(context.Context, *awsiam.GetPolicyVersionInput, ...func(*awsiam.Options)) (*awsiam.GetPolicyVersionOutput, error)
 }
 
 // listIAMUserRecords reads only the metadata needed for the legacy user resource.
 // A failed IAM read aborts the service so incomplete policy references are not emitted.
+// Policy-document reads degrade instead: a denied document keeps the surviving
+// statements behind one warning per document.
 func listIAMUserRecords(ctx context.Context, client iamUserAPI, region string, identity VerifiedIdentity) ([]collector.Record, error) {
 	rows := []collector.Record{}
+	var denials []optionalDenial
 	pages := awsiam.NewListUsersPaginator(client, &awsiam.ListUsersInput{})
 	for pages.HasMorePages() {
 		page, err := pages.NextPage(ctx)
@@ -57,8 +63,24 @@ func listIAMUserRecords(ctx context.Context, client iamUserAPI, region string, i
 			if err != nil {
 				return nil, err
 			}
+			effective := effectiveIAMUser(listed, detail)
+			boundaryARN := ""
+			if effective.PermissionsBoundary != nil {
+				boundaryARN = aws.ToString(effective.PermissionsBoundary.PermissionsBoundaryArn)
+			}
+			statements, denial, err := iamUserStatements(ctx, client, name, attached, inline, boundaryARN)
+			if err != nil {
+				return nil, err
+			}
+			if denial != nil {
+				denials = append(denials, denial.denials...)
+			}
+			row.IAMPermissionStatements = iamPermissionObservations(row.Resource.ARN, iamPrincipalTypeUser, statements)
 			rows = append(rows, row)
 		}
+	}
+	if len(denials) > 0 {
+		return rows, &optionalReadDenied{denials: denials}
 	}
 	return rows, nil
 }
@@ -91,12 +113,18 @@ func listInlineIAMUserPolicies(ctx context.Context, client iamUserAPI, name stri
 	return names, nil
 }
 
+// effectiveIAMUser resolves the detail-or-listed user both the resource row
+// and the permission-statement reader use, so the two never diverge.
+func effectiveIAMUser(listed iamtypes.User, detail *iamtypes.User) iamtypes.User {
+	if detail != nil {
+		return *detail
+	}
+	return listed
+}
+
 // iamUserRecord binds a regionless IAM user ARN to the verified AWS identity.
 func iamUserRecord(listed iamtypes.User, detail *iamtypes.User, attached, inline []string, _ string, identity VerifiedIdentity) (collector.Record, error) {
-	user := listed
-	if detail != nil {
-		user = *detail
-	}
+	user := effectiveIAMUser(listed, detail)
 	name := aws.ToString(listed.UserName)
 	arn := strings.TrimSpace(aws.ToString(user.Arn))
 	if arn == "" {

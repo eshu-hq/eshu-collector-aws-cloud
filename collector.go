@@ -112,6 +112,11 @@ type Record struct {
 	// per bucket-policy statement. The live S3 reader sets it; Collect fans
 	// it out through AppendLiveResourcePolicyPermissions.
 	ResourcePolicyStatements []ResourcePolicyPermissionObservation `json:"-"`
+	// IAMPermissionStatements carries one normalized metadata-only statement
+	// per IAM identity, trust, or permission-boundary policy statement. The
+	// live IAM reader sets it; Collect fans it out through
+	// AppendLiveIAMPermissions.
+	IAMPermissionStatements []IAMPermissionObservation `json:"-"`
 	// SGPosture carries one normalized security-group rule posture from a
 	// DescribeSecurityGroupRules row. The live EC2 reader sets it; Collect
 	// fans it out through AppendLiveSecurityGroupRulePostures.
