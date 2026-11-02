@@ -121,8 +121,7 @@ func listCloudWatchLogs(ctx context.Context, cfg aws.Config) ([]collector.Record
 			return nil, fmt.Errorf("cloudwatchlogs describe log groups: %w", err)
 		}
 		for _, group := range page.LogGroups {
-			name := aws.ToString(group.LogGroupName)
-			records = append(records, record(aws.ToString(group.Arn), "cloudwatchlogs", region, name, "log-group"))
+			records = append(records, cloudWatchLogsLogGroupRecord(group, region))
 		}
 	}
 	return records, nil
@@ -141,8 +140,7 @@ func listEventBridge(ctx context.Context, cfg aws.Config) ([]collector.Record, e
 			return nil, fmt.Errorf("eventbridge list event buses: %w", err)
 		}
 		for _, bus := range page.EventBuses {
-			name := aws.ToString(bus.Name)
-			records = append(records, record(aws.ToString(bus.Arn), "eventbridge", region, name, "event-bus"))
+			records = append(records, eventBridgeEventBusRecord(bus, region))
 			var ruleToken *string
 			for {
 				rules, err := client.ListRules(ctx, &awseventbridge.ListRulesInput{EventBusName: bus.Name, NextToken: ruleToken})
@@ -150,7 +148,7 @@ func listEventBridge(ctx context.Context, cfg aws.Config) ([]collector.Record, e
 					return nil, fmt.Errorf("eventbridge list rules: %w", err)
 				}
 				for _, rule := range rules.Rules {
-					records = append(records, record(aws.ToString(rule.Arn), "eventbridge", region, aws.ToString(rule.Name), "rule"))
+					records = append(records, eventBridgeRuleRecord(aws.ToString(bus.Arn), aws.ToString(bus.Name), rule, region))
 				}
 				if rules.NextToken == nil || aws.ToString(rules.NextToken) == "" {
 					break
@@ -203,7 +201,7 @@ func listIAM(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]
 			return nil, fmt.Errorf("iam list policies: %w", err)
 		}
 		for _, policy := range page.Policies {
-			records = append(records, record(aws.ToString(policy.Arn), "iam", region, aws.ToString(policy.PolicyName), "policy"))
+			records = append(records, iamPolicyRecord(policy, region))
 		}
 	}
 	profiles := awsiam.NewListInstanceProfilesPaginator(client, &awsiam.ListInstanceProfilesInput{})
@@ -213,7 +211,7 @@ func listIAM(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]
 			return nil, fmt.Errorf("iam list instance profiles: %w", err)
 		}
 		for _, profile := range page.InstanceProfiles {
-			records = append(records, record(aws.ToString(profile.Arn), "iam", region, aws.ToString(profile.InstanceProfileName), "instance-profile"))
+			records = append(records, iamInstanceProfileRecord(profile, region))
 		}
 	}
 	providers, err := client.ListOpenIDConnectProviders(ctx, &awsiam.ListOpenIDConnectProvidersInput{})
@@ -221,8 +219,7 @@ func listIAM(ctx context.Context, cfg aws.Config, identity VerifiedIdentity) ([]
 		return nil, fmt.Errorf("iam list OIDC providers: %w", err)
 	}
 	for _, provider := range providers.OpenIDConnectProviderList {
-		arn := aws.ToString(provider.Arn)
-		records = append(records, record(arn, "iam", region, lastSegment(arn, "/"), "oidc-provider"))
+		records = append(records, iamOIDCProviderRecord(aws.ToString(provider.Arn), "", nil, nil, region))
 	}
 	return records, nil
 }
@@ -326,7 +323,7 @@ func listSQS(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
 			return nil, fmt.Errorf("sqs list queues: %w", err)
 		}
 		for _, url := range page.QueueUrls {
-			records = append(records, record(url, "sqs", region, lastSegment(url, "/"), "queue"))
+			records = append(records, sqsQueueRecord(url, region))
 		}
 	}
 	return records, nil
