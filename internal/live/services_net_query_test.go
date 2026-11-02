@@ -5,6 +5,7 @@ package live
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -172,6 +173,98 @@ func TestListSNSListsTopicsAndSubscriptions(t *testing.T) {
 	}
 	if len(records[0].Relationships) != 1 || records[0].Relationships[0].RelationshipType != catalog.RelationshipSNSTopicDeliversToResource {
 		t.Fatalf("sns subscription edges = %+v, want one delivers_to relationship", records[0].Relationships)
+	}
+}
+
+func TestListSNSDeniedAttributesKeepsBareTopic(t *testing.T) {
+	t.Parallel()
+
+	cfg := stubAWSConfig(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Error(err)
+			return
+		}
+		w.Header().Set("Content-Type", "text/xml")
+		serve := func(body string) {
+			if _, err := w.Write([]byte(body)); err != nil {
+				t.Errorf("write stub response: %v", err)
+			}
+		}
+		switch r.Form.Get("Action") {
+		case "ListTopics":
+			serve(`<ListTopicsResponse><ListTopicsResult><Topics><member><TopicArn>arn:aws:sns:us-east-1:123456789012:orders</TopicArn></member></Topics></ListTopicsResult><ResponseMetadata><RequestId>r</RequestId></ResponseMetadata></ListTopicsResponse>`)
+		case "GetTopicAttributes":
+			w.WriteHeader(http.StatusForbidden)
+			serve(`<ErrorResponse><Error><Type>Sender</Type><Code>AuthorizationError</Code><Message>denied</Message></Error><RequestId>r</RequestId></ErrorResponse>`)
+		case "ListSubscriptionsByTopic":
+			serve(`<ListSubscriptionsByTopicResponse><ListSubscriptionsByTopicResult><Subscriptions></Subscriptions></ListSubscriptionsByTopicResult><ResponseMetadata><RequestId>r</RequestId></ResponseMetadata></ListSubscriptionsByTopicResponse>`)
+		default:
+			t.Errorf("unexpected SNS action %q", r.Form.Get("Action"))
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	}))
+
+	records, err := listSNS(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("denied attributes read must surface an optional denial, got nil error")
+	}
+	var denied *optionalReadDenied
+	if !errors.As(err, &denied) {
+		t.Fatalf("error type = %T, want *optionalReadDenied: %v", err, err)
+	}
+	if len(denied.denials) != 1 || denied.denials[0].operation != "GetTopicAttributes" {
+		t.Fatalf("denials = %+v, want one GetTopicAttributes denial", denied.denials)
+	}
+	if len(records) != 1 {
+		t.Fatalf("record count = %d, want the bare typed topic row", len(records))
+	}
+	if records[0].Resource == nil || records[0].Resource.ResourceType != "aws_sns_topic" {
+		t.Fatalf("bare topic resource = %+v, want typed home", records[0].Resource)
+	}
+	if records[0].Name != "orders" {
+		t.Fatalf("bare topic name = %q, want ARN fallback", records[0].Name)
+	}
+	if !records[0].TypedOnly {
+		t.Fatal("bare topic row must set TypedOnly")
+	}
+}
+
+func TestListSNSAttributesInternalErrorIsFatal(t *testing.T) {
+	t.Parallel()
+
+	cfg := stubAWSConfig(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Error(err)
+			return
+		}
+		w.Header().Set("Content-Type", "text/xml")
+		serve := func(body string) {
+			if _, err := w.Write([]byte(body)); err != nil {
+				t.Errorf("write stub response: %v", err)
+			}
+		}
+		switch r.Form.Get("Action") {
+		case "ListTopics":
+			serve(`<ListTopicsResponse><ListTopicsResult><Topics><member><TopicArn>arn:aws:sns:us-east-1:123456789012:orders</TopicArn></member></Topics></ListTopicsResult><ResponseMetadata><RequestId>r</RequestId></ResponseMetadata></ListTopicsResponse>`)
+		case "GetTopicAttributes":
+			w.WriteHeader(http.StatusInternalServerError)
+			serve(`<ErrorResponse><Error><Type>Receiver</Type><Code>InternalError</Code><Message>boom</Message></Error><RequestId>r</RequestId></ErrorResponse>`)
+		default:
+			t.Errorf("unexpected SNS action %q", r.Form.Get("Action"))
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	}))
+
+	records, err := listSNS(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("non-denial attributes failure must be fatal, got nil error")
+	}
+	var denied *optionalReadDenied
+	if errors.As(err, &denied) {
+		t.Fatalf("non-denial failure must not degrade to an optional denial: %v", err)
+	}
+	if len(records) != 0 {
+		t.Fatalf("fatal attributes failure must keep no rows, got %d", len(records))
 	}
 }
 

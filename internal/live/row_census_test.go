@@ -54,7 +54,6 @@ var censusProved = []struct {
 // censusWaived pins listed rows with intentionally no satellite typed home.
 // This set is closed: adding a waiver needs a linked issue or peer-lane
 // reference, and TestRowCensusWaiversClosed fails on any other change.
-// censusWaived pins listed rows with intentionally no satellite typed home.
 // The cloudfront/sns waivers lifted when the peer lanes were retired
 // abandoned: the arbiter waived no-takeover for the custodial successor
 // homes (drive/8852-peer-homes), which moved to censusProved above.

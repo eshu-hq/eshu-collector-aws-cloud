@@ -65,8 +65,8 @@ func TestHomeCloudFrontDistribution(t *testing.T) {
 	if !ok || certificate["cloudfront_default_certificate"] != true {
 		t.Fatalf("distribution viewer certificate = %#v", resource.Attributes["viewer_certificate"])
 	}
-	if resource.Attributes["tags"] != nil {
-		t.Fatalf("distribution tags must stay nil (no ListTagsForResource call), got %#v", resource.Attributes["tags"])
+	if got.Resource.Tags != nil {
+		t.Fatalf("distribution tags must stay nil (no ListTagsForResource call), got %#v", got.Resource.Tags)
 	}
 	if !got.TypedOnly {
 		t.Fatal("distribution row must set TypedOnly")
@@ -176,6 +176,26 @@ func TestHomeSNSSubscription(t *testing.T) {
 	}
 	if edge.TargetType != "aws_sqs_queue" {
 		t.Fatalf("edge target type = %q", edge.TargetType)
+	}
+}
+
+func TestHomeSNSSubscriptionEnvelopeAdmits(t *testing.T) {
+	subscription := awssnstypes.Subscription{
+		TopicArn:        aws.String("arn:aws:sns:us-east-1:123456789012:orders"),
+		SubscriptionArn: aws.String("arn:aws:sns:us-east-1:123456789012:orders:1111"),
+		Protocol:        aws.String("sqs"),
+		Endpoint:        aws.String("arn:aws:sqs:us-east-1:123456789012:fulfilment"),
+		Owner:           aws.String("123456789012"),
+	}
+	edge, ok := snsSubscriptionRelationship("arn:aws:sns:us-east-1:123456789012:orders", subscription, "us-east-1")
+	if !ok {
+		t.Fatal("ARN-endpoint subscription must produce an edge")
+	}
+	observation := relationshipObservation("123456789012", edge)
+	observation.Boundary = wave1Boundary("123456789012", "us-east-1", edge.ServiceKind)
+	observation.SourceURI = "aws://123456789012"
+	if _, err := collector.NewRelationshipFact(observation); err != nil {
+		t.Fatalf("subscription edge must envelope cleanly: %v", err)
 	}
 }
 
