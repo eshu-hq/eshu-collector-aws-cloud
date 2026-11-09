@@ -1,493 +1,99 @@
-# AWS Cloud Collector (`eshu-collector-aws-cloud`)
+# eshu-collector-aws-cloud
 
-Standalone Eshu collector for AWS Cloud. Module path
-`github.com/eshu-hq/eshu-collector-aws-cloud`; component ID
-`collector-aws-cloud`; collector kind `aws`; source system `aws`; metrics
-prefix `eshu_dp_aws_cloud_collector_`. Scaffolded from the collector
-template; the AWS logic port is tracked in [PORT_PLAN.md](PORT_PLAN.md).
+Status: standalone collector, version `0.1.0`. The manifest still
+declares three temporary placeholder fact kinds while the AWS port
+finishes (see [PORT_PLAN.md](PORT_PLAN.md)).
 
-This repo pins the published SDK pair for core `>=0.0.5 <0.2.0`:
+In a nutshell: this is an Eshu collector that reads one AWS account
+and reports what exists there. Resources, links between them, and
+security-relevant settings, turned into facts for Eshu core to store
+and connect later. It reads metadata only, makes no writes to AWS,
+and never looks at data contents. Keeping the AWS reads in their own
+collector lets core stay source-neutral, and lets this code ship and
+be pinned on its own.
 
-- `github.com/eshu-hq/eshu-sdk/collector v0.1.0-rc.4`
-- `github.com/eshu-hq/eshu-sdk/factschema v0.1.0-rc.7`
-
-Wire protocol: `collector-sdk/v1alpha1` requests keep the exact legacy
-single-shot shape; `collector-sdk/v1alpha3` requests emit bounded result
-pages with continuation tokens (`manifest.yaml` advertises v1alpha3). There
-are no `replace` directives: an out-of-tree clone resolves both modules
-through the Go module proxy.
-
-## Naming
-
-The directory is `collector` and the binary is `cmd/collector` — the
-repository name already says which collector this is, so file, package, and
-symbol names do not repeat it (`collector/collector-foo` is rejected in
-review). Keep internal helpers private.
-
-## Emission contract
-
-`manifest.yaml` `spec.emittedFacts` declares `aws_resource`,
-`aws_relationship`, `aws_image_reference`, `aws_warning`, and the staged
-`s3_bucket_posture` (replication presence, confirmed bucket settings, and
-conservatively derived bucket-policy flags) alongside three
-transitional placeholder kinds (`collector-aws-cloud.snapshot/record/warning`).
-The live EC2 reader emits typed resource identity for VPCs, subnets, security
-groups and rules, network interfaces, instances, AMI identities, and volumes,
-plus subnet-to-VPC, volume-to-KMS, instance-to-AMI, and network-interface
-relationships when their IDs are reported. Before any live service read, it
-verifies the active credentials account with STS in each configured region and fails the claim
-if it differs from the target account.
-Typed EC2 names follow legacy scanner identity rules: stable IDs for VPCs,
-subnets, instances, AMIs, and volumes; group names for security groups. Missing
-required source IDs fail the EC2 read, while subnet ARN and security-group-rule
-content use the legacy deterministic identity fallbacks. The live
-path currently re-emits on every read because the old placeholder digest does
-not cover typed facts or service failures. The ECR reader emits typed
-repository observations from DescribeRepositories and ListTagsForResource while
-retaining its repository placeholder record. Existing DescribeImages pages emit
-one `aws_image_reference` per tag, including an empty tag for untagged images;
-the image placeholder record remains. Lambda ListFunctions rows are enriched
-by one GetFunction read per function. They emit typed `aws_resource` identity,
-configuration metadata, VPC and logging configuration, source KMS key ARN,
-ECR image URIs, and a function-to-image relationship for a validated image
-URI. The relationship carries the resolved digest reference when reported.
-The GetFunction ARN and nonempty function name must match the listed identity.
-Only validated ECR image URIs enter attributes and correlation anchors;
-unsafe URIs fail the Lambda read without logging the value.
-Presigned package download URLs never enter records. Function environment
-values and tags remain deferred until this collector has the legacy keyed
-redaction path. GetFunction requires `lambda:GetFunction`; AWS may also require
-`lambda:ListTags` to populate tags, though this port does not emit them.
-ListAliases pages emit typed `aws_lambda_alias` resources and
-`lambda_alias_targets_function` relationships with reported version and
-additional routing weights. User-authored alias descriptions are omitted.
-An alias ARN must match the known parent function ARN and qualifier; without
-that parent ARN, the alias read fails rather than attributing a foreign ARN.
-A missing alias ARN can still use the known parent ARN and alias name for its
-resource ID. The reviewed mapping-denial path retains successful aliases. Functions also emit execution-role, per-subnet, and per-security-group placement relationships, and ListEventSourceMappings pages emit typed `aws_lambda_event_source_mapping` resources with mapping-to-function edges.
-The S3 reader emits typed bucket identity, region, and creation time from
-regional ListBuckets. It verifies the expected owner with HeadBucket and
-reads tags through GetBucketTagging. Only NoSuchTagSet means an empty tag set.
-GetBucketEncryption adds reported algorithms, KMS key IDs, and bucket-key state.
-GetBucketVersioning and GetPublicAccessBlock add the reported bucket-level
-versioning and public-access settings. An absent public-access-block
-configuration leaves its four flags unknown. GetBucketPolicyStatus adds the
-reported public-policy boolean; a missing policy leaves that boolean unknown.
-A separate required GetBucketPolicy read derives policy presence, public
-AWS-principal grants, and cross-account AWS-principal grants into the typed
-`s3_bucket_posture` fact, and additionally emits separate
-`s3_external_principal_grant` facts (one per bucket-policy Allow grant) and
-`aws_resource_policy_permission` facts (one per statement) through
-`AppendLiveS3ExternalPrincipalGrants` and
-`AppendLiveResourcePolicyPermissions`. The raw document is discarded; malformed or ambiguous
-Allow principals fail the S3 read with a sanitized error. No policy is reported
-as known absent with unknown grant flags, while an empty successful response
-leaves all three flags unknown. This adds one read per bucket and requires
-`s3:GetBucketPolicy`; live IAM access, cost, and reducer graph integration
-remain unverified. BPA fields are not emitted into the typed posture fact.
-GetBucketOwnershipControls adds
-reported ownership enum values; missing or empty controls yield null. Both
-reads bind the verified bucket owner. Their denials fail the S3 read; live
-access and cost remain unverified. GetBucketWebsite records whether hosting is
-configured, index/error document presence, redirect host, and routing-rule
-count; it excludes document object keys. GetBucketLogging records whether
-access logging is configured and its target bucket and prefix; it excludes
-target grants and object-key formats. Both reads pass ExpectedBucketOwner,
-require `s3:GetBucketWebsite` and `s3:GetBucketLogging`, and add two API calls
-per listed bucket. Live IAM access and request cost remain unverified. A
-missing website configuration and empty logging response mean disabled;
-other errors, including denials, fail the S3 read.
-GetBucketReplication adds one `s3:GetReplicationConfiguration` read per listed
-bucket with ExpectedBucketOwner. Its replication posture field is
-`replication_enabled`: a configuration with any rule reports true even when
-the rule status is disabled, the explicit missing-configuration error or an
-empty rule list reports false, and a nil successful response leaves it unknown.
-The fact has the legacy bucket identity, anchors, and `#posture` source record;
-replication rules, destinations, and role never enter facts. A denied read
-fails the S3 service read. Live IAM access and request cost remain unverified.
-The same typed posture fact now includes reported logging enabled/target,
-versioning and MFA-delete state, object ownership and ACL-disabled state, and
-default encryption summary from the existing bucket reads. Missing or empty
-versioning and ownership responses leave their derived fields unknown.
-Encryption fields are populated only after a confirmed response or S3's
-explicit missing-configuration error; a denied or nil successful response
-leaves them unknown. Public-access-block flags remain unset in the typed posture fact; the
-policy-presence and conservatively derived grant flags come from the separate
-GetBucketPolicy read. No logging edge is synthesized by this collector.
-For encryption, the explicit missing-configuration response means a known
-empty configuration. Encryption AccessDenied leaves those attributes absent,
-retains the bucket, emits a typed warning, and makes the SDK result partial.
-Versioning and public-access-block denials fail the S3 read; the overall claim
-can still be partial when another service returns evidence. ECS
-DescribeClusters emits cluster identity, tags, status, and
-reported counts. DescribeServices emits service identity, tags, status, counts,
-task-definition binding, and load-balancer metadata. DescribeTasks emits
-task identity, status, containers, network-interface attachments, and reported
-runtime metadata. DescribeTaskDefinition emits task-definition identity,
-tags, roles, resource sizing, network mode, compatibilities, revision, and
-registration time, container definitions with keyed environment markers and
-secret references, and per-image relationships. Services link to reported
-task definitions and load-balancer targets; tasks
-link to reported ENIs. The ECS read requires `ESHU_AWS_REDACTION_KEY` (named
-by `source.redactionKeyEnv`) before source acquisition.
-The live read requires `ecs:DescribeTaskDefinition` and makes one describe
-call per distinct listed or service-referenced task definition, including
-inactive revisions referenced by services. This increases ECS API request
-volume and claim latency.
-EKS DescribeCluster emits typed cluster identity, status, tags, version, and
-reported control-plane metadata, including
-the OIDC issuer URL. DescribeNodegroup emits managed nodegroup identity,
-status, tags, version, AMI and capacity type, node role, network placement,
-and scaling counts. EKS DescribeAddon emits add-on identity, status, tags,
-version, timestamps, and service-account role ARN; its configuration values
-are excluded because they may contain secrets. DescribeCluster also emits
-reported service-role, subnet, and security-group relationships. Reported
-nodegroup and add-on role edges, nodegroup subnet edges, and cluster membership
-edges are also typed. Membership uses the observed parent list request and
-rejects a nonblank conflicting child cluster name. EKS IAM OIDC provider
-enrichment reads the account provider list once per service-region read and
-fetches provider metadata, matching only the EKS-reported issuer. It emits a
-provider resource and cluster relationship for a match, or an issuer-only
-resource and relationship when IAM has no match. An explicit
-ListOpenIDConnectProviders permission denial retains the cluster, nodegroup,
-add-on, and issuer-only provider observations with a scoped warning and
-partial SDK result; other list failures and every
-GetOpenIDConnectProvider failure fail the EKS read. This requires iam:ListOpenIDConnectProviders and
-iam:GetOpenIDConnectProvider for complete enrichment; live IAM permission and
-request cost have not been verified.
-ECR GetLifecyclePolicy now emits typed policy metadata after each repository
-image read. A missing policy emits nothing; a denied read fails the ECR
-service. The policy JSON body is omitted because it can contain user-supplied
-values. This adds one API call per repository and requires
-`ecr:GetLifecyclePolicy`; the live IAM grant and call cost remain unverified.
-The KMS reader emits typed `aws_kms_key` resources from paginated ListKeys and
-one DescribeKey per nonblank listed key ID. A blank ListKeys ID is skipped,
-matching the legacy scanner. For described keys it verifies the reported ARN
-against the listed key ID and the STS-verified account, partition, and region;
-missing or conflicting DescribeKey identity fails the service read. The resource
-includes only DescribeKey metadata such as manager, state, usage, origin, algorithms,
-creation/deletion dates, and multi-Region configuration. ListAliases pages emit typed
-`aws_kms_alias` resources and alias-to-key relationships joined by target key ID;
-a reported alias ARN must scope to the claimed identity, while a missing alias ARN
-still identifies by alias name. ListGrants pages emit typed `aws_kms_grant` resources
-with grant-to-key edges, plus grant-to-grantee edges for named IAM or service
-grantees; grant encryption contexts and constraints stay excluded. Alias or grant
-list denials fail the service read. The reader also reads per-key tags
-(`kms:ListResourceTags`), rotation status (`kms:GetKeyRotationStatus`), and
-policy revision names (`kms:ListKeyPolicies`), emitting `alias_count`,
-`grant_count`, `policy_revision_names`, and `rotation_status_known` /
-`rotation_enabled` (the latter only when known). The reader does not read
-key material or raw policy documents. Rotation is skipped without an API call
-for keys AWS cannot answer (non-customer, non-encrypt/decrypt, non-symmetric,
-pending-deletion/replica-deletion, unavailable, creating, disabled, or
-pending-import); a denied tag read yields nil tags, indistinguishable from an
-untagged key. The new reads require `kms:ListKeys`, `kms:DescribeKey`,
-`kms:ListAliases`, `kms:ListGrants`, `kms:ListResourceTags`,
-`kms:GetKeyRotationStatus`, and `kms:ListKeyPolicies`, with one call of each
-per-key read per nonblank listed key ID (tags, rotation, and policy names add
-up to three calls per key); live IAM access and call cost remain unverified.
-The IAM reader emits typed `aws_iam_role` resources from ListRoles, GetRole,
-ListAttachedRolePolicies, and ListRolePolicies. It binds each regionless
-role ARN to the STS-verified account and partition, and its suffix to the
-reported role name. The typed role fact uses the legacy `aws-global` boundary
-while the configured region still selects the AWS endpoint and STS verification.
-It retains role path, policy references, permissions boundary, and trust-policy
-presence. Raw trust documents and normalized permission statements are excluded.
-A missing GetRole detail uses
-the listed role; read errors fail the IAM service. Enrichment adds at least
-three reads per listed role, with pagination possibly adding more. Live IAM
-access and request cost remain unverified. The IAM user reader emits typed
-`aws_iam_user` resources from ListUsers, ListAttachedUserPolicies,
-ListUserPolicies, and GetUser. It binds regionless user ARNs to the verified
-account and partition, checks the reported user name, and emits at the
-`aws-global` boundary. It retains the legacy path, attached-policy ARN and
-inline-policy name lists (including null for empty lists), and permissions
-boundary metadata. It excludes policy documents, normalized permission
-statements, and credential material. A missing GetUser detail uses the listed
-user; any read error fails the IAM service. Each listed user adds at least
-three IAM requests, with additional pages increasing the count. The required
-IAM actions are `iam:ListUsers`, `iam:ListAttachedUserPolicies`,
-`iam:ListUserPolicies`, and `iam:GetUser`; live grants and request cost remain
-unverified. Other service readers remain partial ports.
-The full port removes those placeholders and declares the other core-owned AWS
-fact kinds at schema `1.0.0`, all with
-`reported` confidence (the in-tree AWS envelopes record facts returned by
-the AWS APIs as reported):
-
-`aws_resource`, `aws_relationship`, `aws_tag_observation`, `aws_dns_record`,
-`aws_image_reference`, `aws_security_group_rule`, `aws_iam_permission`,
-`aws_resource_policy_permission`, `aws_warning`, `ec2_instance_posture`,
-`s3_bucket_posture`, `rds_instance_posture`, `s3_external_principal_grant`.
-
-The remaining bare AWS kinds stay out of the manifest until their typed
-emitters are ported and the host supplies a trusted grant snapshot to
-conformance (#8909).
-The pinned standalone SDK accepts those kinds only through its `CoreFacts`
-context; a synthetic context in fixture tests proves the portable mechanism,
-not production authorization. The host owns grant issuance and rechecks
-emission at runtime. See [PORT_PLAN.md](PORT_PLAN.md).
-
-The typed `aws_resource` envelope is connected to claim-bound live EC2 reads.
-VPC, subnet, and volume observations carry reported state, tags, and API
-attributes, including CIDR associations and volume attachments. Security-group
-observations carry the reported group name, tags, description, owner, VPC ID,
-and legacy group-ID/name correlation anchors. Security group rule observations
-carry rule metadata, tags, and rule/group correlation anchors. Network
-interface observations carry status, tags, attachment, address, and security
-group metadata. Network interface edges link reported subnets, VPCs, security
-groups, and attached instances; attachment targets use the reported owner and
-verified partition. Instance identity observations carry state and launch AMI
-ID from the same `DescribeInstances` response. These edges, subnet-to-VPC,
-volume-to-KMS, and instance-to-AMI are the typed EC2 relationships currently
-emitted. AMI identities are deduplicated by ID within each regional EC2 scan.
-The live RDS reader emits typed resource identity for DB instances, clusters,
-and subnet groups from the existing describe pages, plus one metadata-only
-`rds_instance_posture` fact per instance or cluster; the posture excludes
-endpoint addresses, database names, usernames, and security parameter values.
-One bounded `DescribeImages` call per scan (at most 100 distinct image IDs,
-deprecated images included) stamps the reported typed image fields
-(`platform_details`, `platform`, `architecture`, `creation_date`,
-`deprecation_time`, `owner_alias`, `root_device_type`) onto the matching AMI
-facts. The structurally validated image `name` is admitted as untrusted creator-controlled text; the image `description` is never emitted
-(see eshu-hq/eshu#9525).
-AMI targets add typed facts without adding transitional record facts; all
-emitted facts count toward the claim's record limit.
-
-This is staged implementation, not a full parity or live host admission claim.
-Instance and volume ARNs use the account and partition verified by STS before
-EC2 reads; a partition mismatch fails before a service read.
-Sensitive-shaped resource attribute keys fail closed.
-See [PORT_PLAN.md](PORT_PLAN.md#resource-envelope-seam-status) for the
-remaining redaction and host-grant boundary.
-
-## Build and test from a clean clone
-
-```bash
-go mod tidy -diff
-go build ./...
-go vet ./...
-go test ./... -count=1
-go run ./cmd/collector --input ./testdata/complete.json
+```mermaid
+flowchart LR
+  H[Eshu host] -->|one claim request on stdin| C[AWS Cloud collector<br/>this repo]
+  C -->|read-only calls| A[AWS APIs<br/>one account]
+  A --> C
+  C -->|one result on stdout| H
+  H --> E[Eshu core<br/>stores the facts]
 ```
 
-`go.sum` lists only the modules the template's own imports reach. Importing
-the `factschema` root package (typed payload structs and encoders) pulls in
-that module's own dependencies, and `go mod tidy -diff` then fails until you
-run `go mod tidy` and commit the added `go.sum` lines. The conformance script
-runs `go mod tidy -diff` first so that drift fails before review.
+In words: the host sends one claim request, the collector reads AWS,
+writes one result to stdout, and exits. The host commits the facts.
+The collector writes nothing to Eshu storage itself, and it never
+starts itself on a schedule.
 
-`scripts/run-conformance.sh` runs the same gate CI runs
-(`.github/workflows/ci.yml`, discovered by GitHub Actions because this
-directory is a repository root).
+## When you'd use it, and when you wouldn't
 
-## Configuration
+Use it when Eshu should learn from live AWS APIs for one account at
+a time, under host-issued claims. Access is bounded by three
+allowlists: one account, named regions, named services.
 
-Copy `config.example.yaml`. The collector reads one source document
-(`source.input`), emits against one credential-free `sourceURI`, and tracks
-freshness with `freshness.previousDigest`. All payloads pass
-`ValidateShareSafeKeys`; anything sensitive must be redacted before emission
-(see `collector.go` and the redaction test).
+Don't use it for data contents (objects, messages, secret values),
+for writes to AWS (it makes none), or to query answers back. Core
+does the answering. This just reports what it saw.
 
-## Least-privilege credentials
+## How Eshu runs it
 
-The collector receives only a bounded claim plus local config. It never gets
-Postgres, graph, queue, lease, reducer, API, or MCP handles. Source
-credentials stay in the collector runtime environment and never enter fact
-payloads, source URIs, logs, or statuses. URIs embedding
-`user:secret@host` or known credential query keys are refused, including
-AWS presigned URL keys such as
-`X-Amz-Credential` and `X-Amz-Signature` (even when the key is percent-encoded).
-Ordinary credential-free HTTPS queries and `aws:` source URIs remain valid.
+Four lines cover it. The host starts the image entry point,
+`/usr/local/bin/collector --sdk-stdio`, once per claim. It writes
+one JSON request to stdin (`collector-sdk/v1alpha1` or `v1alpha3`)
+with the claim and the config. The collector reads AWS and writes
+one JSON result, or one page of it, to stdout. The host commits the
+facts, and re-invokes with a cursor if more pages remain.
 
-## `permission_denied` contract (optional-call degradation)
-
-A denial on a core listing call stays terminal: the service contributes no
-evidence, and a claim with nothing readable fails instead of emitting a
-partial result. A denial on a reviewed optional enrichment call degrades
-instead: the collector keeps the core inventory, marks the SDK result
-`ResultPartial` with a warning status, and emits one typed `aws_warning`
-fact per skipped call carrying the service, the denied operation, the
-affected resource, and the effect (`operation`, `resource`, `effect`
-attributes plus a `permission_denied` warning kind and error class).
-Warning identity covers operation, resource, and effect, so repeated
-denials of one read collapse to a single fact. The warning statuses ride
-the emitted claim, which is what the host persists to collector status,
-readiness, and `list_collectors`; a log line alone is not the signal.
-An unread setting stays unknown in its attributes and is never reported
-as disabled or absent.
-
-Core/optional split per service:
-
-- EC2: core is the VPC, subnet, security-group, network-interface,
-  instance, AMI, and volume listings; optional is
-  `DescribeSecurityGroupRules` and `DescribeImages` (AMI detail
-  enrichment) only.
-- EKS: core is the cluster, nodegroup, and add-on listings plus
-  `GetOpenIDConnectProvider`; optional is
-  `iam:ListOpenIDConnectProviders` only.
-- Lambda: core is `ListFunctions`, `GetFunction`, and `ListAliases`;
-  optional is `ListEventSourceMappings` only.
-- S3: core is the bucket, tag, versioning, public-access-block, policy,
-  ownership, website, logging, and replication reads (their denials fail
-  the S3 read); optional is `GetBucketEncryption` only.
-
-## EC2 rule-read denial
-
-A permission denial from EC2 `DescribeSecurityGroupRules` makes the live claim
-partial. The collector retains VPC, subnet, security-group, network-interface,
-instance, and volume observations from successful reads. It omits rule records
-if any rule page is denied, emits a typed `aws_warning` naming the operation,
-regional resource, and missing-rule effect, and returns SDK `ResultPartial` with
-a warning status. Other EC2 API errors keep their existing failure behavior.
-The warning does not prove that a security group has no rules.
-
-## EC2 AMI detail enrichment
-
-A permission denial from EC2 `DescribeImages` keeps every core observation and
-adds one `aws_warning` with the `ami-details-unavailable` effect. A scan that
-references more than 100 distinct AMI IDs resolves the first 100 in sorted
-order and warns with the `ami-details-cap-truncated` effect and the dropped
-count. Images the call cannot see (shared without permission, deregistered)
-keep their identity-only fact and warn once with the `ami-image-unresolved`
-effect and the unresolved count; no OS version is inferred. Other
-`DescribeImages` errors fail the EC2 read.
-
-The image `Name` is admitted only under structural validation: a scalar
-string of 3-128 runes in the exact AWS `CreateImage` charset, passing a
-hygiene scan over the shared sensitive-key predicate. Any other value drops
-the field while the AMI keeps its id and typed fields, with one deduped
-`aws_warning` carrying the `ami_name_dropped` effect and the dropped count.
-The admitted name is untrusted creator-controlled text: admission claims
-structural validity, never secret-freedom. The image `Description` is never
-read or emitted.
-
-## Lambda mapping-read denial
-
-An `AccessDenied`, `AccessDeniedException`, or `UnauthorizedOperation` from
-Lambda `ListEventSourceMappings` leaves that function's mappings unknown. The
-collector discards every mapping page already read for that function, retains
-its function and alias facts and facts from other functions, and emits a typed
-`aws_warning` naming the operation, function ARN, and missing-mappings effect.
-The SDK result is `ResultPartial` with a warning status. Other mapping errors,
-and errors from `ListFunctions` or `ListAliases`, fail the Lambda read.
-
-## Limits
-
-Default bounds live in `health.go` (`DefaultResourceUse`): 5000 records per
-claim, 64 KiB per payload, 300 s claim timeout, 8 queued retries. Tune them
-per source and record the values in the cutover issue. Past the retry bound
-the collector fails terminal instead of queuing forever.
-
-## Upgrades
-
-Pin exact SDK versions. Before bumping either pin, re-run conformance in
-the collector's own CI: a payload shape the new schemas reject fails closed
-here before it ever reaches a reducer. Keep the compatibility row in step
-with `docs/public/extend/sdk-compatibility.md` in the core repo.
-
-## Producer grants, revocation, and rollback
-
-Core-owned fact kinds require a live #6709 producer grant naming this
-producer, version, kind, schema, and scope; namespaced kinds need none.
-The AWS issuance request set contains thirteen grants, one per core kind at
-schema `1.0.0`. The current manifest declares `aws_resource`,
-`aws_relationship`, `aws_image_reference`, and `aws_warning` alongside three transitional
-namespaced kinds.
-`TestManifestEmissionsAreAuthorized` fails when a declared kind is
-outside the collector's namespace and has no live grant scoped to a
-collector kind. This repo cannot see the core registry, so it treats any
-kind outside its namespace as potentially core-owned, including dotted
-names such as `incident.record`. The host decides ownership: it enforces
-core-ownership at install and again at every emission.
-`grant.example.json` is the issuance request set: a JSON array with one
-request per AWS kind. A grant's scope is the collector kind
-(`CollectorKind`, declared in `spec.collectorKinds`), not a scope ID such
-as `host.scope.id`: the host matches the grant against the manifest's
-collector kinds, and `grant_test.go` fails when an example drifts from
-them. `grant_test.go` also locks the fail-closed matrix (wrong
-scope/schema/producer refused). Revocation is a core-side grant revoke
-followed by replay from the last committed generation: stop new claims,
-expire in-flight leases, revoke, restore the last supported producer,
-replay, and verify fact/graph/read truth. Two producers never hold one
-scope+generation at once.
-
-Live grant issuance and claim admission for the new typed path are not yet
-proven here. The grant request set names the required tuples; the host must
-issue and verify them before deployment.
-
-## Releases
-
-Every artifact in `manifest.yaml` is digest-pinned (`@sha256:…`, never
-`:latest`). `manifest_test.go` enforces pinning plus manifest validity, and
-the all-zero placeholder digest is rejected once the component is renamed —
-so the scaffold release flow pins the real pushed digest with
-`scripts/pin-digest.sh`. Base images in `Dockerfile` are pinned the same
-way; re-pin them when bumping either base. `version` in `manifest.yaml`
-and the git tag must match (`v0.1.0` for `0.1.0`); pushing a `v*` tag runs
-`release.yml`, which builds, signs, and publishes the image plus SBOM and
-provenance attestations. `release_version_test.go` enforces both directions.
-The workflow publishes a tag only when the tag is exactly `v` plus the manifest
-version and points at the protected `main` head; anything else fails before
-anything builds or pushes. Pushes to `main` publish `:main`, `:latest` (both
-moving), and `:sha-<long-sha>` with the same signatures, SBOM, and attestations.
-
-## Result paging (collector-sdk/v1alpha3)
-
-Large first scans can exceed one bounded host stdout write (the motivating
-case is a 72 MB result against a 64 MB cap). On a v1alpha3 host request the
-satellite splits completable results into pages within a per-page byte
-budget and the host re-invokes the satellite with a continuation cursor
-until a final page closes the generation (eshu-hq/eshu#9716).
-
-- Per-page byte budget: `limits.maxPageBytes`, default `4128768` (the
-  default host `stdout_limit_bytes` of 4 MiB minus 64 KiB envelope
-  headroom). Keep it at or below the host cap minus headroom — for the
-  motivating 64 MB QA cap that means raising the host cap and this knob
-  together. A page that still exceeds the host cap trips the host
-  admission error with byte sizes. A single fact larger than the bound
-  fails the claim terminal with class `page-budget-exceeded` instead of
-  emitting an over-budget page.
-- Continuation tokens: the satellite is stateless, so each page-0 cursor
-  pins the generation (ID, observed time, freshness hint, deletion
-  attestation) and a digest of the full fact stream. A resumed call
-  re-collects, proves the stream still matches, repeats the pinned
-  generation, and serves the cursored page. Drift fails the run so the
-  host retries the claim from page zero; only the final page carries
-  statuses because the host sums per-page statuses.
-- Compatibility: v1alpha1 requests never see a page envelope. Results with
-  no page stay single-shot on either protocol, and only complete/partial
-  states paginate.
-
-The paging math (`paging.go`: page bound, wire sizes, split, cursor codec)
-mirrors the host SDK contract field-for-field; `paging_test.go` pins the
-envelope shape against the host intake because the pinned standalone SDK
-predates pagination.
-
-## Remote proof
-
-The collector never submits results to core. Under the `process` adapter the
-host starts `./collector --sdk-stdio`, writes one claim on stdin, reads one SDK
-result from stdout, and commits the facts itself. The collector holds no
-endpoint, queue, or datastore handle, so there is nothing for it to submit to
-and no collector-side script can stand in for the host.
-
-To prove a deployment, run the real component lifecycle against a component
-home (see
-[Community extension authoring](https://github.com/eshu-hq/eshu/blob/main/docs/public/extend/community-extension-authoring.md)
-and
-[Component producer grants](https://github.com/eshu-hq/eshu/blob/main/docs/public/reference/component-producer-grants.md)):
+You can run the fixture mode locally without a host:
 
 ```bash
-eshu component grant collector-aws-cloud --component-home "$HOME_DIR" \
-  --version 0.1.0 --kind <kind> --schema-version 1.0.0 \
-  --scope aws --expires-in 720h   # one grant per core-owned kind (13 total)
-eshu component install manifest.yaml --component-home "$HOME_DIR" \
-  --trust-mode allowlist --allow-id collector-aws-cloud --allow-publisher eshu-hq
-eshu component enable collector-aws-cloud --component-home "$HOME_DIR" \
-  --instance aws-cloud-primary --mode scheduled --claims --config config.example.yaml
+go run ./cmd/collector --input testdata/complete.json
 ```
 
-Then let the coordinator claim a scope and read the committed facts back
-through the target core's own API and MCP surfaces, using the paths in that
-core's API reference. Record the tested core version, topology, and evidence
-location in the cutover issue; credential-free conformance stays in CI.
+## Documentation
+
+| Doc | What's in it |
+|---|---|
+| [docs/README.md](docs/README.md) | Documentation index: start here |
+| [docs/getting-started/README.md](docs/getting-started/README.md) | Run fixture mode locally, then see how the host runs it |
+| [docs/guides/](docs/guides/README.md) | Operate, troubleshoot, seed, and release |
+| [docs/concepts/](docs/concepts/README.md) | The claim contract and boundaries |
+| [docs/reference/configuration.md](docs/reference/configuration.md) | Config fields, credentials, allowlists, and limits |
+| [docs/reference/facts.md](docs/reference/facts.md) | Every emitted fact kind, mirroring the manifest |
+| [docs/architecture/README.md](docs/architecture/README.md) | Where this collector sits in Eshu |
+| [docs/diagrams/README.md](docs/diagrams/README.md) | Every diagram, with captions and text versions |
+| [docs/decisions/README.md](docs/decisions/README.md) | Architecture decision records |
+| [docs/contributing/README.md](docs/contributing/README.md) | Local gates before a pull request |
+| [config.example.yaml](config.example.yaml) | Annotated config shape |
+| [manifest.yaml](manifest.yaml) | Declared facts and the runtime contract |
+| [PORT_PLAN.md](PORT_PLAN.md) and [NOT_PORTED.md](NOT_PORTED.md) | The AWS port plan, and what isn't ported yet |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Local gates and CI lanes |
+
+Terms, briefly: a claim is one unit of work with a time budget, a
+fact is one stored observation with a kind like `aws_resource`, and
+the host is the Eshu process that starts this collector.
+
+## Related repos
+
+- [eshu](https://github.com/eshu-hq/eshu): core. It issues claims,
+  stores the facts, and answers questions over them. The manifest
+  declares compatibility with core `>=0.0.5 <0.2.0`.
+- [eshu-sdk](https://github.com/eshu-hq/eshu-sdk): the collector
+  contract this binary speaks. `go.mod` pins `eshu-sdk/collector
+  v0.1.0-rc.4` and `eshu-sdk/factschema v0.1.0-rc.7`.
+- [eshu-extension-host](https://github.com/eshu-hq/eshu-extension-host):
+  the standalone host that can run component collectors like this
+  one.
+
+## Development
+
+Go `1.26.10` (pinned in `go.mod`). Run `make ci` for vet, lint,
+format, tidy, the line cap, build, test, and race. Tests run on
+fixtures only and never call live AWS.
+
+## Contributing, security, license
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull
+request. There's no SECURITY.md or LICENSE file in this repo. Source
+files carry `SPDX-License-Identifier: MIT`.
