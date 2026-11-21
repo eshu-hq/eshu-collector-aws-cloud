@@ -177,6 +177,56 @@ func SplitFacts(facts []sdk.Fact, maxPageBytes int64) ([][]sdk.Fact, error) {
 	return pages, nil
 }
 
+// canonicalFactOrder returns the facts in one deterministic emission order:
+// kind, then stable key, then the full wire JSON as the final tiebreak so
+// same-key facts with different payloads still order identically. The
+// input slice is never mutated; page splits of identical sets are then
+// identical across stateless calls. It mirrors the PageDigest keying so
+// the digest a cursor pins always describes this same order.
+func canonicalFactOrder(facts []sdk.Fact) []sdk.Fact {
+	type keyed struct {
+		fact sdk.Fact
+		key  string
+		wire string
+	}
+	ordered := make([]keyed, 0, len(facts))
+	for _, fact := range facts {
+		raw, err := json.Marshal(fact)
+		wire := ""
+		if err == nil {
+			wire = string(raw)
+		}
+		ordered = append(ordered, keyed{
+			fact: fact,
+			key:  fact.Kind + "\x00" + fact.StableKey,
+			wire: wire,
+		})
+	}
+	sort.SliceStable(ordered, func(i, j int) bool {
+		if ordered[i].key != ordered[j].key {
+			return ordered[i].key < ordered[j].key
+		}
+		return ordered[i].wire < ordered[j].wire
+	})
+	sorted := make([]sdk.Fact, 0, len(facts))
+	for _, item := range ordered {
+		sorted = append(sorted, item.fact)
+	}
+	return sorted
+}
+
+// countPagedFacts totals the facts a split holds. SplitFacts preserves the
+// input set by contract; the count pins that contract at the paging
+// boundary so a future split regression fails closed here instead of
+// reaching the host as a declared-total mismatch.
+func countPagedFacts(pages [][]sdk.Fact) int {
+	total := 0
+	for _, page := range pages {
+		total += len(page)
+	}
+	return total
+}
+
 // PageDigest returns the stable identity of one generation's fact stream:
 // kind and stable key of every fact in emission order. The cursor carries
 // it so a resumed call proves the source did not move before serving a
@@ -267,10 +317,24 @@ func PaginateResult(result sdk.Result, protocol string, continuation *PageContin
 	if len(result.Facts) == 0 {
 		return result, nil, nil
 	}
+	// Every continuation call re-collects, and the source orders nothing:
+	// the identical fact set may arrive in a different order. The cursor
+	// digest is order-insensitive, so without a canonical order the resume
+	// would split a regrouped stream and the host would reassemble torn
+	// pages (duplicated keys, a count off the declared total —
+	// eshu-hq/eshu#11085). Sorting first makes identical sets split
+	// identically on every call, whatever order the source returned.
+	result.Facts = canonicalFactOrder(result.Facts)
 	bound := effectivePageBound(maxPageBytes)
 	pages, err := SplitFacts(result.Facts, bound)
 	if err != nil {
 		return pageBudgetExceeded(result), nil, nil
+	}
+	if paged := countPagedFacts(pages); paged != len(result.Facts) {
+		return sdk.Result{}, nil, fmt.Errorf(
+			"paging split holds %d facts, want assembled total %d",
+			paged, len(result.Facts),
+		)
 	}
 	if continuation == nil {
 		return emitFirstPage(result, pages)
