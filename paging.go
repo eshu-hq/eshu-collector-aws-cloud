@@ -5,7 +5,6 @@ package collector
 
 import (
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -31,7 +30,11 @@ const FailureClassPageBudgetExceeded = "page-budget-exceeded"
 
 // pageCursorVersion versions the opaque continuation token. A future cursor
 // shape bumps it; older satellites fail closed on unknown versions.
-const pageCursorVersion = 1
+// Version 2 pins the page-zero split (fact count per page) so resumed
+// calls slice the same pages instead of re-splitting drifted wire bytes
+// (eshu-hq/eshu#11085 class 1); version-1 cursors fail closed here and
+// the host retries the claim from page zero.
+const pageCursorVersion = 2
 
 const (
 	// DefaultStdoutLimitBytes mirrors the host process runner's default
@@ -88,22 +91,6 @@ type PageContinuation struct {
 type PagedResult struct {
 	sdk.Result
 	Page *ResultPage `json:"page,omitempty"`
-}
-
-// pageCursor is the decoded continuation token: everything a stateless
-// resumed process needs to serve its page. The digest binds the cursor to
-// the exact fact stream the first page split, so source drift between
-// calls fails closed instead of emitting a page the host rejects
-// mid-stream.
-type pageCursor struct {
-	Version         int    `json:"v"`
-	NextPage        int    `json:"next"`
-	TotalFacts      int    `json:"total"`
-	GenerationID    string `json:"gen"`
-	ObservedAtNanos int64  `json:"obs"`
-	FreshnessHint   string `json:"fresh,omitempty"`
-	TrustedDeletion bool   `json:"td,omitempty"`
-	Digest          string `json:"digest"`
 }
 
 // PageBoundForStdout derives the explicit per-call page byte bound from the
@@ -241,45 +228,6 @@ func PageDigest(facts []sdk.Fact) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// encodePageCursor renders one resume token for JSON transport: base64url
-// of the compact JSON cursor, so the token carries no padding or escaping
-// hazards in the host request document.
-func encodePageCursor(cursor pageCursor) (string, error) {
-	raw, err := json.Marshal(cursor)
-	if err != nil {
-		return "", fmt.Errorf("encode page cursor: %w", err)
-	}
-	return base64.RawURLEncoding.EncodeToString(raw), nil
-}
-
-// decodePageCursor validates one resume token: well-formed encoding, known
-// version, sane resume position, and a pinned generation identity. Anything
-// else fails closed instead of resuming at an untrusted offset.
-func decodePageCursor(encoded string) (pageCursor, error) {
-	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(encoded))
-	if err != nil || len(raw) == 0 {
-		return pageCursor{}, fmt.Errorf("decode page cursor: invalid encoding")
-	}
-	var cursor pageCursor
-	decoder := json.NewDecoder(strings.NewReader(string(raw)))
-	if err := decoder.Decode(&cursor); err != nil {
-		return pageCursor{}, fmt.Errorf("decode page cursor: %w", err)
-	}
-	if cursor.Version != pageCursorVersion {
-		return pageCursor{}, fmt.Errorf("decode page cursor: version %d is unsupported", cursor.Version)
-	}
-	if cursor.NextPage < 0 || cursor.TotalFacts < 0 {
-		return pageCursor{}, fmt.Errorf("decode page cursor: negative resume position")
-	}
-	if strings.TrimSpace(cursor.GenerationID) == "" {
-		return pageCursor{}, fmt.Errorf("decode page cursor: generation is required")
-	}
-	if strings.TrimSpace(cursor.Digest) == "" {
-		return pageCursor{}, fmt.Errorf("decode page cursor: digest is required")
-	}
-	return cursor, nil
-}
-
 // effectivePageBound resolves the per-page byte budget: an explicit
 // positive bound wins, anything else selects the documented default.
 func effectivePageBound(maxPageBytes int64) int64 {
@@ -319,13 +267,22 @@ func PaginateResult(result sdk.Result, protocol string, continuation *PageContin
 	}
 	// Every continuation call re-collects, and the source orders nothing:
 	// the identical fact set may arrive in a different order. The cursor
-	// digest is order-insensitive, so without a canonical order the resume
-	// would split a regrouped stream and the host would reassemble torn
-	// pages (duplicated keys, a count off the declared total —
-	// eshu-hq/eshu#11085). Sorting first makes identical sets split
-	// identically on every call, whatever order the source returned.
+	// digest is order-insensitive, so the resume would split a regrouped
+	// stream and the host would reassemble torn pages (duplicated keys, a
+	// count off the declared total — eshu-hq/eshu#11085). Sorting first
+	// gives every call one deterministic order to cut pages from.
+	// Sorting alone is not enough: per-call wire-length drift (fresh
+	// ObservedAt stamps marshal to different byte lengths under
+	// RFC3339Nano trimming) still moves split boundaries on a resume
+	// re-split with admission passing. The cursor therefore pins the
+	// page-zero split and the resume slices at those boundaries instead
+	// of re-splitting, so a pinned walk always partitions the admitted
+	// set and reassembles exactly the declared total.
 	result.Facts = canonicalFactOrder(result.Facts)
 	bound := effectivePageBound(maxPageBytes)
+	if continuation != nil {
+		return emitResumePage(result, continuation, bound)
+	}
 	pages, err := SplitFacts(result.Facts, bound)
 	if err != nil {
 		return pageBudgetExceeded(result), nil, nil
@@ -336,10 +293,7 @@ func PaginateResult(result sdk.Result, protocol string, continuation *PageContin
 			paged, len(result.Facts),
 		)
 	}
-	if continuation == nil {
-		return emitFirstPage(result, pages)
-	}
-	return emitResumePage(result, pages, continuation)
+	return emitFirstPage(result, pages)
 }
 
 // emitFirstPage serves page zero and mints the resume cursor when more
@@ -352,6 +306,10 @@ func emitFirstPage(result sdk.Result, pages [][]sdk.Fact) (sdk.Result, *ResultPa
 		return result, &ResultPage{PageIndex: 0, TotalFacts: total}, nil
 	}
 	digest := PageDigest(result.Facts)
+	sizes := make([]int, 0, len(pages))
+	for _, page := range pages {
+		sizes = append(sizes, len(page))
+	}
 	cursor, err := encodePageCursor(pageCursor{
 		Version:         pageCursorVersion,
 		NextPage:        1,
@@ -361,6 +319,7 @@ func emitFirstPage(result sdk.Result, pages [][]sdk.Fact) (sdk.Result, *ResultPa
 		FreshnessHint:   result.Generation.FreshnessHint,
 		TrustedDeletion: result.Generation.TrustedDeletion,
 		Digest:          digest,
+		PageSizes:       sizes,
 	})
 	if err != nil {
 		return sdk.Result{}, nil, err
@@ -376,8 +335,12 @@ func emitFirstPage(result sdk.Result, pages [][]sdk.Fact) (sdk.Result, *ResultPa
 // emitResumePage serves the cursor's page after proving the re-collected
 // facts still match the first page's stream. The generation repeats the
 // cursor-pinned values, never the re-collection time, so the host's
-// generation pin holds across pages.
-func emitResumePage(result sdk.Result, pages [][]sdk.Fact, continuation *PageContinuation) (sdk.Result, *ResultPage, error) {
+// generation pin holds across pages. The page is sliced at the pinned
+// page-zero boundaries, never re-split: per-call wire-length drift
+// cannot regroup pages mid-walk, so the walk always partitions the
+// admitted set and reassembles exactly the declared total
+// (eshu-hq/eshu#11085 class 1).
+func emitResumePage(result sdk.Result, continuation *PageContinuation, maxPageBytes int64) (sdk.Result, *ResultPage, error) {
 	cursor, err := decodePageCursor(continuation.Cursor)
 	if err != nil {
 		return sdk.Result{}, nil, err
@@ -388,10 +351,25 @@ func emitResumePage(result sdk.Result, pages [][]sdk.Fact, continuation *PageCon
 			cursor.TotalFacts, len(result.Facts),
 		)
 	}
-	if cursor.NextPage >= len(pages) {
+	pinned := 0
+	for _, size := range cursor.PageSizes {
+		if size <= 0 {
+			return sdk.Result{}, nil, fmt.Errorf(
+				"page cursor pins an empty page: source moved, retry the claim",
+			)
+		}
+		pinned += size
+	}
+	if len(cursor.PageSizes) == 0 || pinned != cursor.TotalFacts {
+		return sdk.Result{}, nil, fmt.Errorf(
+			"page cursor pins %d facts across %d pages, want bound total %d: source moved, retry the claim",
+			pinned, len(cursor.PageSizes), cursor.TotalFacts,
+		)
+	}
+	if cursor.NextPage >= len(cursor.PageSizes) {
 		return sdk.Result{}, nil, fmt.Errorf(
 			"page cursor resumes at page %d of %d: source moved, retry the claim",
-			cursor.NextPage, len(pages),
+			cursor.NextPage, len(cursor.PageSizes),
 		)
 	}
 	result.Generation = sdk.Generation{
@@ -401,8 +379,30 @@ func emitResumePage(result sdk.Result, pages [][]sdk.Fact, continuation *PageCon
 		TrustedDeletion: cursor.TrustedDeletion,
 	}
 	index := cursor.NextPage
-	result.Facts = pages[index]
-	if index == len(pages)-1 {
+	offset := 0
+	for _, size := range cursor.PageSizes[:index] {
+		offset += size
+	}
+	result.Facts = result.Facts[offset : offset+cursor.PageSizes[index]]
+	// A pinned page can outgrow the byte bound when the re-collection
+	// marshals longer than page zero did. Failing closed retries the
+	// claim from page zero, where a fresh split absorbs the growth;
+	// emitting it would only trip the host cap instead.
+	var pageBytes int64
+	for _, fact := range result.Facts {
+		size, err := FactWireBytes(fact)
+		if err != nil {
+			return sdk.Result{}, nil, err
+		}
+		pageBytes += int64(size)
+	}
+	if pageBytes > maxPageBytes {
+		return sdk.Result{}, nil, fmt.Errorf(
+			"page %d re-collected at %d bytes above page bound %d, retry the claim",
+			index, pageBytes, maxPageBytes,
+		)
+	}
+	if index == len(cursor.PageSizes)-1 {
 		return result, &ResultPage{PageIndex: index, TotalFacts: cursor.TotalFacts}, nil
 	}
 	next, err := encodePageCursor(pageCursor{
@@ -414,6 +414,7 @@ func emitResumePage(result sdk.Result, pages [][]sdk.Fact, continuation *PageCon
 		FreshnessHint:   cursor.FreshnessHint,
 		TrustedDeletion: cursor.TrustedDeletion,
 		Digest:          cursor.Digest,
+		PageSizes:       cursor.PageSizes,
 	})
 	if err != nil {
 		return sdk.Result{}, nil, err
