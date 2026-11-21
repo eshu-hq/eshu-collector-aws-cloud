@@ -148,3 +148,38 @@ func TestResumeOrderShiftKeepsReassemblyWhole(t *testing.T) {
 		t.Fatalf("reassembled %d unique keys, want %d", len(seen), len(ids))
 	}
 }
+
+// TestCountPagedFactsTotalsSplit pins the PaginateResult fail-closed
+// self-check counter (eshu-hq/eshu#11085 review P2): it totals whatever
+// a split holds, so a dropped page reports fewer than the assembled
+// total and the guard fires. The guard's error branch itself is
+// unreachable-by-construction unless SplitFacts regresses on its
+// set-preservation contract (proven by
+// TestResumeOrderShiftKeepsReassemblyWhole); this test pins the counter
+// the branch decides on.
+func TestCountPagedFactsTotalsSplit(t *testing.T) {
+	t.Parallel()
+
+	observed := time.Date(2026, time.November, 1, 12, 0, 0, 0, time.UTC)
+	facts := []sdk.Fact{
+		sizedFact("a", 400, observed),
+		sizedFact("b", 400, observed),
+		sizedFact("c", 400, observed),
+	}
+	pages, err := SplitFacts(facts, 1000)
+	if err != nil {
+		t.Fatalf("SplitFacts: %v", err)
+	}
+	if len(pages) < 2 {
+		t.Fatalf("want multi-page split, got %d page(s)", len(pages))
+	}
+	if got := countPagedFacts(pages); got != len(facts) {
+		t.Fatalf("countPagedFacts = %d, want %d", got, len(facts))
+	}
+	if got := countPagedFacts(pages[:len(pages)-1]); got == len(facts) {
+		t.Fatalf("dropped page still totals %d, want fewer", got)
+	}
+	if got := countPagedFacts(nil); got != 0 {
+		t.Fatalf("countPagedFacts(nil) = %d, want 0", got)
+	}
+}
