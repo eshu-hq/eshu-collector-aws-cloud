@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -211,7 +212,7 @@ func (s *SnapshotStore) CommitWalk(result sdk.Result, pageBound int64) (sdk.Resu
 // instance and generation, and sweeps TTL-expired files. Digest addressing
 // makes concurrent page-zero commits safe: files never clobber, and each
 // walk's cursor binds its own digest.
-func (s *SnapshotStore) persist(instance, generation, digest string, doc snapshotDoc) error {
+func (s *SnapshotStore) persist(instance, generation, digest string, doc snapshotDoc) (err error) {
 	name := snapshotFileName(instance, generation, digest)
 	path := filepath.Join(s.dir, name)
 	tmp, err := os.CreateTemp(s.dir, ".walk-*.tmp")
@@ -222,16 +223,25 @@ func (s *SnapshotStore) persist(instance, generation, digest string, doc snapsho
 	committed := false
 	defer func() {
 		if !committed {
-			_ = os.Remove(tmpName)
+			// Best effort: the TTL sweep reaps orphaned temp files, so a
+			// removal failure joins the error already in flight instead
+			// of replacing it.
+			if removeErr := os.Remove(tmpName); removeErr != nil && !os.IsNotExist(removeErr) {
+				err = errors.Join(err, fmt.Errorf("snapshot remove temp: %w", removeErr))
+			}
 		}
 	}()
 	encoder := json.NewEncoder(tmp)
 	if err := encoder.Encode(doc); err != nil {
-		_ = tmp.Close()
+		if closeErr := tmp.Close(); closeErr != nil {
+			return errors.Join(fmt.Errorf("snapshot encode: %w", err), fmt.Errorf("snapshot close temp: %w", closeErr))
+		}
 		return fmt.Errorf("snapshot encode: %w", err)
 	}
 	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
+		if closeErr := tmp.Close(); closeErr != nil {
+			return errors.Join(fmt.Errorf("snapshot fsync: %w", err), fmt.Errorf("snapshot close temp: %w", closeErr))
+		}
 		return fmt.Errorf("snapshot fsync: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
@@ -256,11 +266,16 @@ func (s *SnapshotStore) persist(instance, generation, digest string, doc snapsho
 		if entry.IsDir() || !strings.HasPrefix(entry.Name(), prefix) || entry.Name() == name {
 			continue
 		}
-		_ = os.Remove(filepath.Join(s.dir, entry.Name()))
+		if err := os.Remove(filepath.Join(s.dir, entry.Name())); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("snapshot supersede remove: %w", err)
+		}
 	}
-	// Best-effort reap: load-time TTL checks already fail expired walks
-	// closed, so a sweep failure only delays unlinking, never correctness.
-	_, _ = s.Sweep()
+	// Reap or report: load-time TTL checks already fail expired walks
+	// closed, so a sweep failure delays unlinking rather than corrupting
+	// state — but it is still reported instead of swallowed.
+	if _, err := s.Sweep(); err != nil {
+		return fmt.Errorf("snapshot sweep: %w", err)
+	}
 	return nil
 }
 

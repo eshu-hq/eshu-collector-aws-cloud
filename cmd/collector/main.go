@@ -82,8 +82,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) err
 	// emitProtocol selects the wire output: file mode keeps the legacy
 	// v1alpha1 single-shot shape, while --sdk-stdio emits whatever the
 	// host negotiated (v1alpha1 passthrough, v1alpha3 paged). A resumed
-	// v1alpha3 call serves its cursor's page from the committed walk
-	// snapshot without re-collecting; only page zero collects.
+	// v1alpha3 call serves its page from the committed walk snapshot.
 	emitProtocol := sdk.ProtocolVersionV1Alpha1
 	var emitContinuation *collector.PageContinuation
 	var snapshotCfg collector.SnapshotConfig
@@ -96,13 +95,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) err
 			emitProtocol = plan.protocol
 			emitContinuation = plan.continuation
 			snapshotCfg = plan.snapshot
-			if plan.protocol == collector.ProtocolVersionV1Alpha3 {
-				if plan.continuation != nil && strings.TrimSpace(plan.continuation.Cursor) != "" {
-					snapshotResume = true
-				} else {
-					snapshotWalk = true
-				}
-			}
+			snapshotWalk, snapshotResume = snapshotMode(plan.protocol, plan.continuation)
 			if !snapshotResume {
 				result, outcomeDigest, err = runCollectWithTimeout(func() (sdk.Result, string, error) {
 					return collectStdioPlan(plan)
@@ -121,18 +114,9 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) err
 	// from page zero instead of committing torn evidence.
 	var page *collector.ResultPage
 	if err == nil {
-		switch {
-		case snapshotResume:
-			var store *collector.SnapshotStore
-			if store, err = collector.NewSnapshotStore(snapshotCfg); err == nil {
-				result, page, err = store.ResumeWalk(emitContinuation, int64(limits.MaxPageBytes))
-			}
-		case snapshotWalk:
-			var store *collector.SnapshotStore
-			if store, err = collector.NewSnapshotStore(snapshotCfg); err == nil {
-				result, page, err = store.CommitWalk(result, int64(limits.MaxPageBytes))
-			}
-		default:
+		if snapshotResume || snapshotWalk {
+			result, page, err = serveSnapshotPage(snapshotCfg, snapshotResume, emitContinuation, result, int64(limits.MaxPageBytes))
+		} else {
 			result, page, err = collector.PaginateResult(result, emitProtocol, emitContinuation, int64(limits.MaxPageBytes))
 		}
 	}
