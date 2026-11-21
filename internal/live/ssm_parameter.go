@@ -4,13 +4,11 @@
 package live
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awsssm "github.com/aws/aws-sdk-go-v2/service/ssm"
 	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 	"github.com/eshu-hq/eshu-collector-aws-cloud/catalog"
@@ -71,27 +69,6 @@ func ssmParameterRecord(parameter ssmtypes.ParameterMetadata, tagList []ssmtypes
 		}
 	}
 	return result, nil
-}
-
-// listSSMParameterTags reads the tag list for one parameter name, mirroring
-// the in-tree awssdk client's per-parameter ListTagsForResource pass. A blank
-// name carries no addressable resource and returns nil without a call.
-func listSSMParameterTags(ctx context.Context, client *awsssm.Client, name string) ([]ssmtypes.Tag, error) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return nil, nil
-	}
-	output, err := client.ListTagsForResource(ctx, &awsssm.ListTagsForResourceInput{
-		ResourceId:   aws.String(name),
-		ResourceType: ssmtypes.ResourceTypeForTaggingParameter,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("ssm list tags for parameter %q: %w", name, err)
-	}
-	if output == nil {
-		return nil, nil
-	}
-	return output.TagList, nil
 }
 
 // ssmParameterTags mirrors the in-tree mapper's tag shape: keys trim,
