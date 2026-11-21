@@ -96,8 +96,11 @@ snapshot is the walk's checkpoint: it must outlive every page serve,
 including the final page, whose delivery is never acked. Deletion rule:
 a snapshot is deleted only when superseded (a newer snapshot for the
 same instance+generation commits) or when its mtime passes the snapshot
-TTL. Default TTL is 2 h (STEP-2 parameter; rationale: 2x the 1200 s G2
-walk bound plus headroom for host retry spacing). No explicit host
+TTL. Default TTL is 2 h (STEP-2 parameter; rationale stated exactly:
+the 1200 s G2 walk bound is 20 minutes, so twice the bound is 40
+minutes; the default carries headroom past 40 minutes for host retry
+spacing across TTL windows and for the final page, whose delivery is
+never acked). No explicit host
 completion signal is required, which is why this needs no wire change.
 
 ### Restart rules
