@@ -136,6 +136,7 @@ func TestPageCursorRoundTrip(t *testing.T) {
 		GenerationID:    "generation-1",
 		ObservedAtNanos: observedAt.UnixNano(),
 		Digest:          PageDigest(facts),
+		PageSizes:       []int{1, 1},
 	})
 	if err != nil {
 		t.Fatalf("encodePageCursor error = %v", err)
@@ -150,6 +151,9 @@ func TestPageCursorRoundTrip(t *testing.T) {
 	if decoded.NextPage != 2 || decoded.TotalFacts != 2 || decoded.GenerationID != "generation-1" ||
 		decoded.ObservedAtNanos != observedAt.UnixNano() || decoded.Digest != PageDigest(facts) {
 		t.Fatalf("decoded cursor = %+v, want fields preserved", decoded)
+	}
+	if len(decoded.PageSizes) != 2 || decoded.PageSizes[0] != 1 || decoded.PageSizes[1] != 1 {
+		t.Fatalf("decoded page sizes = %v, want the pinned page-zero split [1 1]", decoded.PageSizes)
 	}
 }
 
