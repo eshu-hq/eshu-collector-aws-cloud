@@ -195,8 +195,11 @@ func TestListSSMListsParameters(t *testing.T) {
 		switch target := r.Header.Get("X-Amz-Target"); {
 		case strings.HasSuffix(target, "DescribeParameters"):
 			serveJSON(t, `{"Parameters": [{"Name": "/app/config"}]}`)(w, r)
+		case strings.HasSuffix(target, "GetResources"):
+			serveJSON(t, `{"ResourceTagMappingList": [{"ResourceARN": "arn:aws:ssm:us-east-1:123456789012:parameter/app/config", "Tags": [{"Key": "env", "Value": "wave1"}]}]}`)(w, r)
 		case strings.HasSuffix(target, "ListTagsForResource"):
-			serveJSON(t, `{"TagList": [{"Key": "env", "Value": "wave1"}]}`)(w, r)
+			t.Errorf("bulk lane must not call ListTagsForResource")
+			w.WriteHeader(http.StatusBadRequest)
 		default:
 			t.Errorf("unexpected SSM target %q", target)
 			w.WriteHeader(http.StatusBadRequest)
@@ -221,7 +224,7 @@ func TestListSSMListsParameters(t *testing.T) {
 		t.Fatalf("parameter resource = %+v, want ARN-less name fallback", resource)
 	}
 	if got := resource.Tags; len(got) != 1 || got["env"] != "wave1" {
-		t.Fatalf("parameter tags = %#v, want per-parameter tag list", got)
+		t.Fatalf("parameter tags = %#v, want bulk tag map", got)
 	}
 	if records[0].Relationship != nil {
 		t.Fatalf("parameter relationship = %+v, want nil (no key)", records[0].Relationship)

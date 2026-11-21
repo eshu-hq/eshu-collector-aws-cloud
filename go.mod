@@ -31,6 +31,8 @@ require (
 
 require github.com/aws/aws-sdk-go-v2/service/kms v1.62.5
 
+require github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi v1.30.13
+
 require (
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.26 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.17
