@@ -288,3 +288,17 @@ func TestStdioSnapshotConfigMalformedFailsClosed(t *testing.T) {
 		t.Fatal("malformed snapshot config error = nil, want failure")
 	}
 }
+
+func TestServeSnapshotPageReportsBadStore(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "file")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	cfg := collector.SnapshotConfig{Dir: f.Name()}
+	if _, _, err := serveSnapshotPage(cfg, false, nil, sdk.Result{}, 1<<20); err == nil {
+		t.Fatal("expected store construction error")
+	}
+}
