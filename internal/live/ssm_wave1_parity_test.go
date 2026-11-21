@@ -19,18 +19,22 @@ import (
 // to the in-tree oracle keys: every fact the in-tree Scanner.Scan derives for
 // the shared fixture (testdata/wave1-ssm-parity.json) has a satellite twin
 // with the identical stable key. The test drives the full production listSSM
-// path (stubbed SSM API: DescribeParameters plus per-parameter
-// ListTagsForResource) and converts records to facts exactly as CollectReport
-// does. Oracle keys come from the in-tree scan; the re-derivation recipe is
-// in testdata/stable-key-provenance.md.
+// path (stubbed SSM API: DescribeParameters plus the bulk tagging-API page
+// carrying the fixture tags, zero ListTagsForResource calls) and converts
+// records to facts exactly as CollectReport does. Oracle keys come from the
+// in-tree scan; the re-derivation recipe is in
+// testdata/stable-key-provenance.md.
 func TestWave1SSMParityAgainstInTreeOracle(t *testing.T) {
 	t.Parallel()
 
 	fixture := loadWave1SSMFixture(t)
-	cfg := wave1SSMStubConfig(t, fixture)
+	cfg, calls := wave1SSMStubConfig(t, fixture)
 	records, err := listSSM(context.Background(), cfg)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if got := calls.ListTags.Load(); got != 0 {
+		t.Fatalf("ListTagsForResource calls = %d, want 0 (bulk lane)", got)
 	}
 
 	const accountID = "123456789012"
@@ -90,7 +94,7 @@ func TestWave1SSMPayloadBranches(t *testing.T) {
 	t.Parallel()
 
 	fixture := loadWave1SSMFixture(t)
-	cfg := wave1SSMStubConfig(t, fixture)
+	cfg, _ := wave1SSMStubConfig(t, fixture)
 	records, err := listSSM(context.Background(), cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -169,7 +173,7 @@ func TestWave1SSMParameterAttributeEquality(t *testing.T) {
 	t.Parallel()
 
 	fixture := loadWave1SSMFixture(t)
-	cfg := wave1SSMStubConfig(t, fixture)
+	cfg, _ := wave1SSMStubConfig(t, fixture)
 	records, err := listSSM(context.Background(), cfg)
 	if err != nil {
 		t.Fatal(err)

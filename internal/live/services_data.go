@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsdynamodb "github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	awsrds "github.com/aws/aws-sdk-go-v2/service/rds"
+	awstagging "github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	awssecretsmanager "github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	awsssm "github.com/aws/aws-sdk-go-v2/service/ssm"
@@ -233,31 +234,9 @@ func listSecretsManager(ctx context.Context, cfg aws.Config) ([]collector.Record
 }
 
 // listSSM mirrors the in-tree ssm scanner: parameter metadata only.
-// Parameter values, history values, and policy JSON stay unread. Each
-// DescribeParameters row maps through ssmParameterRecord with its
-// ListTagsForResource tag list, the same two reads the in-tree awssdk client
-// performs per parameter (no OTEL spans).
+// Parameter values, history values, and policy JSON stay unread. Tags arrive
+// from the bulk tagging-API walk in ssm_parameter_bulk_tags.go (no OTEL
+// spans, zero ListTagsForResource calls).
 func listSSM(ctx context.Context, cfg aws.Config) ([]collector.Record, error) {
-	client := awsssm.NewFromConfig(cfg)
-	region := cfg.Region
-	records := []collector.Record{}
-	parameters := awsssm.NewDescribeParametersPaginator(client, &awsssm.DescribeParametersInput{})
-	for parameters.HasMorePages() {
-		page, err := parameters.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("ssm describe parameters: %w", err)
-		}
-		for _, parameter := range page.Parameters {
-			tags, err := listSSMParameterTags(ctx, client, aws.ToString(parameter.Name))
-			if err != nil {
-				return nil, err
-			}
-			recorded, err := ssmParameterRecord(parameter, tags, region)
-			if err != nil {
-				return nil, fmt.Errorf("ssm parameter identity: %w", err)
-			}
-			records = append(records, recorded)
-		}
-	}
-	return records, nil
+	return listSSMWithAPIs(ctx, awsssm.NewFromConfig(cfg), awstagging.NewFromConfig(cfg), cfg.Region)
 }

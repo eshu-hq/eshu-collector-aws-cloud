@@ -23,7 +23,7 @@ func TestWave1SSMLiveConformance(t *testing.T) {
 	t.Parallel()
 
 	fixture := loadWave1SSMFixture(t)
-	cfg := wave1SSMStubConfig(t, fixture)
+	cfg, _ := wave1SSMStubConfig(t, fixture)
 	records, err := listSSM(context.Background(), cfg)
 	if err != nil {
 		t.Fatal(err)
