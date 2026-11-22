@@ -7,14 +7,13 @@ reasoning out of old pull requests.
 
 ## Index
 
-No ADRs are recorded yet. When the first one lands it will be
-`ADR-0001` and listed here. We only write an ADR for a decision
+`ADR-0001` is recorded and listed here. We only write an ADR for a decision
 that was actually made and recorded; we don't backfill imaginary
 ones to fill the folder.
 
 | ADR | Title | Status |
 |---|---|---|
-| — | None recorded yet | — |
+| [ADR-0001](ADR-0001-collect-once-paged-emission.md) | Collect-once paged emission for Class-3 walks | proposed |
 
 ## Format for a new ADR
 

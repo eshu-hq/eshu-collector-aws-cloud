@@ -82,9 +82,11 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) err
 	// emitProtocol selects the wire output: file mode keeps the legacy
 	// v1alpha1 single-shot shape, while --sdk-stdio emits whatever the
 	// host negotiated (v1alpha1 passthrough, v1alpha3 paged). A resumed
-	// v1alpha3 call re-collects and serves its cursor's page.
+	// v1alpha3 call serves its page from the committed walk snapshot.
 	emitProtocol := sdk.ProtocolVersionV1Alpha1
 	var emitContinuation *collector.PageContinuation
+	var snapshotCfg collector.SnapshotConfig
+	var snapshotWalk, snapshotResume bool
 	if *sdkStdio {
 		var plan stdioPlan
 		plan, err = parseSDKStdio(stdin)
@@ -92,22 +94,31 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) err
 			limits = plan.limits
 			emitProtocol = plan.protocol
 			emitContinuation = plan.continuation
-			result, outcomeDigest, err = runCollectWithTimeout(func() (sdk.Result, string, error) {
-				return collectStdioPlan(plan)
-			}, limits)
+			snapshotCfg = plan.snapshot
+			snapshotWalk, snapshotResume = snapshotMode(plan.protocol, plan.continuation)
+			if !snapshotResume {
+				result, outcomeDigest, err = runCollectWithTimeout(func() (sdk.Result, string, error) {
+					return collectStdioPlan(plan)
+				}, limits)
+			}
 		}
 	} else {
 		result, err = collectWithTimeout(*inputPath, *sourceURI, *previousDigest, limits)
 	}
 	// Paging selects the one page this call emits. On legacy requests it
 	// returns the result untouched, preserving the exact single-shot
-	// shape; on v1alpha3 it splits completable results into bounded pages.
-	// A resume failure (drifted source, bad cursor) fails the run so the
-	// host retries the claim from page zero instead of committing torn
-	// evidence.
+	// shape. On v1alpha3 a page-zero call commits one snapshot and serves
+	// page zero from it, while a resume call serves its cursor's page
+	// from that snapshot with no new collection. A resume failure (dead
+	// snapshot, bad cursor) fails the run so the host retries the claim
+	// from page zero instead of committing torn evidence.
 	var page *collector.ResultPage
 	if err == nil {
-		result, page, err = collector.PaginateResult(result, emitProtocol, emitContinuation, int64(limits.MaxPageBytes))
+		if snapshotResume || snapshotWalk {
+			result, page, err = serveSnapshotPage(snapshotCfg, snapshotResume, emitContinuation, result, int64(limits.MaxPageBytes))
+		} else {
+			result, page, err = collector.PaginateResult(result, emitProtocol, emitContinuation, int64(limits.MaxPageBytes))
+		}
 	}
 	monitor.SetResource(limits)
 	if err != nil {
@@ -266,6 +277,7 @@ type stdioPlan struct {
 	claim          sdk.Claim
 	protocol       string
 	continuation   *collector.PageContinuation
+	snapshot       collector.SnapshotConfig
 	liveMode       bool
 	live           live.Config
 }
@@ -314,6 +326,11 @@ func parseSDKStdio(stdin io.Reader) (stdioPlan, error) {
 	plan.claim = claim
 	plan.protocol = protocol
 	plan.continuation = request.Continuation
+	snapshot, err := collector.ParseSnapshotConfig(request.Config)
+	if err != nil {
+		return stdioPlan{}, err
+	}
+	plan.snapshot = snapshot
 	if inputPresent && strings.TrimSpace(inputPath) != "" {
 		// A missing key falls back to the placeholder; a present-but-malformed
 		// value fails closed instead of silently emitting against the placeholder.

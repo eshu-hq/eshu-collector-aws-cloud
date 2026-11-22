@@ -31,6 +31,17 @@ type pageCursor struct {
 	TrustedDeletion bool   `json:"td,omitempty"`
 	Digest          string `json:"digest"`
 	PageSizes       []int  `json:"sizes"`
+	// Snapshot binds the cursor to one collect-once walk snapshot: the
+	// content digest of the committed fact stream. PageBound pins the
+	// per-page byte bound page zero split with (the stored boundary a
+	// resume serves), and InstanceID locates the snapshot file. All
+	// three ride inside the host-opaque token, so no wire shape changes.
+	// Cursors minted before collect-once carry none of them; the
+	// snapshot resume path fails those closed instead of resuming at an
+	// unbound offset.
+	Snapshot   string `json:"snap,omitempty"`
+	PageBound  int64  `json:"bound,omitempty"`
+	InstanceID string `json:"inst,omitempty"`
 }
 
 // encodePageCursor renders one resume token for JSON transport: base64url
