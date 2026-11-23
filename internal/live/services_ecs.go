@@ -6,6 +6,7 @@ package live
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -26,6 +27,9 @@ func listECS(ctx context.Context, cfg aws.Config, key marker.Key) ([]collector.R
 	region := cfg.Region
 	records := []collector.Record{}
 	seenDefinitions := make(map[string]struct{})
+	listedClusters := 0
+	undescribedClusters := 0
+	undescribedReasons := map[string]int{}
 	clusters := awsecs.NewListClustersPaginator(client, &awsecs.ListClustersInput{})
 	for clusters.HasMorePages() {
 		page, err := clusters.NextPage(ctx)
@@ -33,9 +37,33 @@ func listECS(ctx context.Context, cfg aws.Config, key marker.Key) ([]collector.R
 			return nil, fmt.Errorf("ecs list clusters: %w", err)
 		}
 		for _, arn := range page.ClusterArns {
+			listedClusters++
 			described, err := client.DescribeClusters(ctx, ecsClusterDescribeInput(arn))
 			if err != nil {
 				return nil, fmt.Errorf("ecs describe clusters: %w", err)
+			}
+			if len(described.Clusters) == 0 {
+				// Listed but undescribed (eshu-hq/eshu#11280): ListClusters
+				// named this ARN yet DescribeClusters described nothing
+				// (failures carry MISSING and the clusters array stays
+				// empty). Skipping silently commits green with zero ECS
+				// facts and zero warnings, so the gap rides the warning
+				// carrier instead. Children of an undescribed parent stay
+				// unlisted: without a cluster record they cannot be
+				// attributed, and attempting them burns API budget only to
+				// risk replacing the warning with a hard error.
+				undescribedClusters++
+				if len(described.Failures) == 0 {
+					undescribedReasons["no-failure-detail"]++
+				}
+				for _, failure := range described.Failures {
+					reason := strings.TrimSpace(aws.ToString(failure.Reason))
+					if reason == "" {
+						reason = "unknown"
+					}
+					undescribedReasons[reason]++
+				}
+				continue
 			}
 			for _, cluster := range described.Clusters {
 				row := ecsClusterRecord(cluster, region)
@@ -104,7 +132,41 @@ func listECS(ctx context.Context, cfg aws.Config, key marker.Key) ([]collector.R
 	// revisions they pin inline above. Enumerating every registered revision
 	// (thousands in a real account, including deregistered ones) throttles
 	// DescribeTaskDefinition and fails the whole ECS leg with zero facts.
-	return records, nil
+	return records, combineOptionalDenials(ecsDescribeGapDenial(region, listedClusters, undescribedClusters, undescribedReasons))
+}
+
+// ecsDescribeGapDenial builds the warning carrier for clusters ListClusters
+// named but DescribeClusters could not describe (eshu-hq/eshu#11280). The
+// carrier holds counts and failure-reason shapes only, never the listed
+// ARNs, so no account, ARN, or cluster identity reaches the operator
+// surface. A nil return keeps the fully-described path warning-free.
+func ecsDescribeGapDenial(region string, listed, undescribed int, reasons map[string]int) *optionalReadDenied {
+	if undescribed == 0 {
+		return nil
+	}
+	summaries := make([]string, 0, len(reasons))
+	for reason, count := range reasons {
+		summaries = append(summaries, fmt.Sprintf("%sx%d", reason, count))
+	}
+	sort.Strings(summaries)
+	summary := strings.Join(summaries, ",")
+	if summary == "" {
+		summary = "no-failure-detail"
+	}
+	return &optionalReadDenied{denials: []optionalDenial{{
+		operation: "DescribeClusters",
+		resource:  "region:" + region,
+		effect:    "clusters-undescribed",
+		message: fmt.Sprintf("DescribeClusters described %d of %d listed cluster(s) (%s)",
+			listed-undescribed, listed, summary),
+		attributes: map[string]any{
+			"listed_clusters":      listed,
+			"undescribed_clusters": undescribed,
+			"reasons":              summary,
+		},
+		warningKind: "clusters_undescribed",
+		errorClass:  "clusters_undescribed",
+	}}}
 }
 
 // collectECSTaskDefinition describes one previously unseen definition ARN.
