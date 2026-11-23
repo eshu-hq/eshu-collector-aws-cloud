@@ -11,6 +11,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsecs "github.com/aws/aws-sdk-go-v2/service/ecs"
+	awsecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	collector "github.com/eshu-hq/eshu-collector-aws-cloud"
 	"github.com/eshu-hq/eshu-sdk/collector/marker"
 )
@@ -30,6 +31,10 @@ func listECS(ctx context.Context, cfg aws.Config, key marker.Key) ([]collector.R
 	listedClusters := 0
 	undescribedClusters := 0
 	undescribedReasons := map[string]int{}
+	listedServices, undescribedServices := 0, 0
+	undescribedServiceReasons := map[string]int{}
+	listedTasks, undescribedTasks := 0, 0
+	undescribedTaskReasons := map[string]int{}
 	clusters := awsecs.NewListClustersPaginator(client, &awsecs.ListClustersInput{})
 	for clusters.HasMorePages() {
 		page, err := clusters.NextPage(ctx)
@@ -79,9 +84,14 @@ func listECS(ctx context.Context, cfg aws.Config, key marker.Key) ([]collector.R
 					return nil, fmt.Errorf("ecs list services: %w", err)
 				}
 				for _, chunk := range chunks(servicePage.ServiceArns, 10) {
+					listedServices += len(chunk)
 					described, err := client.DescribeServices(ctx, ecsServiceDescribeInput(arn, chunk))
 					if err != nil {
 						return nil, fmt.Errorf("ecs describe services: %w", err)
+					}
+					if missing := len(chunk) - len(described.Services); missing > 0 {
+						undescribedServices += missing
+						tallyGapReasons(undescribedServiceReasons, described.Failures, missing)
 					}
 					for _, service := range described.Services {
 						row, err := ecsServiceRecord(service, region)
@@ -106,9 +116,14 @@ func listECS(ctx context.Context, cfg aws.Config, key marker.Key) ([]collector.R
 					return nil, fmt.Errorf("ecs list tasks: %w", err)
 				}
 				for _, chunk := range chunks(taskPage.TaskArns, 100) {
+					listedTasks += len(chunk)
 					described, err := client.DescribeTasks(ctx, &awsecs.DescribeTasksInput{Cluster: aws.String(arn), Tasks: chunk})
 					if err != nil {
 						return nil, fmt.Errorf("ecs describe tasks: %w", err)
+					}
+					if missing := len(chunk) - len(described.Tasks); missing > 0 {
+						undescribedTasks += missing
+						tallyGapReasons(undescribedTaskReasons, described.Failures, missing)
 					}
 					for _, task := range described.Tasks {
 						row := ecsTaskRecord(task, region)
@@ -132,7 +147,62 @@ func listECS(ctx context.Context, cfg aws.Config, key marker.Key) ([]collector.R
 	// revisions they pin inline above. Enumerating every registered revision
 	// (thousands in a real account, including deregistered ones) throttles
 	// DescribeTaskDefinition and fails the whole ECS leg with zero facts.
-	return records, combineOptionalDenials(ecsDescribeGapDenial(region, listedClusters, undescribedClusters, undescribedReasons))
+	return records, combineOptionalDenials(
+		ecsDescribeGapDenial(region, listedClusters, undescribedClusters, undescribedReasons),
+		ecsMemberGapDenial("DescribeServices", region, "services", "services-undescribed", "services_undescribed", listedServices, undescribedServices, undescribedServiceReasons),
+		ecsMemberGapDenial("DescribeTasks", region, "tasks", "tasks-undescribed", "tasks_undescribed", listedTasks, undescribedTasks, undescribedTaskReasons),
+	)
+}
+
+// tallyGapReasons folds one describe page's per-member failures into the
+// aggregated reason shapes; members missing without a failure entry count
+// as no-failure-detail, mirroring the cluster gap.
+func tallyGapReasons(reasons map[string]int, failures []awsecstypes.Failure, missing int) {
+	for _, failure := range failures {
+		reason := strings.TrimSpace(aws.ToString(failure.Reason))
+		if reason == "" {
+			reason = "unknown"
+		}
+		reasons[reason]++
+	}
+	if remainder := missing - len(failures); remainder > 0 {
+		reasons["no-failure-detail"] += remainder
+	}
+}
+
+// ecsMemberGapDenial builds the warning carrier for service or task ARNs
+// List named but the chunked describe could not describe
+// (eshu-hq/eshu#11283). Counts and failure-reason shapes only, never the
+// listed ARNs, so no account, ARN, or cluster identity reaches the
+// operator surface. A nil return keeps the fully-described path
+// warning-free.
+func ecsMemberGapDenial(operation, region, unit, effect, kind string, listed, undescribed int, reasons map[string]int) *optionalReadDenied {
+	if undescribed == 0 {
+		return nil
+	}
+	summaries := make([]string, 0, len(reasons))
+	for reason, count := range reasons {
+		summaries = append(summaries, fmt.Sprintf("%sx%d", reason, count))
+	}
+	sort.Strings(summaries)
+	summary := strings.Join(summaries, ",")
+	if summary == "" {
+		summary = "no-failure-detail"
+	}
+	return &optionalReadDenied{denials: []optionalDenial{{
+		operation: operation,
+		resource:  "region:" + region,
+		effect:    effect,
+		message: fmt.Sprintf("%s described %d of %d listed %s (%s)",
+			operation, listed-undescribed, listed, unit, summary),
+		attributes: map[string]any{
+			"listed_" + unit:      listed,
+			"undescribed_" + unit: undescribed,
+			"reasons":             summary,
+		},
+		warningKind: kind,
+		errorClass:  kind,
+	}}}
 }
 
 // ecsDescribeGapDenial builds the warning carrier for clusters ListClusters
