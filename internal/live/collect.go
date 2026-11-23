@@ -195,6 +195,9 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 				} else {
 					ordinaryFailure = true
 					warnings = append(warnings, fmt.Sprintf("%s/%s: %s", service, region, firstLine(err.Error())))
+					observation := loaderFailedObservation(service, region, err)
+					observation.Boundary.AccountID = config.AccountID
+					warningObservations = append(warningObservations, observation)
 					continue
 				}
 			}
