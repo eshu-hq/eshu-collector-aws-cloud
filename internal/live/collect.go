@@ -186,7 +186,7 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 					for _, entry := range denied.denials {
 						warningObservations = append(warningObservations, collector.WarningObservation{
 							Boundary:    collector.Boundary{AccountID: config.AccountID, Region: region, ServiceKind: service},
-							WarningKind: "permission_denied", ErrorClass: "permission_denied",
+							WarningKind: optionalDenialWarningKind(entry), ErrorClass: optionalDenialErrorClass(entry),
 							Message:        optionalDenialMessage(entry),
 							SourceRecordID: entry.operation + ":" + entry.resource,
 							Attributes:     optionalDenialAttributes(entry),
@@ -289,12 +289,35 @@ func (c Collector) CollectReport(ctx context.Context, config Config) (Outcome, e
 // optionalDenial identifies one reviewed API read whose denial leaves the
 // enclosing service's other observations usable. Message overrides the
 // default denial wording for non-denial degradations (cap truncation,
-// unresolved images); attributes carries extra warning attributes such as
-// counts, never identities.
+// unresolved images, undescribed ECS clusters); attributes carries extra
+// warning attributes such as counts, never identities. WarningKind and
+// errorClass override the historical permission-denied taxonomy for
+// degradations that are not authorization denials; empty keeps the default
+// the reviewed optional enrichments rely on.
 type optionalDenial struct {
 	operation, resource, effect string
 	message                     string
 	attributes                  map[string]any
+	warningKind, errorClass     string
+}
+
+// optionalDenialWarningKind reports the warning taxonomy for one denial:
+// the entry override when set, else the historical permission-denied
+// default the reviewed optional enrichments rely on.
+func optionalDenialWarningKind(entry optionalDenial) string {
+	if kind := strings.TrimSpace(entry.warningKind); kind != "" {
+		return kind
+	}
+	return "permission_denied"
+}
+
+// optionalDenialErrorClass mirrors optionalDenialWarningKind for the error
+// class the typed warning fact carries.
+func optionalDenialErrorClass(entry optionalDenial) string {
+	if class := strings.TrimSpace(entry.errorClass); class != "" {
+		return class
+	}
+	return "permission_denied"
 }
 
 // optionalDenialMessage renders the warning message, keeping the exact
