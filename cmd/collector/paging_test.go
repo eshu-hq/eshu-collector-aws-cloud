@@ -24,6 +24,11 @@ func stdioFileConfig(t *testing.T, extra map[string]any) map[string]any {
 	t.Helper()
 	config := map[string]any{
 		"source": map[string]any{"input": "../../testdata/complete.json"},
+		// Isolate the walk snapshot store per test (eshu-hq/eshu#11280):
+		// the default dir is process-shared and CommitWalk supersede-deletes
+		// same-scope snapshots, so parallel walk tests deleted each other's
+		// snapshots ("snapshot is gone" flakes under load).
+		"snapshot": map[string]any{"dir": t.TempDir()},
 	}
 	for key, value := range extra {
 		config[key] = value
@@ -106,10 +111,13 @@ func TestStdioV1Alpha3WalksContinuationToGreen(t *testing.T) {
 	t.Parallel()
 
 	claim := sdk.Claim{Scope: sdk.Scope{ID: "component:aws-cloud-primary", Kind: "component"}}
+	// One store for the whole walk: every page of the walk must resume
+	// from the same directory (see stdioFileConfig).
+	walkSnapshots := map[string]any{"snapshot": map[string]any{"dir": t.TempDir()}}
 	first, _ := runStdio(t, sdkRequest{
 		ProtocolVersion: collector.ProtocolVersionV1Alpha3,
 		Claim:           claim,
-		Config:          stdioFileConfig(t, nil),
+		Config:          stdioFileConfig(t, walkSnapshots),
 	})
 	if len(first.Facts) < 3 {
 		t.Fatalf("fixture facts = %d, want at least 3 to force paging", len(first.Facts))
@@ -130,7 +138,11 @@ func TestStdioV1Alpha3WalksContinuationToGreen(t *testing.T) {
 	// at least two pages while every fact still fits.
 	bound := float64(maxSingle + (total-maxSingle)/2)
 	paged := func(cursor string) stdioPagedResult {
-		config := stdioFileConfig(t, map[string]any{"limits": map[string]any{"maxPageBytes": bound}})
+		extra := map[string]any{"limits": map[string]any{"maxPageBytes": bound}}
+		for key, value := range walkSnapshots {
+			extra[key] = value
+		}
+		config := stdioFileConfig(t, extra)
 		request := sdkRequest{
 			ProtocolVersion: collector.ProtocolVersionV1Alpha3,
 			Claim:           claim,
