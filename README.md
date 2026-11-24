@@ -81,14 +81,19 @@ the host is the Eshu process that starts this collector.
   declares compatibility with core `>=0.0.5 <0.2.0`.
 - [eshu-sdk](https://github.com/eshu-hq/eshu-sdk): the collector
   contract this binary speaks. `go.mod` pins `eshu-sdk/collector
-  v0.1.0-rc.4` and `eshu-sdk/factschema v0.1.0-rc.7`.
+  v0.2.0-rc.4` and `eshu-sdk/factschema v0.1.0-rc.19`.
 - [eshu-extension-host](https://github.com/eshu-hq/eshu-extension-host):
   the standalone host that can run component collectors like this
   one.
+- [eshu-deploy](https://github.com/eshu-hq/eshu-deploy): Helm charts and
+  Compose examples for deploying Eshu and its collectors.
+- [Collector and Reducer Readiness](https://github.com/eshu-hq/eshu/blob/main/docs/public/reference/collector-reducer-readiness.md),
+  [Start Here](https://github.com/eshu-hq/eshu/blob/main/docs/public/start-here.md), and the 31-repo
+  [Repository Map](https://github.com/eshu-hq/eshu/blob/main/REPOSITORIES.md).
 
 ## Development
 
-Go `1.26.10` (pinned in `go.mod`). Run `make ci` for vet, lint,
+Go `1.26.11` (pinned in `go.mod`). Run `make ci` for vet, lint,
 format, tidy, the line cap, build, test, and race. Tests run on
 fixtures only and never call live AWS.
 
